@@ -81,6 +81,22 @@ func main() {
 	protected.HandleFunc("POST /journals/{id}", h.UpdateJournal)
 	protected.HandleFunc("DELETE /journals/{id}", h.DeleteJournal)
 
+	// Income
+	protected.HandleFunc("GET /income", h.ListIncome)
+	protected.HandleFunc("GET /income/new", h.NewIncome)
+	protected.HandleFunc("POST /income", h.CreateIncome)
+	protected.HandleFunc("GET /income/{id}/edit", h.EditIncome)
+	protected.HandleFunc("POST /income/{id}", h.UpdateIncome)
+	protected.HandleFunc("DELETE /income/{id}", h.DeleteIncome)
+
+	// Expenses
+	protected.HandleFunc("GET /expenses", h.ListExpenses)
+	protected.HandleFunc("GET /expenses/new", h.NewExpense)
+	protected.HandleFunc("POST /expenses", h.CreateExpense)
+	protected.HandleFunc("GET /expenses/{id}/edit", h.EditExpense)
+	protected.HandleFunc("POST /expenses/{id}", h.UpdateExpense)
+	protected.HandleFunc("DELETE /expenses/{id}", h.DeleteExpense)
+
 	// HTMX partials
 	protected.HandleFunc("GET /htmx/journal-line", h.JournalLinePartial)
 

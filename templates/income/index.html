@@ -1,0 +1,52 @@
+{{template "base" .}}
+{{define "content"}}
+<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+    <h1 class="text-2xl font-bold">Income</h1>
+    {{if .User.IsAdmin}}
+    <a href="/income/new" class="btn btn-primary btn-sm">+ Record Income</a>
+    {{end}}
+</div>
+
+{{$entries := .Data}}
+
+<div id="income-table" class="overflow-x-auto">
+    <table class="table table-sm">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Reference</th>
+                <th>Description</th>
+                <th class="text-right">Amount</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range $entries}}
+            <tr id="income-{{.ID}}">
+                <td class="text-sm">{{formatDate .EntryDate}}</td>
+                <td><span class="font-mono text-sm">{{.Reference}}</span></td>
+                <td>{{.Description}}</td>
+                <td class="text-right font-mono text-success">{{formatIDR .TotalDebit}}</td>
+                <td>
+                    <div class="flex gap-1">
+                        <a href="/journals/{{.ID}}" class="btn btn-ghost btn-xs">View</a>
+                        {{if $.User.IsAdmin}}
+                        <a href="/income/{{.ID}}/edit" class="btn btn-ghost btn-xs">Edit</a>
+                        <button class="btn btn-ghost btn-xs text-error"
+                            hx-delete="/income/{{.ID}}"
+                            hx-target="#income-{{.ID}}"
+                            hx-swap="outerHTML"
+                            hx-confirm="Delete this income entry?">Delete</button>
+                        {{end}}
+                    </div>
+                </td>
+            </tr>
+            {{else}}
+            <tr>
+                <td colspan="5" class="text-center py-8 opacity-60">No income recorded yet</td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+{{end}}

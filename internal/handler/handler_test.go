@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/naufal/latasya-erp/internal/auth"
-	"github.com/naufal/latasya-erp/internal/handler"
 	"github.com/naufal/latasya-erp/internal/testutil"
 )
 
@@ -48,6 +47,18 @@ func testServer(t *testing.T) (*httptest.Server, *sql.DB) {
 	protected.HandleFunc("POST /journals/{id}", h.UpdateJournal)
 	protected.HandleFunc("DELETE /journals/{id}", h.DeleteJournal)
 	protected.HandleFunc("GET /htmx/journal-line", h.JournalLinePartial)
+	protected.HandleFunc("GET /income", h.ListIncome)
+	protected.HandleFunc("GET /income/new", h.NewIncome)
+	protected.HandleFunc("POST /income", h.CreateIncome)
+	protected.HandleFunc("GET /income/{id}/edit", h.EditIncome)
+	protected.HandleFunc("POST /income/{id}", h.UpdateIncome)
+	protected.HandleFunc("DELETE /income/{id}", h.DeleteIncome)
+	protected.HandleFunc("GET /expenses", h.ListExpenses)
+	protected.HandleFunc("GET /expenses/new", h.NewExpense)
+	protected.HandleFunc("POST /expenses", h.CreateExpense)
+	protected.HandleFunc("GET /expenses/{id}/edit", h.EditExpense)
+	protected.HandleFunc("POST /expenses/{id}", h.UpdateExpense)
+	protected.HandleFunc("DELETE /expenses/{id}", h.DeleteExpense)
 
 	mux.Handle("/", auth.RequireAuth(db, protected))
 
@@ -621,11 +632,178 @@ func TestJournalLinePartial_HTMX(t *testing.T) {
 	}
 }
 
-// --- Helper function for handler_test.go ---
+// --- Income Handler Tests ---
 
-func newHandler(t *testing.T) (*handler.Handler, *sql.DB) {
-	t.Helper()
-	db := testutil.SetupTestDB(t)
-	h := testutil.SetupTestHandler(t, db)
-	return h, db
+func TestListIncome(t *testing.T) {
+	ts, _ := testServer(t)
+	cookies := loginAsAdmin(t, ts)
+
+	client := &http.Client{}
+	req, _ := requestWithCookies("GET", ts.URL+"/income", cookies, "")
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+}
+
+func TestCreateIncome_Success(t *testing.T) {
+	ts, db := testServer(t)
+	cookies := loginAsAdmin(t, ts)
+
+	var cashID, revenueID int
+	db.QueryRow("SELECT id FROM accounts WHERE code = '1-1001'").Scan(&cashID)
+	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
+
+	client := &http.Client{CheckRedirect: func(r *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+
+	form := fmt.Sprintf(
+		"entry_date=2026-04-04&description=School+bus+payment&amount=5000000&revenue_account=%d&deposit_account=%d",
+		revenueID, cashID,
+	)
+	req, _ := requestWithCookies("POST", ts.URL+"/income", cookies, form)
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("expected 303 redirect, got %d", resp.StatusCode)
+	}
+
+	loc := resp.Header.Get("Location")
+	if !strings.HasPrefix(loc, "/journals/") {
+		t.Errorf("expected redirect to /journals/{id}, got %q", loc)
+	}
+
+	// Verify journal entry was created with correct source_type
+	var sourceType string
+	id := strings.TrimPrefix(loc, "/journals/")
+	db.QueryRow("SELECT COALESCE(source_type,'') FROM journal_entries WHERE id = ?", id).Scan(&sourceType)
+	if sourceType != "income" {
+		t.Errorf("expected source_type 'income', got %q", sourceType)
+	}
+
+	// Verify debit = credit = 5000000
+	var totalDebit, totalCredit int
+	db.QueryRow("SELECT COALESCE(SUM(debit),0), COALESCE(SUM(credit),0) FROM journal_lines WHERE entry_id = ?", id).Scan(&totalDebit, &totalCredit)
+	if totalDebit != 5000000 || totalCredit != 5000000 {
+		t.Errorf("expected balanced 5000000, got debit=%d credit=%d", totalDebit, totalCredit)
+	}
+}
+
+func TestCreateIncome_ValidationError(t *testing.T) {
+	ts, _ := testServer(t)
+	cookies := loginAsAdmin(t, ts)
+
+	client := &http.Client{CheckRedirect: func(r *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+
+	form := "entry_date=&description=&amount=0&revenue_account=&deposit_account="
+	req, _ := requestWithCookies("POST", ts.URL+"/income", cookies, form)
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200 (validation error), got %d", resp.StatusCode)
+	}
+}
+
+// --- Expense Handler Tests ---
+
+func TestListExpenses(t *testing.T) {
+	ts, _ := testServer(t)
+	cookies := loginAsAdmin(t, ts)
+
+	client := &http.Client{}
+	req, _ := requestWithCookies("GET", ts.URL+"/expenses", cookies, "")
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+}
+
+func TestCreateExpense_Success(t *testing.T) {
+	ts, db := testServer(t)
+	cookies := loginAsAdmin(t, ts)
+
+	var cashID, fuelID int
+	db.QueryRow("SELECT id FROM accounts WHERE code = '1-1001'").Scan(&cashID)
+	db.QueryRow("SELECT id FROM accounts WHERE code = '5-1001'").Scan(&fuelID)
+
+	client := &http.Client{CheckRedirect: func(r *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+
+	form := fmt.Sprintf(
+		"entry_date=2026-04-04&description=Diesel+fuel+Bus+01&amount=500000&expense_account=%d&payment_account=%d",
+		fuelID, cashID,
+	)
+	req, _ := requestWithCookies("POST", ts.URL+"/expenses", cookies, form)
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("expected 303 redirect, got %d", resp.StatusCode)
+	}
+
+	loc := resp.Header.Get("Location")
+	if !strings.HasPrefix(loc, "/journals/") {
+		t.Errorf("expected redirect to /journals/{id}, got %q", loc)
+	}
+
+	// Verify journal entry source_type
+	var sourceType string
+	id := strings.TrimPrefix(loc, "/journals/")
+	db.QueryRow("SELECT COALESCE(source_type,'') FROM journal_entries WHERE id = ?", id).Scan(&sourceType)
+	if sourceType != "expense" {
+		t.Errorf("expected source_type 'expense', got %q", sourceType)
+	}
+
+	// Verify debit = credit = 500000
+	var totalDebit, totalCredit int
+	db.QueryRow("SELECT COALESCE(SUM(debit),0), COALESCE(SUM(credit),0) FROM journal_lines WHERE entry_id = ?", id).Scan(&totalDebit, &totalCredit)
+	if totalDebit != 500000 || totalCredit != 500000 {
+		t.Errorf("expected balanced 500000, got debit=%d credit=%d", totalDebit, totalCredit)
+	}
+}
+
+func TestCreateExpense_ValidationError(t *testing.T) {
+	ts, _ := testServer(t)
+	cookies := loginAsAdmin(t, ts)
+
+	client := &http.Client{CheckRedirect: func(r *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+
+	form := "entry_date=&description=&amount=0&expense_account=&payment_account="
+	req, _ := requestWithCookies("POST", ts.URL+"/expenses", cookies, form)
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200 (validation error), got %d", resp.StatusCode)
+	}
 }

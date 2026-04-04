@@ -1,0 +1,99 @@
+{{template "base" .}}
+{{define "content"}}
+{{$data := .Data}}
+
+<div class="max-w-2xl">
+    <h1 class="text-2xl font-bold mb-6">
+        {{if $data.IsEdit}}Edit Income{{else}}Record Income{{end}}
+    </h1>
+
+    {{if index $data.Errors "general"}}
+    <div class="alert alert-error mb-4">
+        <span>{{index $data.Errors "general"}}</span>
+    </div>
+    {{end}}
+
+    <form method="POST" action="{{if $data.IsEdit}}/income/{{$data.Entry.ID}}{{else}}/income{{end}}"
+        class="card bg-base-100 shadow">
+        <div class="card-body">
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <!-- Date -->
+                <div class="form-control">
+                    <label class="label"><span class="label-text">Date *</span></label>
+                    <input type="date" name="entry_date"
+                        class="input input-bordered {{if index $data.Errors "entry_date"}}input-error{{end}}"
+                        value="{{$data.Entry.EntryDate}}" required>
+                    {{if index $data.Errors "entry_date"}}
+                    <label class="label"><span class="label-text-alt text-error">{{index $data.Errors "entry_date"}}</span></label>
+                    {{end}}
+                </div>
+
+                <!-- Amount -->
+                <div class="form-control">
+                    <label class="label"><span class="label-text">Amount (Rp) *</span></label>
+                    <input type="number" name="amount" placeholder="e.g. 5000000"
+                        class="input input-bordered font-mono {{if index $data.Errors "amount"}}input-error{{end}}"
+                        value="{{if gt $data.Amount 0}}{{$data.Amount}}{{end}}" min="1" required>
+                    {{if index $data.Errors "amount"}}
+                    <label class="label"><span class="label-text-alt text-error">{{index $data.Errors "amount"}}</span></label>
+                    {{end}}
+                </div>
+
+                <!-- Revenue Account -->
+                <div class="form-control">
+                    <label class="label"><span class="label-text">Revenue Account *</span></label>
+                    <select name="revenue_account"
+                        class="select select-bordered {{if index $data.Errors "revenue_account"}}select-error{{end}}" required>
+                        <option value="">Select revenue account</option>
+                        {{range $data.RevenueAccounts}}
+                        <option value="{{.ID}}" {{if eq .ID $data.RevenueAccount}}selected{{end}}>{{.Code}} - {{.Name}}</option>
+                        {{end}}
+                    </select>
+                    {{if index $data.Errors "revenue_account"}}
+                    <label class="label"><span class="label-text-alt text-error">{{index $data.Errors "revenue_account"}}</span></label>
+                    {{end}}
+                </div>
+
+                <!-- Deposit To -->
+                <div class="form-control">
+                    <label class="label"><span class="label-text">Deposit To *</span></label>
+                    <select name="deposit_account"
+                        class="select select-bordered {{if index $data.Errors "deposit_account"}}select-error{{end}}" required>
+                        <option value="">Select deposit account</option>
+                        {{range $data.DepositAccounts}}
+                        <option value="{{.ID}}" {{if eq .ID $data.DepositAccount}}selected{{end}}>{{.Code}} - {{.Name}}</option>
+                        {{end}}
+                    </select>
+                    {{if index $data.Errors "deposit_account"}}
+                    <label class="label"><span class="label-text-alt text-error">{{index $data.Errors "deposit_account"}}</span></label>
+                    {{end}}
+                </div>
+            </div>
+
+            <!-- Description -->
+            <div class="form-control mt-2">
+                <label class="label"><span class="label-text">Description *</span></label>
+                <input type="text" name="description" placeholder="e.g. Monthly school bus fee from SD Negeri 1"
+                    class="input input-bordered {{if index $data.Errors "description"}}input-error{{end}}"
+                    value="{{$data.Entry.Description}}" required>
+                {{if index $data.Errors "description"}}
+                <label class="label"><span class="label-text-alt text-error">{{index $data.Errors "description"}}</span></label>
+                {{end}}
+            </div>
+
+            <div class="bg-base-200 rounded-lg p-3 mt-4 text-sm">
+                <p class="font-semibold mb-1">What happens:</p>
+                <p class="opacity-70">This creates a journal entry that debits your deposit account (increases cash/bank) and credits the revenue account (records income).</p>
+            </div>
+
+            <div class="card-actions justify-end mt-4">
+                <a href="/income" class="btn btn-ghost">Cancel</a>
+                <button type="submit" class="btn btn-primary">
+                    {{if $data.IsEdit}}Update{{else}}Record{{end}} Income
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+{{end}}
