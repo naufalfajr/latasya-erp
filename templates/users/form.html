@@ -1,0 +1,86 @@
+{{template "base" .}}
+{{define "content"}}
+{{$data := .Data}}
+
+<div class="max-w-lg">
+    <h1 class="text-2xl font-bold mb-6">
+        {{if $data.IsEdit}}Edit User{{else}}New User{{end}}
+    </h1>
+
+    <form method="POST" action="{{if $data.IsEdit}}/users/{{$data.User.ID}}{{else}}/users{{end}}"
+        class="card bg-base-100 shadow">
+        <div class="card-body">
+
+            {{if not $data.IsEdit}}
+            <!-- Username (only on create) -->
+            <div class="form-control">
+                <label class="label"><span class="label-text">Username *</span></label>
+                <input type="text" name="username" placeholder="Username"
+                    class="input input-bordered {{if index $data.Errors "username"}}input-error{{end}}"
+                    value="{{$data.User.Username}}" required>
+                {{if index $data.Errors "username"}}
+                <label class="label"><span class="label-text-alt text-error">{{index $data.Errors "username"}}</span></label>
+                {{end}}
+            </div>
+            {{else}}
+            <div class="form-control">
+                <label class="label"><span class="label-text">Username</span></label>
+                <input type="text" class="input input-bordered bg-base-200" value="{{$data.User.Username}}" disabled>
+            </div>
+            {{end}}
+
+            <!-- Full Name -->
+            <div class="form-control">
+                <label class="label"><span class="label-text">Full Name *</span></label>
+                <input type="text" name="full_name" placeholder="Full name"
+                    class="input input-bordered {{if index $data.Errors "full_name"}}input-error{{end}}"
+                    value="{{$data.User.FullName}}" required>
+                {{if index $data.Errors "full_name"}}
+                <label class="label"><span class="label-text-alt text-error">{{index $data.Errors "full_name"}}</span></label>
+                {{end}}
+            </div>
+
+            <!-- Password -->
+            <div class="form-control">
+                <label class="label">
+                    <span class="label-text">Password {{if not $data.IsEdit}}*{{else}}(leave blank to keep current){{end}}</span>
+                </label>
+                <input type="password" name="password" placeholder="{{if $data.IsEdit}}New password{{else}}Password{{end}}"
+                    class="input input-bordered {{if index $data.Errors "password"}}input-error{{end}}"
+                    {{if not $data.IsEdit}}required{{end}} minlength="4">
+                {{if index $data.Errors "password"}}
+                <label class="label"><span class="label-text-alt text-error">{{index $data.Errors "password"}}</span></label>
+                {{end}}
+            </div>
+
+            <!-- Role -->
+            <div class="form-control">
+                <label class="label"><span class="label-text">Role *</span></label>
+                <select name="role" class="select select-bordered {{if index $data.Errors "role"}}select-error{{end}}" required>
+                    <option value="viewer" {{if eq $data.User.Role "viewer"}}selected{{end}}>Viewer (reports only)</option>
+                    <option value="admin" {{if eq $data.User.Role "admin"}}selected{{end}}>Admin (full access)</option>
+                </select>
+                {{if index $data.Errors "role"}}
+                <label class="label"><span class="label-text-alt text-error">{{index $data.Errors "role"}}</span></label>
+                {{end}}
+            </div>
+
+            <!-- Active -->
+            <div class="form-control">
+                <label class="label cursor-pointer justify-start gap-2">
+                    <input type="checkbox" name="is_active" class="checkbox checkbox-sm"
+                        {{if $data.User.IsActive}}checked{{end}}>
+                    <span class="label-text">Active</span>
+                </label>
+            </div>
+
+            <div class="card-actions justify-end mt-4">
+                <a href="/users" class="btn btn-ghost">Cancel</a>
+                <button type="submit" class="btn btn-primary">
+                    {{if $data.IsEdit}}Update{{else}}Create{{end}} User
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+{{end}}

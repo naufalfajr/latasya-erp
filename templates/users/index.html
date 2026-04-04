@@ -1,0 +1,55 @@
+{{template "base" .}}
+{{define "content"}}
+<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+    <h1 class="text-2xl font-bold">Users</h1>
+    <a href="/users/new" class="btn btn-primary btn-sm">+ New User</a>
+</div>
+
+{{$users := .Data}}
+
+<div class="overflow-x-auto">
+    <table class="table table-sm">
+        <thead>
+            <tr>
+                <th>Username</th>
+                <th>Full Name</th>
+                <th>Role</th>
+                <th>Status</th>
+                <th>Created</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range $users}}
+            <tr id="user-{{.ID}}" class="{{if not .IsActive}}opacity-50{{end}}">
+                <td class="font-semibold">{{.Username}}</td>
+                <td>{{.FullName}}</td>
+                <td><span class="badge badge-sm {{if eq .Role "admin"}}badge-primary{{else}}badge-ghost{{end}}">{{.Role}}</span></td>
+                <td>
+                    {{if .IsActive}}
+                    <span class="badge badge-success badge-xs">active</span>
+                    {{else}}
+                    <span class="badge badge-ghost badge-xs">inactive</span>
+                    {{end}}
+                </td>
+                <td class="text-sm">{{formatDate .CreatedAt}}</td>
+                <td>
+                    <div class="flex gap-1">
+                        <a href="/users/{{.ID}}/edit" class="btn btn-ghost btn-xs">Edit</a>
+                        {{if .IsActive}}
+                        <button class="btn btn-ghost btn-xs text-error"
+                            hx-delete="/users/{{.ID}}"
+                            hx-target="#user-{{.ID}}"
+                            hx-swap="outerHTML"
+                            hx-confirm="Deactivate user {{.Username}}?">Deactivate</button>
+                        {{end}}
+                    </div>
+                </td>
+            </tr>
+            {{else}}
+            <tr><td colspan="6" class="text-center py-8 opacity-60">No users found</td></tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+{{end}}

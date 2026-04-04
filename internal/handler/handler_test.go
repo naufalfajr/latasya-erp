@@ -85,6 +85,15 @@ func testServer(t *testing.T) (*httptest.Server, *sql.DB) {
 	protected.HandleFunc("GET /reports/balance-sheet", h.BalanceSheet)
 	protected.HandleFunc("GET /reports/cash-flow", h.CashFlowReport)
 	protected.HandleFunc("GET /reports/general-ledger", h.GeneralLedger)
+	adminMux := http.NewServeMux()
+	adminMux.HandleFunc("GET /users", h.ListUsers)
+	adminMux.HandleFunc("GET /users/new", h.NewUser)
+	adminMux.HandleFunc("POST /users", h.CreateUser)
+	adminMux.HandleFunc("GET /users/{id}/edit", h.EditUser)
+	adminMux.HandleFunc("POST /users/{id}", h.UpdateUser)
+	adminMux.HandleFunc("DELETE /users/{id}", h.DeleteUser)
+	protected.Handle("/users", auth.RequireAdmin(adminMux))
+	protected.Handle("/users/", auth.RequireAdmin(adminMux))
 
 	mux.Handle("/", auth.RequireAuth(db, protected))
 
@@ -1033,5 +1042,120 @@ func TestReportPages_ViewerCanAccess(t *testing.T) {
 		if resp.StatusCode != http.StatusOK {
 			t.Errorf("viewer should access %s, got %d", page, resp.StatusCode)
 		}
+	}
+}
+
+// --- User Management Tests ---
+
+func TestListUsers_AdminOnly(t *testing.T) {
+	ts, _ := testServer(t)
+	cookies := loginAsAdmin(t, ts)
+
+	client := &http.Client{}
+	req, _ := requestWithCookies("GET", ts.URL+"/users", cookies, "")
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+}
+
+func TestListUsers_ViewerDenied(t *testing.T) {
+	ts, db := testServer(t)
+	cookies := loginAsViewer(t, ts, db)
+
+	client := &http.Client{}
+	req, _ := requestWithCookies("GET", ts.URL+"/users", cookies, "")
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusForbidden {
+		t.Errorf("viewer should get 403, got %d", resp.StatusCode)
+	}
+}
+
+func TestCreateUser_Admin(t *testing.T) {
+	ts, _ := testServer(t)
+	cookies := loginAsAdmin(t, ts)
+
+	noRedirect := &http.Client{CheckRedirect: func(r *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+
+	form := "username=newuser&full_name=New+User&password=test1234&role=viewer&is_active=on"
+	req, _ := requestWithCookies("POST", ts.URL+"/users", cookies, form)
+	resp, err := noRedirect.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("expected 303, got %d", resp.StatusCode)
+	}
+}
+
+func TestCreateUser_ValidationError(t *testing.T) {
+	ts, _ := testServer(t)
+	cookies := loginAsAdmin(t, ts)
+
+	noRedirect := &http.Client{CheckRedirect: func(r *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+
+	form := "username=&full_name=&password=&role=invalid"
+	req, _ := requestWithCookies("POST", ts.URL+"/users", cookies, form)
+	resp, err := noRedirect.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200 (validation error), got %d", resp.StatusCode)
+	}
+}
+
+// --- Dashboard Tests ---
+
+func TestDashboard_WithData(t *testing.T) {
+	ts, db := testServer(t)
+	cookies := loginAsAdmin(t, ts)
+
+	// Create some test data
+	var cashID, revenueID int
+	db.QueryRow("SELECT id FROM accounts WHERE code = '1-1001'").Scan(&cashID)
+	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
+
+	noRedirect := &http.Client{CheckRedirect: func(r *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+
+	// Record income
+	form := fmt.Sprintf(
+		"entry_date=2026-04-04&description=Test+income&amount=5000000&revenue_account=%d&deposit_account=%d",
+		revenueID, cashID,
+	)
+	req, _ := requestWithCookies("POST", ts.URL+"/income", cookies, form)
+	noRedirect.Do(req)
+
+	// Check dashboard renders
+	client := &http.Client{}
+	req2, _ := requestWithCookies("GET", ts.URL+"/", cookies, "")
+	resp, err := client.Do(req2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
 	}
 }

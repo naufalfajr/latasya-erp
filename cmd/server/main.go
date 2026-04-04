@@ -127,6 +127,17 @@ func main() {
 	protected.HandleFunc("GET /reports/cash-flow", h.CashFlowReport)
 	protected.HandleFunc("GET /reports/general-ledger", h.GeneralLedger)
 
+	// User Management (admin only — enforced in handler via RequireAdmin)
+	adminMux := http.NewServeMux()
+	adminMux.HandleFunc("GET /users", h.ListUsers)
+	adminMux.HandleFunc("GET /users/new", h.NewUser)
+	adminMux.HandleFunc("POST /users", h.CreateUser)
+	adminMux.HandleFunc("GET /users/{id}/edit", h.EditUser)
+	adminMux.HandleFunc("POST /users/{id}", h.UpdateUser)
+	adminMux.HandleFunc("DELETE /users/{id}", h.DeleteUser)
+	protected.Handle("/users", auth.RequireAdmin(adminMux))
+	protected.Handle("/users/", auth.RequireAdmin(adminMux))
+
 	// HTMX partials
 	protected.HandleFunc("GET /htmx/journal-line", h.JournalLinePartial)
 	protected.HandleFunc("GET /htmx/invoice-line", h.InvoiceLinePartial)

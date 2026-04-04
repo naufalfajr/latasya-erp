@@ -1,30 +1,98 @@
 {{template "base" .}}
 {{define "content"}}
+{{$d := .Data}}
+
 <h1 class="text-2xl font-bold mb-6">Dashboard</h1>
 
 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-    <div class="stat bg-base-100 rounded-box shadow">
-        <div class="stat-title">Cash Balance</div>
-        <div class="stat-value text-lg">Rp 0</div>
+    <div class="stat bg-base-100 rounded-box shadow p-4">
+        <div class="stat-title text-xs">Cash Balance</div>
+        <div class="stat-value text-lg font-mono">{{formatIDR $d.CashBalance}}</div>
     </div>
-    <div class="stat bg-base-100 rounded-box shadow">
-        <div class="stat-title">Monthly Revenue</div>
-        <div class="stat-value text-lg text-success">Rp 0</div>
+    <div class="stat bg-base-100 rounded-box shadow p-4">
+        <div class="stat-title text-xs">Monthly Revenue</div>
+        <div class="stat-value text-lg font-mono text-success">{{formatIDR $d.MonthlyRevenue}}</div>
     </div>
-    <div class="stat bg-base-100 rounded-box shadow">
-        <div class="stat-title">Monthly Expenses</div>
-        <div class="stat-value text-lg text-error">Rp 0</div>
+    <div class="stat bg-base-100 rounded-box shadow p-4">
+        <div class="stat-title text-xs">Monthly Expenses</div>
+        <div class="stat-value text-lg font-mono text-error">{{formatIDR $d.MonthlyExpenses}}</div>
     </div>
-    <div class="stat bg-base-100 rounded-box shadow">
-        <div class="stat-title">Outstanding Invoices</div>
-        <div class="stat-value text-lg text-warning">0</div>
+    <div class="stat bg-base-100 rounded-box shadow p-4">
+        <div class="stat-title text-xs">Net This Month</div>
+        <div class="stat-value text-lg font-mono {{if ge (sub $d.MonthlyRevenue $d.MonthlyExpenses) 0}}text-success{{else}}text-error{{end}}">
+            {{formatIDR (sub $d.MonthlyRevenue $d.MonthlyExpenses)}}
+        </div>
     </div>
 </div>
 
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+    {{if gt $d.OutstandingInvoices 0}}
+    <div class="alert alert-warning shadow">
+        <div>
+            <span class="font-semibold">Outstanding Invoices:</span>
+            <span class="font-mono">{{formatIDR $d.OutstandingInvoices}}</span>
+        </div>
+        <a href="/invoices?status=sent" class="btn btn-sm btn-ghost">View</a>
+    </div>
+    {{end}}
+    {{if gt $d.OutstandingBills 0}}
+    <div class="alert alert-error shadow">
+        <div>
+            <span class="font-semibold">Outstanding Bills:</span>
+            <span class="font-mono">{{formatIDR $d.OutstandingBills}}</span>
+        </div>
+        <a href="/bills?status=received" class="btn btn-sm btn-ghost">View</a>
+    </div>
+    {{end}}
+</div>
+
+<!-- Quick Actions -->
+{{if .User.IsAdmin}}
+<div class="flex flex-wrap gap-2 mb-6">
+    <a href="/income/new" class="btn btn-success btn-sm">+ Record Income</a>
+    <a href="/expenses/new" class="btn btn-error btn-sm">+ Record Expense</a>
+    <a href="/invoices/new" class="btn btn-info btn-sm">+ New Invoice</a>
+    <a href="/bills/new" class="btn btn-warning btn-sm">+ New Bill</a>
+</div>
+{{end}}
+
+<!-- Recent Transactions -->
 <div class="card bg-base-100 shadow">
     <div class="card-body">
-        <h2 class="card-title">Recent Transactions</h2>
-        <p class="text-sm opacity-60">No transactions yet. Start by recording income or expenses.</p>
+        <div class="flex justify-between items-center mb-2">
+            <h2 class="card-title text-lg">Recent Transactions</h2>
+            <a href="/journals" class="btn btn-ghost btn-xs">View All</a>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Reference</th>
+                        <th>Description</th>
+                        <th>Type</th>
+                        <th class="text-right">Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range $d.RecentTransactions}}
+                    <tr class="hover cursor-pointer" onclick="window.location='/journals/{{.ID}}'">
+                        <td class="text-sm">{{formatDate .EntryDate}}</td>
+                        <td class="font-mono text-sm">{{.Reference}}</td>
+                        <td>{{.Description}}</td>
+                        <td><span class="badge badge-ghost badge-xs">{{.SourceType}}</span></td>
+                        <td class="text-right font-mono text-sm">{{formatIDR .Amount}}</td>
+                    </tr>
+                    {{else}}
+                    <tr>
+                        <td colspan="5" class="text-center py-8 opacity-60">
+                            No transactions yet. Start by recording income or expenses.
+                        </td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
 {{end}}
