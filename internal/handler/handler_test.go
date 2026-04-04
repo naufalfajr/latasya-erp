@@ -80,6 +80,11 @@ func testServer(t *testing.T) (*httptest.Server, *sql.DB) {
 	protected.HandleFunc("POST /bills/{id}/receive", h.ReceiveBill)
 	protected.HandleFunc("POST /bills/{id}/payment", h.BillPayment)
 	protected.HandleFunc("GET /htmx/bill-line", h.BillLinePartial)
+	protected.HandleFunc("GET /reports/trial-balance", h.TrialBalance)
+	protected.HandleFunc("GET /reports/profit-loss", h.ProfitLoss)
+	protected.HandleFunc("GET /reports/balance-sheet", h.BalanceSheet)
+	protected.HandleFunc("GET /reports/cash-flow", h.CashFlowReport)
+	protected.HandleFunc("GET /reports/general-ledger", h.GeneralLedger)
 
 	mux.Handle("/", auth.RequireAuth(db, protected))
 
@@ -976,5 +981,57 @@ func TestBillLifecycle_Handler(t *testing.T) {
 	db.QueryRow("SELECT status FROM bills WHERE id = ?", billIDStr).Scan(&billStatus)
 	if billStatus != "paid" {
 		t.Errorf("expected status 'paid', got %q", billStatus)
+	}
+}
+
+// --- Report Handler Tests ---
+
+func TestReportPages_Authenticated(t *testing.T) {
+	ts, _ := testServer(t)
+	cookies := loginAsAdmin(t, ts)
+	client := &http.Client{}
+
+	pages := []string{
+		"/reports/trial-balance",
+		"/reports/profit-loss",
+		"/reports/balance-sheet",
+		"/reports/cash-flow",
+		"/reports/general-ledger",
+	}
+
+	for _, page := range pages {
+		req, _ := requestWithCookies("GET", ts.URL+page, cookies, "")
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatalf("%s: %v", page, err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Errorf("%s: expected 200, got %d", page, resp.StatusCode)
+		}
+	}
+}
+
+func TestReportPages_ViewerCanAccess(t *testing.T) {
+	ts, db := testServer(t)
+	cookies := loginAsViewer(t, ts, db)
+	client := &http.Client{}
+
+	pages := []string{
+		"/reports/trial-balance",
+		"/reports/profit-loss",
+		"/reports/balance-sheet",
+	}
+
+	for _, page := range pages {
+		req, _ := requestWithCookies("GET", ts.URL+page, cookies, "")
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatalf("%s: %v", page, err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Errorf("viewer should access %s, got %d", page, resp.StatusCode)
+		}
 	}
 }

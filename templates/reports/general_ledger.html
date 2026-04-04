@@ -1,0 +1,71 @@
+{{template "base" .}}
+{{define "content"}}
+{{$data := .Data}}
+
+<h1 class="text-2xl font-bold mb-6">General Ledger</h1>
+
+<form class="flex flex-wrap gap-2 mb-4 items-end">
+    <div class="form-control">
+        <label class="label label-text text-xs">Account</label>
+        <select name="account" class="select select-bordered select-sm">
+            <option value="">Select account</option>
+            {{$selID := (index $data "AccountID")}}
+            {{range (index $data "Accounts")}}
+            <option value="{{.ID}}" {{if eq .ID $selID}}selected{{end}}>{{.Code}} - {{.Name}}</option>
+            {{end}}
+        </select>
+    </div>
+    <div class="form-control">
+        <label class="label label-text text-xs">From</label>
+        <input type="date" name="from" value="{{index $data "From"}}" class="input input-bordered input-sm">
+    </div>
+    <div class="form-control">
+        <label class="label label-text text-xs">To</label>
+        <input type="date" name="to" value="{{index $data "To"}}" class="input input-bordered input-sm">
+    </div>
+    <button type="submit" class="btn btn-sm btn-primary">Apply</button>
+</form>
+
+{{if (index $data "SelectedAccount")}}
+{{$acct := (index $data "SelectedAccount")}}
+<div class="mb-4">
+    <span class="text-lg font-semibold">{{$acct.Code}} — {{$acct.Name}}</span>
+    <span class="badge badge-ghost badge-sm ml-2">{{$acct.AccountType}}</span>
+</div>
+{{end}}
+
+<div class="card bg-base-100 shadow">
+    <div class="card-body overflow-x-auto">
+        {{if gt (index $data "AccountID") 0}}
+        <table class="table table-sm">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Reference</th>
+                    <th>Description</th>
+                    <th class="text-right">Debit</th>
+                    <th class="text-right">Credit</th>
+                    <th class="text-right">Balance</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range (index $data "Entries")}}
+                <tr>
+                    <td class="text-sm">{{formatDate .EntryDate}}</td>
+                    <td class="font-mono text-sm">{{.Reference}}</td>
+                    <td>{{.Description}}</td>
+                    <td class="text-right font-mono">{{if gt .Debit 0}}{{formatIDR .Debit}}{{end}}</td>
+                    <td class="text-right font-mono">{{if gt .Credit 0}}{{formatIDR .Credit}}{{end}}</td>
+                    <td class="text-right font-mono font-semibold">{{formatIDR .Balance}}</td>
+                </tr>
+                {{else}}
+                <tr><td colspan="6" class="text-center py-8 opacity-60">No transactions for this account</td></tr>
+                {{end}}
+            </tbody>
+        </table>
+        {{else}}
+        <p class="text-center py-8 opacity-60">Select an account to view its ledger</p>
+        {{end}}
+    </div>
+</div>
+{{end}}

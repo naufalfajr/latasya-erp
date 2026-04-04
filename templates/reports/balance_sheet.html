@@ -1,0 +1,101 @@
+{{template "base" .}}
+{{define "content"}}
+{{$data := .Data}}
+{{$report := (index $data "Report")}}
+
+<h1 class="text-2xl font-bold mb-6">Balance Sheet</h1>
+
+<form class="flex flex-wrap gap-2 mb-4 items-end">
+    <div class="form-control">
+        <label class="label label-text text-xs">As of</label>
+        <input type="date" name="date" value="{{index $data "AsOf"}}" class="input input-bordered input-sm">
+    </div>
+    <button type="submit" class="btn btn-sm btn-primary">Apply</button>
+</form>
+
+<div class="card bg-base-100 shadow">
+    <div class="card-body overflow-x-auto">
+        <table class="table table-sm">
+            <!-- Assets -->
+            <thead>
+                <tr class="bg-base-200"><th colspan="2">Assets</th><th class="text-right">Amount</th></tr>
+            </thead>
+            <tbody>
+                {{range $report.Assets.Accounts}}
+                <tr>
+                    <td class="font-mono text-sm">{{.AccountCode}}</td>
+                    <td>{{.AccountName}}</td>
+                    <td class="text-right font-mono">{{formatIDR .Balance}}</td>
+                </tr>
+                {{else}}
+                <tr><td colspan="3" class="text-center opacity-60">No assets</td></tr>
+                {{end}}
+            </tbody>
+            <tfoot>
+                <tr class="font-bold">
+                    <td colspan="2" class="text-right">Total Assets</td>
+                    <td class="text-right font-mono">{{formatIDR $report.Assets.Total}}</td>
+                </tr>
+            </tfoot>
+
+            <!-- Liabilities -->
+            <thead>
+                <tr class="bg-base-200"><th colspan="2">Liabilities</th><th class="text-right">Amount</th></tr>
+            </thead>
+            <tbody>
+                {{range $report.Liabilities.Accounts}}
+                <tr>
+                    <td class="font-mono text-sm">{{.AccountCode}}</td>
+                    <td>{{.AccountName}}</td>
+                    <td class="text-right font-mono">{{formatIDR .Balance}}</td>
+                </tr>
+                {{else}}
+                <tr><td colspan="3" class="text-center opacity-60">No liabilities</td></tr>
+                {{end}}
+            </tbody>
+            <tfoot>
+                <tr class="font-bold">
+                    <td colspan="2" class="text-right">Total Liabilities</td>
+                    <td class="text-right font-mono">{{formatIDR $report.Liabilities.Total}}</td>
+                </tr>
+            </tfoot>
+
+            <!-- Equity -->
+            <thead>
+                <tr class="bg-base-200"><th colspan="2">Equity</th><th class="text-right">Amount</th></tr>
+            </thead>
+            <tbody>
+                {{range $report.Equity.Accounts}}
+                <tr>
+                    <td class="font-mono text-sm">{{.AccountCode}}</td>
+                    <td>{{.AccountName}}</td>
+                    <td class="text-right font-mono">{{formatIDR .Balance}}</td>
+                </tr>
+                {{end}}
+                {{if ne $report.RetainedEarnings 0}}
+                <tr>
+                    <td></td>
+                    <td class="italic">Retained Earnings (Net Income)</td>
+                    <td class="text-right font-mono">{{formatIDR $report.RetainedEarnings}}</td>
+                </tr>
+                {{end}}
+            </tbody>
+            <tfoot>
+                <tr class="font-bold">
+                    <td colspan="2" class="text-right">Total Equity</td>
+                    <td class="text-right font-mono">{{formatIDR (add $report.Equity.Total $report.RetainedEarnings)}}</td>
+                </tr>
+                <tr class="font-bold text-lg border-t-2">
+                    <td colspan="2" class="text-right">Total Liabilities + Equity</td>
+                    <td class="text-right font-mono">{{formatIDR $report.TotalLiabEquity}}</td>
+                </tr>
+                {{if ne $report.Assets.Total $report.TotalLiabEquity}}
+                <tr class="text-error">
+                    <td colspan="3" class="text-center">Balance sheet does not balance! (Assets: {{formatIDR $report.Assets.Total}} ≠ L+E: {{formatIDR $report.TotalLiabEquity}})</td>
+                </tr>
+                {{end}}
+            </tfoot>
+        </table>
+    </div>
+</div>
+{{end}}

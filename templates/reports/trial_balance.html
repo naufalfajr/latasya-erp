@@ -1,0 +1,60 @@
+{{template "base" .}}
+{{define "content"}}
+{{$data := .Data}}
+
+<h1 class="text-2xl font-bold mb-6">Trial Balance</h1>
+
+<!-- Date range picker -->
+<form class="flex flex-wrap gap-2 mb-4 items-end">
+    <div class="form-control">
+        <label class="label label-text text-xs">From</label>
+        <input type="date" name="from" value="{{index $data "From"}}" class="input input-bordered input-sm">
+    </div>
+    <div class="form-control">
+        <label class="label label-text text-xs">To</label>
+        <input type="date" name="to" value="{{index $data "To"}}" class="input input-bordered input-sm">
+    </div>
+    <button type="submit" class="btn btn-sm btn-primary">Apply</button>
+</form>
+
+<div class="card bg-base-100 shadow">
+    <div class="card-body overflow-x-auto">
+        <table class="table table-sm">
+            <thead>
+                <tr>
+                    <th>Code</th>
+                    <th>Account</th>
+                    <th>Type</th>
+                    <th class="text-right">Debit</th>
+                    <th class="text-right">Credit</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range (index $data "Rows")}}
+                <tr>
+                    <td class="font-mono text-sm">{{.AccountCode}}</td>
+                    <td>{{.AccountName}}</td>
+                    <td><span class="badge badge-ghost badge-xs">{{.AccountType}}</span></td>
+                    <td class="text-right font-mono">{{if gt .TotalDebit 0}}{{formatIDR .TotalDebit}}{{end}}</td>
+                    <td class="text-right font-mono">{{if gt .TotalCredit 0}}{{formatIDR .TotalCredit}}{{end}}</td>
+                </tr>
+                {{else}}
+                <tr><td colspan="5" class="text-center py-8 opacity-60">No transactions in this period</td></tr>
+                {{end}}
+            </tbody>
+            <tfoot>
+                <tr class="font-bold text-lg">
+                    <td colspan="3" class="text-right">Total</td>
+                    <td class="text-right font-mono">{{formatIDR (index $data "TotalDebit")}}</td>
+                    <td class="text-right font-mono">{{formatIDR (index $data "TotalCredit")}}</td>
+                </tr>
+                {{if ne (index $data "TotalDebit") (index $data "TotalCredit")}}
+                <tr class="text-error">
+                    <td colspan="5" class="text-center">Debits and credits do not balance!</td>
+                </tr>
+                {{end}}
+            </tfoot>
+        </table>
+    </div>
+</div>
+{{end}}

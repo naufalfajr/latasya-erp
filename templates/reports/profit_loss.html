@@ -1,0 +1,81 @@
+{{template "base" .}}
+{{define "content"}}
+{{$data := .Data}}
+{{$report := (index $data "Report")}}
+
+<h1 class="text-2xl font-bold mb-6">Profit & Loss</h1>
+
+<form class="flex flex-wrap gap-2 mb-4 items-end">
+    <div class="form-control">
+        <label class="label label-text text-xs">From</label>
+        <input type="date" name="from" value="{{index $data "From"}}" class="input input-bordered input-sm">
+    </div>
+    <div class="form-control">
+        <label class="label label-text text-xs">To</label>
+        <input type="date" name="to" value="{{index $data "To"}}" class="input input-bordered input-sm">
+    </div>
+    <button type="submit" class="btn btn-sm btn-primary">Apply</button>
+</form>
+
+<div class="card bg-base-100 shadow">
+    <div class="card-body overflow-x-auto">
+        <table class="table table-sm">
+            <!-- Revenue -->
+            <thead>
+                <tr class="bg-base-200">
+                    <th colspan="2">Revenue</th>
+                    <th class="text-right">Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range $report.Revenue}}
+                <tr>
+                    <td class="font-mono text-sm">{{.AccountCode}}</td>
+                    <td>{{.AccountName}}</td>
+                    <td class="text-right font-mono text-success">{{formatIDR .Amount}}</td>
+                </tr>
+                {{else}}
+                <tr><td colspan="3" class="text-center opacity-60">No revenue</td></tr>
+                {{end}}
+            </tbody>
+            <tfoot>
+                <tr class="font-bold">
+                    <td colspan="2" class="text-right">Total Revenue</td>
+                    <td class="text-right font-mono text-success">{{formatIDR $report.TotalRevenue}}</td>
+                </tr>
+            </tfoot>
+
+            <!-- Expenses -->
+            <thead>
+                <tr class="bg-base-200">
+                    <th colspan="2">Expenses</th>
+                    <th class="text-right">Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range $report.Expenses}}
+                <tr>
+                    <td class="font-mono text-sm">{{.AccountCode}}</td>
+                    <td>{{.AccountName}}</td>
+                    <td class="text-right font-mono text-error">{{formatIDR .Amount}}</td>
+                </tr>
+                {{else}}
+                <tr><td colspan="3" class="text-center opacity-60">No expenses</td></tr>
+                {{end}}
+            </tbody>
+            <tfoot>
+                <tr class="font-bold">
+                    <td colspan="2" class="text-right">Total Expenses</td>
+                    <td class="text-right font-mono text-error">{{formatIDR $report.TotalExpense}}</td>
+                </tr>
+                <tr class="font-bold text-lg border-t-2">
+                    <td colspan="2" class="text-right">Net Income</td>
+                    <td class="text-right font-mono {{if ge $report.NetIncome 0}}text-success{{else}}text-error{{end}}">
+                        {{formatIDR $report.NetIncome}}
+                    </td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+{{end}}

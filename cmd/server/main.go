@@ -120,6 +120,13 @@ func main() {
 	protected.HandleFunc("POST /bills/{id}/receive", h.ReceiveBill)
 	protected.HandleFunc("POST /bills/{id}/payment", h.BillPayment)
 
+	// Reports
+	protected.HandleFunc("GET /reports/trial-balance", h.TrialBalance)
+	protected.HandleFunc("GET /reports/profit-loss", h.ProfitLoss)
+	protected.HandleFunc("GET /reports/balance-sheet", h.BalanceSheet)
+	protected.HandleFunc("GET /reports/cash-flow", h.CashFlowReport)
+	protected.HandleFunc("GET /reports/general-ledger", h.GeneralLedger)
+
 	// HTMX partials
 	protected.HandleFunc("GET /htmx/journal-line", h.JournalLinePartial)
 	protected.HandleFunc("GET /htmx/invoice-line", h.InvoiceLinePartial)

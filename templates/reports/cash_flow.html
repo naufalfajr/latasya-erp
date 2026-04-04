@@ -1,0 +1,67 @@
+{{template "base" .}}
+{{define "content"}}
+{{$data := .Data}}
+{{$report := (index $data "Report")}}
+
+<h1 class="text-2xl font-bold mb-6">Cash Flow</h1>
+
+<form class="flex flex-wrap gap-2 mb-4 items-end">
+    <div class="form-control">
+        <label class="label label-text text-xs">From</label>
+        <input type="date" name="from" value="{{index $data "From"}}" class="input input-bordered input-sm">
+    </div>
+    <div class="form-control">
+        <label class="label label-text text-xs">To</label>
+        <input type="date" name="to" value="{{index $data "To"}}" class="input input-bordered input-sm">
+    </div>
+    <button type="submit" class="btn btn-sm btn-primary">Apply</button>
+</form>
+
+<div class="card bg-base-100 shadow">
+    <div class="card-body overflow-x-auto">
+        <!-- Summary cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+            <div class="stat bg-base-200 rounded-box p-4">
+                <div class="stat-title text-xs">Opening Cash</div>
+                <div class="stat-value text-lg font-mono">{{formatIDR $report.OpeningCash}}</div>
+            </div>
+            <div class="stat bg-base-200 rounded-box p-4">
+                <div class="stat-title text-xs">Net Change</div>
+                <div class="stat-value text-lg font-mono {{if ge $report.NetCashChange 0}}text-success{{else}}text-error{{end}}">{{formatIDR $report.NetCashChange}}</div>
+            </div>
+            <div class="stat bg-base-200 rounded-box p-4">
+                <div class="stat-title text-xs">Closing Cash</div>
+                <div class="stat-value text-lg font-mono">{{formatIDR $report.ClosingCash}}</div>
+            </div>
+        </div>
+
+        <!-- Detail -->
+        <table class="table table-sm">
+            <thead>
+                <tr class="bg-base-200">
+                    <th>Code</th>
+                    <th>Account</th>
+                    <th class="text-right">Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range $report.Operating}}
+                <tr>
+                    <td class="font-mono text-sm">{{.AccountCode}}</td>
+                    <td>{{.AccountName}}</td>
+                    <td class="text-right font-mono {{if ge .Amount 0}}text-success{{else}}text-error{{end}}">{{formatIDR .Amount}}</td>
+                </tr>
+                {{else}}
+                <tr><td colspan="3" class="text-center py-8 opacity-60">No cash transactions in this period</td></tr>
+                {{end}}
+            </tbody>
+            <tfoot>
+                <tr class="font-bold">
+                    <td colspan="2" class="text-right">Total Cash Flow</td>
+                    <td class="text-right font-mono {{if ge $report.TotalOperating 0}}text-success{{else}}text-error{{end}}">{{formatIDR $report.TotalOperating}}</td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+{{end}}
