@@ -2,6 +2,7 @@ package handler_test
 
 import (
 	"database/sql"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -39,6 +40,14 @@ func testServer(t *testing.T) (*httptest.Server, *sql.DB) {
 	protected.HandleFunc("GET /contacts/{id}/edit", h.EditContact)
 	protected.HandleFunc("POST /contacts/{id}", h.UpdateContact)
 	protected.HandleFunc("DELETE /contacts/{id}", h.DeleteContact)
+	protected.HandleFunc("GET /journals", h.ListJournals)
+	protected.HandleFunc("GET /journals/new", h.NewJournal)
+	protected.HandleFunc("POST /journals", h.CreateJournal)
+	protected.HandleFunc("GET /journals/{id}", h.ViewJournal)
+	protected.HandleFunc("GET /journals/{id}/edit", h.EditJournal)
+	protected.HandleFunc("POST /journals/{id}", h.UpdateJournal)
+	protected.HandleFunc("DELETE /journals/{id}", h.DeleteJournal)
+	protected.HandleFunc("GET /htmx/journal-line", h.JournalLinePartial)
 
 	mux.Handle("/", auth.RequireAuth(db, protected))
 
@@ -430,6 +439,185 @@ func TestContacts_ViewerCanView(t *testing.T) {
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("viewer should be able to view contacts, got %d", resp.StatusCode)
+	}
+}
+
+// --- Journal Handler Tests ---
+
+func TestListJournals_Authenticated(t *testing.T) {
+	ts, _ := testServer(t)
+	cookies := loginAsAdmin(t, ts)
+
+	client := &http.Client{}
+	req, _ := requestWithCookies("GET", ts.URL+"/journals", cookies, "")
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+}
+
+func TestNewJournal_Form(t *testing.T) {
+	ts, _ := testServer(t)
+	cookies := loginAsAdmin(t, ts)
+
+	client := &http.Client{}
+	req, _ := requestWithCookies("GET", ts.URL+"/journals/new", cookies, "")
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+}
+
+func TestCreateJournal_Success(t *testing.T) {
+	ts, db := testServer(t)
+	cookies := loginAsAdmin(t, ts)
+
+	// Get account IDs
+	var cashID, revenueID int
+	db.QueryRow("SELECT id FROM accounts WHERE code = '1-1001'").Scan(&cashID)
+	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
+
+	client := &http.Client{CheckRedirect: func(r *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+
+	form := fmt.Sprintf(
+		"entry_date=2026-04-04&description=Test+journal&line_account_id=%d&line_account_id=%d&line_debit=5000000&line_debit=0&line_credit=0&line_credit=5000000&line_memo=Cash&line_memo=Revenue",
+		cashID, revenueID,
+	)
+	req, _ := requestWithCookies("POST", ts.URL+"/journals", cookies, form)
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("expected 303 redirect, got %d", resp.StatusCode)
+	}
+
+	// Should redirect to /journals/{id}
+	loc := resp.Header.Get("Location")
+	if !strings.HasPrefix(loc, "/journals/") {
+		t.Errorf("expected redirect to /journals/{id}, got %q", loc)
+	}
+}
+
+func TestCreateJournal_ValidationError_MissingDate(t *testing.T) {
+	ts, db := testServer(t)
+	cookies := loginAsAdmin(t, ts)
+
+	var cashID, revenueID int
+	db.QueryRow("SELECT id FROM accounts WHERE code = '1-1001'").Scan(&cashID)
+	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
+
+	client := &http.Client{CheckRedirect: func(r *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+
+	form := fmt.Sprintf(
+		"entry_date=&description=Test&line_account_id=%d&line_account_id=%d&line_debit=1000&line_debit=0&line_credit=0&line_credit=1000&line_memo=&line_memo=",
+		cashID, revenueID,
+	)
+	req, _ := requestWithCookies("POST", ts.URL+"/journals", cookies, form)
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200 (validation error), got %d", resp.StatusCode)
+	}
+}
+
+func TestCreateJournal_ValidationError_Unbalanced(t *testing.T) {
+	ts, db := testServer(t)
+	cookies := loginAsAdmin(t, ts)
+
+	var cashID, revenueID int
+	db.QueryRow("SELECT id FROM accounts WHERE code = '1-1001'").Scan(&cashID)
+	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
+
+	client := &http.Client{CheckRedirect: func(r *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+
+	form := fmt.Sprintf(
+		"entry_date=2026-04-04&description=Unbalanced&line_account_id=%d&line_account_id=%d&line_debit=5000&line_debit=0&line_credit=0&line_credit=3000&line_memo=&line_memo=",
+		cashID, revenueID,
+	)
+	req, _ := requestWithCookies("POST", ts.URL+"/journals", cookies, form)
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200 (validation error for unbalanced), got %d", resp.StatusCode)
+	}
+}
+
+func TestViewJournal(t *testing.T) {
+	ts, db := testServer(t)
+	cookies := loginAsAdmin(t, ts)
+
+	// Create a journal entry first
+	var cashID, revenueID int
+	db.QueryRow("SELECT id FROM accounts WHERE code = '1-1001'").Scan(&cashID)
+	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
+
+	client := &http.Client{CheckRedirect: func(r *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+	form := fmt.Sprintf(
+		"entry_date=2026-04-04&description=View+test&line_account_id=%d&line_account_id=%d&line_debit=1000&line_debit=0&line_credit=0&line_credit=1000&line_memo=&line_memo=",
+		cashID, revenueID,
+	)
+	req, _ := requestWithCookies("POST", ts.URL+"/journals", cookies, form)
+	resp, _ := client.Do(req)
+	loc := resp.Header.Get("Location")
+
+	// View the created entry
+	client2 := &http.Client{}
+	req2, _ := requestWithCookies("GET", ts.URL+loc, cookies, "")
+	resp2, err := client2.Do(req2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp2.Body.Close()
+
+	if resp2.StatusCode != http.StatusOK {
+		t.Errorf("expected 200, got %d", resp2.StatusCode)
+	}
+}
+
+func TestJournalLinePartial_HTMX(t *testing.T) {
+	ts, _ := testServer(t)
+	cookies := loginAsAdmin(t, ts)
+
+	client := &http.Client{}
+	req, _ := requestWithCookies("GET", ts.URL+"/htmx/journal-line", cookies, "")
+	req.Header.Set("HX-Request", "true")
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
 	}
 }
 

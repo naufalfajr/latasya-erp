@@ -24,6 +24,9 @@ func Open(dbPath string) (*sql.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
 	}
+	// For :memory: databases, limit to 1 connection so all queries use the same DB
+	// For file databases, this also avoids SQLite "database is locked" issues
+	db.SetMaxOpenConns(1)
 
 	// Set PRAGMAs for performance and safety
 	pragmas := []string{

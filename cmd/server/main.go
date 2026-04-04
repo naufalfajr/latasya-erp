@@ -72,6 +72,18 @@ func main() {
 	protected.HandleFunc("POST /contacts/{id}", h.UpdateContact)
 	protected.HandleFunc("DELETE /contacts/{id}", h.DeleteContact)
 
+	// Journal Entries
+	protected.HandleFunc("GET /journals", h.ListJournals)
+	protected.HandleFunc("GET /journals/new", h.NewJournal)
+	protected.HandleFunc("POST /journals", h.CreateJournal)
+	protected.HandleFunc("GET /journals/{id}", h.ViewJournal)
+	protected.HandleFunc("GET /journals/{id}/edit", h.EditJournal)
+	protected.HandleFunc("POST /journals/{id}", h.UpdateJournal)
+	protected.HandleFunc("DELETE /journals/{id}", h.DeleteJournal)
+
+	// HTMX partials
+	protected.HandleFunc("GET /htmx/journal-line", h.JournalLinePartial)
+
 	mux.Handle("/", auth.RequireAuth(db, protected))
 
 	slog.Info("starting server", "port", port, "dev", devMode)

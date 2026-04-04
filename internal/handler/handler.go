@@ -38,19 +38,20 @@ var sharedTemplates = []string{
 	"templates/partials/flash.html",
 }
 
-func (h *Handler) getTemplate(page string) (*template.Template, error) {
+func (h *Handler) getTemplate(pages ...string) (*template.Template, error) {
+	cacheKey := pages[0]
 	if !h.DevMode {
 		h.mu.RLock()
-		if t, ok := h.cache[page]; ok {
+		if t, ok := h.cache[cacheKey]; ok {
 			h.mu.RUnlock()
 			return t, nil
 		}
 		h.mu.RUnlock()
 	}
 
-	files := make([]string, len(sharedTemplates)+1)
+	files := make([]string, len(sharedTemplates)+len(pages))
 	copy(files, sharedTemplates)
-	files[len(files)-1] = page
+	copy(files[len(sharedTemplates):], pages)
 
 	t, err := template.New("").Funcs(h.FuncMap).ParseFS(h.TemplateFS, files...)
 	if err != nil {
@@ -62,14 +63,14 @@ func (h *Handler) getTemplate(page string) (*template.Template, error) {
 		if h.cache == nil {
 			h.cache = make(map[string]*template.Template)
 		}
-		h.cache[page] = t
+		h.cache[cacheKey] = t
 		h.mu.Unlock()
 	}
 
 	return t, nil
 }
 
-func (h *Handler) render(w http.ResponseWriter, r *http.Request, page string, title string, data any) {
+func (h *Handler) render(w http.ResponseWriter, r *http.Request, page string, title string, data any, extraTemplates ...string) {
 	pd := PageData{
 		User:  auth.UserFromContext(r.Context()),
 		Title: title,
@@ -87,7 +88,8 @@ func (h *Handler) render(w http.ResponseWriter, r *http.Request, page string, ti
 		})
 	}
 
-	t, err := h.getTemplate(page)
+	pages := append([]string{page}, extraTemplates...)
+	t, err := h.getTemplate(pages...)
 	if err != nil {
 		slog.Error("parse template", "page", page, "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)

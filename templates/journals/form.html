@@ -1,0 +1,186 @@
+{{template "base" .}}
+{{define "content"}}
+{{$data := .Data}}
+
+<div class="max-w-4xl">
+    <h1 class="text-2xl font-bold mb-6">
+        {{if $data.IsEdit}}Edit Journal Entry{{else}}New Journal Entry{{end}}
+    </h1>
+
+    {{if index $data.Errors "general"}}
+    <div class="alert alert-error mb-4">
+        <span>{{index $data.Errors "general"}}</span>
+    </div>
+    {{end}}
+    {{if index $data.Errors "balance"}}
+    <div class="alert alert-error mb-4">
+        <span>{{index $data.Errors "balance"}}</span>
+    </div>
+    {{end}}
+
+    <form method="POST" action="{{if $data.IsEdit}}/journals/{{$data.Entry.ID}}{{else}}/journals{{end}}"
+        class="card bg-base-100 shadow">
+        <div class="card-body">
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                <!-- Date -->
+                <div class="form-control">
+                    <label class="label" for="entry_date">
+                        <span class="label-text">Date *</span>
+                    </label>
+                    <input type="date" id="entry_date" name="entry_date"
+                        class="input input-bordered {{if index $data.Errors "entry_date"}}input-error{{end}}"
+                        value="{{$data.Entry.EntryDate}}" required>
+                    {{if index $data.Errors "entry_date"}}
+                    <label class="label"><span class="label-text-alt text-error">{{index $data.Errors "entry_date"}}</span></label>
+                    {{end}}
+                </div>
+
+                <!-- Description -->
+                <div class="form-control">
+                    <label class="label" for="description">
+                        <span class="label-text">Description *</span>
+                    </label>
+                    <input type="text" id="description" name="description" placeholder="e.g. Fuel purchase for Bus 01"
+                        class="input input-bordered {{if index $data.Errors "description"}}input-error{{end}}"
+                        value="{{$data.Entry.Description}}" required>
+                    {{if index $data.Errors "description"}}
+                    <label class="label"><span class="label-text-alt text-error">{{index $data.Errors "description"}}</span></label>
+                    {{end}}
+                </div>
+            </div>
+
+            <!-- Journal Lines -->
+            <div class="mb-4">
+                <div class="flex justify-between items-center mb-2">
+                    <label class="label-text font-semibold">Lines *</label>
+                    {{if index $data.Errors "lines"}}
+                    <span class="text-error text-sm">{{index $data.Errors "lines"}}</span>
+                    {{end}}
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="table table-sm" id="lines-table">
+                        <thead>
+                            <tr>
+                                <th class="w-2/5">Account</th>
+                                <th>Memo</th>
+                                <th class="w-1/6">Debit</th>
+                                <th class="w-1/6">Credit</th>
+                                <th class="w-10"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="lines-body">
+                            {{range $i, $line := $data.Lines}}
+                            {{template "journal-line-row" (dict "Index" $i "Line" $line "Accounts" $data.Accounts)}}
+                            {{end}}
+                        </tbody>
+                        <tfoot>
+                            <tr class="font-bold">
+                                <td colspan="2" class="text-right">Total</td>
+                                <td><input type="text" id="total-debit" class="input input-sm input-bordered w-full font-mono bg-base-200" readonly value="0"></td>
+                                <td><input type="text" id="total-credit" class="input input-sm input-bordered w-full font-mono bg-base-200" readonly value="0"></td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+
+                <button type="button" class="btn btn-ghost btn-sm mt-2"
+                    hx-get="/htmx/journal-line"
+                    hx-target="#lines-body"
+                    hx-swap="beforeend"
+                    hx-vals="js:{idx: document.querySelectorAll('#lines-body tr').length}">
+                    + Add Line
+                </button>
+            </div>
+
+            <!-- Actions -->
+            <div class="card-actions justify-end mt-4">
+                <a href="/journals" class="btn btn-ghost">Cancel</a>
+                <button type="submit" class="btn btn-primary">
+                    {{if $data.IsEdit}}Update{{else}}Create{{end}} Journal Entry
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<script>
+// Calculate totals when debit/credit values change
+document.addEventListener('input', function(e) {
+    if (e.target.name === 'line_debit' || e.target.name === 'line_credit') {
+        updateTotals();
+        // Clear opposite field when entering a value
+        const row = e.target.closest('tr');
+        if (e.target.name === 'line_debit' && e.target.value) {
+            row.querySelector('[name="line_credit"]').value = '';
+        } else if (e.target.name === 'line_credit' && e.target.value) {
+            row.querySelector('[name="line_debit"]').value = '';
+        }
+    }
+});
+
+// Recalculate after HTMX adds a new line
+document.addEventListener('htmx:afterSwap', function() {
+    updateTotals();
+});
+
+function updateTotals() {
+    let totalDebit = 0, totalCredit = 0;
+    document.querySelectorAll('[name="line_debit"]').forEach(function(el) {
+        totalDebit += parseInt(el.value.replace(/\D/g, '') || '0');
+    });
+    document.querySelectorAll('[name="line_credit"]').forEach(function(el) {
+        totalCredit += parseInt(el.value.replace(/\D/g, '') || '0');
+    });
+    document.getElementById('total-debit').value = totalDebit.toLocaleString('id-ID');
+    document.getElementById('total-credit').value = totalCredit.toLocaleString('id-ID');
+
+    // Highlight if unbalanced
+    const footer = document.querySelector('#lines-table tfoot tr');
+    if (totalDebit !== totalCredit && (totalDebit > 0 || totalCredit > 0)) {
+        footer.classList.add('text-error');
+    } else {
+        footer.classList.remove('text-error');
+    }
+}
+
+function removeLine(btn) {
+    btn.closest('tr').remove();
+    updateTotals();
+}
+
+// Initial calculation
+updateTotals();
+</script>
+{{end}}
+
+{{define "journal-line-row"}}
+<tr>
+    <td>
+        <select name="line_account_id" class="select select-bordered select-sm w-full">
+            <option value="">Select account</option>
+            {{$selectedID := .Line.AccountID}}
+            {{range .Accounts}}
+            <option value="{{.ID}}" {{if eq .ID $selectedID}}selected{{end}}>{{.Code}} - {{.Name}}</option>
+            {{end}}
+        </select>
+    </td>
+    <td>
+        <input type="text" name="line_memo" placeholder="Memo" class="input input-bordered input-sm w-full"
+            value="{{.Line.Memo}}">
+    </td>
+    <td>
+        <input type="number" name="line_debit" placeholder="0" class="input input-bordered input-sm w-full font-mono"
+            value="{{if gt .Line.Debit 0}}{{.Line.Debit}}{{end}}" min="0">
+    </td>
+    <td>
+        <input type="number" name="line_credit" placeholder="0" class="input input-bordered input-sm w-full font-mono"
+            value="{{if gt .Line.Credit 0}}{{.Line.Credit}}{{end}}" min="0">
+    </td>
+    <td>
+        <button type="button" class="btn btn-ghost btn-xs text-error" onclick="removeLine(this)">X</button>
+    </td>
+</tr>
+{{end}}

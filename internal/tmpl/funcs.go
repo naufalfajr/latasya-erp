@@ -13,13 +13,22 @@ func FuncMap() template.FuncMap {
 		"formatDate": formatDate,
 		"add": func(a, b int) int { return a + b },
 		"sub": func(a, b int) int { return a - b },
-		"eq":  func(a, b string) bool { return a == b },
+		// Go templates have built-in eq that handles multiple types
 		"seq": func(n int) []int {
 			s := make([]int, n)
 			for i := range s {
 				s[i] = i + 1
 			}
 			return s
+		},
+		"dict": func(pairs ...any) map[string]any {
+			m := make(map[string]any, len(pairs)/2)
+			for i := 0; i+1 < len(pairs); i += 2 {
+				if key, ok := pairs[i].(string); ok {
+					m[key] = pairs[i+1]
+				}
+			}
+			return m
 		},
 	}
 }

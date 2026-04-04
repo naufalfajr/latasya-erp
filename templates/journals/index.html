@@ -1,0 +1,78 @@
+{{template "base" .}}
+{{define "content"}}
+<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+    <h1 class="text-2xl font-bold">Journal Entries</h1>
+    {{if .User.IsAdmin}}
+    <a href="/journals/new" class="btn btn-primary btn-sm">+ New Journal Entry</a>
+    {{end}}
+</div>
+
+{{$data := .Data}}
+
+<!-- Filters -->
+<div class="flex flex-wrap gap-2 mb-4">
+    <input type="date" name="from" value="{{$data.Filter.DateFrom}}" placeholder="From"
+        class="input input-bordered input-sm"
+        hx-get="/journals"
+        hx-trigger="change"
+        hx-target="#journal-table"
+        hx-select="#journal-table"
+        hx-include="[name='to'],[name='search']">
+    <input type="date" name="to" value="{{$data.Filter.DateTo}}" placeholder="To"
+        class="input input-bordered input-sm"
+        hx-get="/journals"
+        hx-trigger="change"
+        hx-target="#journal-table"
+        hx-select="#journal-table"
+        hx-include="[name='from'],[name='search']">
+    <input type="text" name="search" value="{{$data.Filter.Search}}" placeholder="Search..."
+        class="input input-bordered input-sm w-full max-w-xs"
+        hx-get="/journals"
+        hx-trigger="keyup changed delay:300ms"
+        hx-target="#journal-table"
+        hx-select="#journal-table"
+        hx-include="[name='from'],[name='to']">
+</div>
+
+<!-- Journal entries table -->
+<div id="journal-table" class="overflow-x-auto">
+    <table class="table table-sm">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Reference</th>
+                <th>Description</th>
+                <th class="text-right">Debit</th>
+                <th class="text-right">Credit</th>
+                <th class="hidden sm:table-cell">Source</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range $data.Entries}}
+            <tr id="journal-{{.ID}}" class="hover">
+                <td class="text-sm">{{formatDate .EntryDate}}</td>
+                <td><span class="font-mono text-sm">{{.Reference}}</span></td>
+                <td>{{.Description}}</td>
+                <td class="text-right font-mono text-sm">{{formatIDR .TotalDebit}}</td>
+                <td class="text-right font-mono text-sm">{{formatIDR .TotalCredit}}</td>
+                <td class="hidden sm:table-cell">
+                    {{if .SourceType}}
+                    <span class="badge badge-ghost badge-xs">{{.SourceType}}</span>
+                    {{else}}
+                    <span class="badge badge-ghost badge-xs">manual</span>
+                    {{end}}
+                </td>
+                <td>
+                    <a href="/journals/{{.ID}}" class="btn btn-ghost btn-xs">View</a>
+                </td>
+            </tr>
+            {{else}}
+            <tr>
+                <td colspan="7" class="text-center py-8 opacity-60">No journal entries found</td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+{{end}}

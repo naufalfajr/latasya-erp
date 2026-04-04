@@ -1,0 +1,72 @@
+{{template "base" .}}
+{{define "content"}}
+{{$je := .Data}}
+
+<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+    <div>
+        <h1 class="text-2xl font-bold">{{$je.Reference}}</h1>
+        <p class="text-sm opacity-60">{{formatDate $je.EntryDate}} &middot; Created by {{$je.CreatedByName}}</p>
+    </div>
+    <div class="flex gap-2">
+        <a href="/journals" class="btn btn-ghost btn-sm">Back</a>
+        {{if .User.IsAdmin}}
+            {{if or (eq $je.SourceType "") (eq $je.SourceType "manual")}}
+            <a href="/journals/{{$je.ID}}/edit" class="btn btn-sm">Edit</a>
+            <button class="btn btn-error btn-sm"
+                hx-delete="/journals/{{$je.ID}}"
+                hx-confirm="Delete this journal entry?"
+                hx-target="body"
+                hx-headers='{"HX-Redirect": "/journals"}'>Delete</button>
+            {{end}}
+        {{end}}
+    </div>
+</div>
+
+<div class="card bg-base-100 shadow">
+    <div class="card-body">
+        <div class="mb-4">
+            <h2 class="font-semibold text-lg mb-1">{{$je.Description}}</h2>
+            {{if and $je.SourceType (ne $je.SourceType "manual")}}
+            <span class="badge badge-ghost">Auto-generated from {{$je.SourceType}}</span>
+            {{end}}
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Account</th>
+                        <th>Memo</th>
+                        <th class="text-right">Debit</th>
+                        <th class="text-right">Credit</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range $je.Lines}}
+                    <tr>
+                        <td>
+                            <span class="font-mono text-sm">{{.AccountCode}}</span>
+                            <span class="ml-1">{{.AccountName}}</span>
+                        </td>
+                        <td class="text-sm opacity-60">{{.Memo}}</td>
+                        <td class="text-right font-mono">
+                            {{if gt .Debit 0}}{{formatIDR .Debit}}{{end}}
+                        </td>
+                        <td class="text-right font-mono">
+                            {{if gt .Credit 0}}{{formatIDR .Credit}}{{end}}
+                        </td>
+                    </tr>
+                    {{end}}
+                </tbody>
+                <tfoot>
+                    <tr class="font-bold">
+                        <td colspan="2" class="text-right">Total</td>
+                        <td class="text-right font-mono">{{formatIDR $je.TotalDebit}}</td>
+                        <td class="text-right font-mono">{{formatIDR $je.TotalCredit}}</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+{{end}}
