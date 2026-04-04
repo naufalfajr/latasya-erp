@@ -103,6 +103,13 @@ func UpdateAccount(db *sql.DB, a *Account) error {
 }
 
 func DeleteAccount(db *sql.DB, id int) error {
+	// Check for linked journal lines
+	var count int
+	db.QueryRow("SELECT COUNT(*) FROM journal_lines WHERE account_id = ?", id).Scan(&count)
+	if count > 0 {
+		return fmt.Errorf("cannot delete account: has %d linked transaction(s)", count)
+	}
+
 	_, err := db.Exec("DELETE FROM accounts WHERE id = ? AND is_system = 0", id)
 	if err != nil {
 		return fmt.Errorf("delete account: %w", err)

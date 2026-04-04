@@ -53,6 +53,9 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Invalidate existing sessions to prevent session fixation
+	auth.DeleteUserSessions(h.DB, user.ID)
+
 	sessionID, err := auth.CreateSession(h.DB, user.ID)
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -64,6 +67,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		Value:    sessionID,
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   !h.DevMode,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   7 * 24 * 60 * 60,
 	})

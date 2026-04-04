@@ -105,6 +105,17 @@ func UpdateContact(db *sql.DB, c *Contact) error {
 }
 
 func DeleteContact(db *sql.DB, id int) error {
+	// Check for linked invoices or bills
+	var count int
+	db.QueryRow("SELECT COUNT(*) FROM invoices WHERE contact_id = ?", id).Scan(&count)
+	if count > 0 {
+		return fmt.Errorf("cannot delete contact: has %d linked invoice(s)", count)
+	}
+	db.QueryRow("SELECT COUNT(*) FROM bills WHERE contact_id = ?", id).Scan(&count)
+	if count > 0 {
+		return fmt.Errorf("cannot delete contact: has %d linked bill(s)", count)
+	}
+
 	_, err := db.Exec("DELETE FROM contacts WHERE id = ?", id)
 	if err != nil {
 		return fmt.Errorf("delete contact: %w", err)

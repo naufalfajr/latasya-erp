@@ -22,7 +22,7 @@ type incomeFormData struct {
 
 func (h *Handler) ListIncome(w http.ResponseWriter, r *http.Request) {
 	f := model.JournalFilter{
-		SourceType: "income",
+		SourceType: model.SourceIncome,
 		DateFrom:   r.URL.Query().Get("from"),
 		DateTo:     r.URL.Query().Get("to"),
 		Search:     r.URL.Query().Get("search"),
@@ -113,7 +113,7 @@ func (h *Handler) EditIncome(w http.ResponseWriter, r *http.Request) {
 	}
 
 	je, err := model.GetJournalEntry(h.DB, id)
-	if err != nil || je.SourceType != "income" {
+	if err != nil || je.SourceType != model.SourceIncome {
 		http.NotFound(w, r)
 		return
 	}
@@ -214,9 +214,11 @@ func (h *Handler) DeleteIncome(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Override source_type to allow deletion
-	h.DB.Exec("UPDATE journal_entries SET source_type = 'manual' WHERE id = ? AND source_type = 'income'", id)
-	model.DeleteJournalEntry(h.DB, id)
+	if err := model.DeleteJournalEntryBySource(h.DB, id, model.SourceIncome); err != nil {
+		h.setFlash(w, "Error: "+err.Error())
+		http.Redirect(w, r, "/income", http.StatusSeeOther)
+		return
+	}
 
 	if r.Header.Get("HX-Request") == "true" {
 		w.WriteHeader(http.StatusOK)
@@ -229,8 +231,8 @@ func (h *Handler) DeleteIncome(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) newIncomeFormData() incomeFormData {
 	active := true
-	revenueAccounts, _ := model.ListAccounts(h.DB, model.AccountFilter{Type: "revenue", IsActive: &active})
-	depositAccounts, _ := model.ListAccounts(h.DB, model.AccountFilter{Type: "asset", IsActive: &active})
+	revenueAccounts, _ := model.ListAccounts(h.DB, model.AccountFilter{Type: model.AccountTypeRevenue, IsActive: &active})
+	depositAccounts, _ := model.ListAccounts(h.DB, model.AccountFilter{Type: model.AccountTypeAsset, IsActive: &active})
 
 	return incomeFormData{
 		Entry:           &model.JournalEntry{},

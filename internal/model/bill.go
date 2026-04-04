@@ -298,8 +298,10 @@ func RecordBillPayment(db *sql.DB, billID int, amount int, paymentDate string, p
 		return fmt.Errorf("create payment journal: %w", err)
 	}
 
-	db.Exec("INSERT INTO payments (payment_date, amount, payment_type, reference_id, payment_method, account_id, journal_id, created_by) VALUES (?, ?, 'bill', ?, 'bank_transfer', ?, ?, ?)",
-		paymentDate, amount, billID, paymentAccountID, journalID, userID)
+	if _, err := db.Exec("INSERT INTO payments (payment_date, amount, payment_type, reference_id, payment_method, account_id, journal_id, created_by) VALUES (?, ?, 'bill', ?, 'bank_transfer', ?, ?, ?)",
+		paymentDate, amount, billID, paymentAccountID, journalID, userID); err != nil {
+		return fmt.Errorf("insert payment: %w", err)
+	}
 
 	newAmountPaid := b.AmountPaid + amount
 	newStatus := "partial"

@@ -74,7 +74,7 @@ func (h *Handler) CreateJournal(w http.ResponseWriter, r *http.Request) {
 	je := &model.JournalEntry{
 		EntryDate:   r.FormValue("entry_date"),
 		Description: r.FormValue("description"),
-		SourceType:  "manual",
+		SourceType:  model.SourceManual,
 		IsPosted:    true,
 		CreatedBy:   user.ID,
 	}
@@ -142,7 +142,7 @@ func (h *Handler) EditJournal(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Don't allow editing auto-generated entries
-	if je.SourceType != "" && je.SourceType != "manual" {
+	if je.SourceType != "" && je.SourceType != model.SourceManual {
 		h.setFlash(w, "Cannot edit auto-generated journal entries")
 		http.Redirect(w, r, fmt.Sprintf("/journals/%d", id), http.StatusSeeOther)
 		return

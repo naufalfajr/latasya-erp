@@ -46,6 +46,12 @@ func DeleteSession(db *sql.DB, sessionID string) error {
 	return err
 }
 
+// DeleteUserSessions removes all sessions for a user (used on login to prevent session fixation).
+func DeleteUserSessions(db *sql.DB, userID int) error {
+	_, err := db.Exec("DELETE FROM sessions WHERE user_id = ?", userID)
+	return err
+}
+
 func CleanExpiredSessions(db *sql.DB) {
 	for {
 		time.Sleep(1 * time.Hour)

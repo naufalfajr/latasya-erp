@@ -277,3 +277,21 @@ func DeleteJournalEntry(db *sql.DB, id int) error {
 	}
 	return nil
 }
+
+// DeleteJournalEntryBySource deletes a journal entry with the given source type.
+// This is used by income/expense delete to bypass the auto-generated check.
+func DeleteJournalEntryBySource(db *sql.DB, id int, sourceType string) error {
+	var actualSource sql.NullString
+	err := db.QueryRow("SELECT source_type FROM journal_entries WHERE id = ?", id).Scan(&actualSource)
+	if err != nil {
+		return fmt.Errorf("get journal entry: %w", err)
+	}
+	if !actualSource.Valid || actualSource.String != sourceType {
+		return fmt.Errorf("journal entry %d is not a %s entry", id, sourceType)
+	}
+	_, err = db.Exec("DELETE FROM journal_entries WHERE id = ?", id)
+	if err != nil {
+		return fmt.Errorf("delete journal entry: %w", err)
+	}
+	return nil
+}

@@ -59,3 +59,15 @@ func RequireAdmin(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
+
+// AdminOnly wraps a HandlerFunc with admin authorization check.
+func AdminOnly(fn http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user := UserFromContext(r.Context())
+		if user == nil || !user.IsAdmin() {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		fn(w, r)
+	}
+}

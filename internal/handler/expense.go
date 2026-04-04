@@ -22,7 +22,7 @@ type expenseFormData struct {
 
 func (h *Handler) ListExpenses(w http.ResponseWriter, r *http.Request) {
 	f := model.JournalFilter{
-		SourceType: "expense",
+		SourceType: model.SourceExpense,
 		DateFrom:   r.URL.Query().Get("from"),
 		DateTo:     r.URL.Query().Get("to"),
 		Search:     r.URL.Query().Get("search"),
@@ -114,7 +114,7 @@ func (h *Handler) EditExpense(w http.ResponseWriter, r *http.Request) {
 	}
 
 	je, err := model.GetJournalEntry(h.DB, id)
-	if err != nil || je.SourceType != "expense" {
+	if err != nil || je.SourceType != model.SourceExpense {
 		http.NotFound(w, r)
 		return
 	}
@@ -214,8 +214,11 @@ func (h *Handler) DeleteExpense(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.DB.Exec("UPDATE journal_entries SET source_type = 'manual' WHERE id = ? AND source_type = 'expense'", id)
-	model.DeleteJournalEntry(h.DB, id)
+	if err := model.DeleteJournalEntryBySource(h.DB, id, model.SourceExpense); err != nil {
+		h.setFlash(w, "Error: "+err.Error())
+		http.Redirect(w, r, "/expenses", http.StatusSeeOther)
+		return
+	}
 
 	if r.Header.Get("HX-Request") == "true" {
 		w.WriteHeader(http.StatusOK)
@@ -228,7 +231,7 @@ func (h *Handler) DeleteExpense(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) newExpenseFormData() expenseFormData {
 	active := true
-	expenseAccounts, _ := model.ListAccounts(h.DB, model.AccountFilter{Type: "expense", IsActive: &active})
+	expenseAccounts, _ := model.ListAccounts(h.DB, model.AccountFilter{Type: model.AccountTypeExpense, IsActive: &active})
 	paymentAccounts, _ := model.ListAccounts(h.DB, model.AccountFilter{Type: "asset", IsActive: &active})
 
 	return expenseFormData{
