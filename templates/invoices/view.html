@@ -1,0 +1,156 @@
+{{template "base" .}}
+{{define "content"}}
+{{$inv := (index .Data "Invoice")}}
+{{$assetAccounts := (index .Data "AssetAccounts")}}
+
+<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+    <div>
+        <h1 class="text-2xl font-bold">{{$inv.InvoiceNumber}}</h1>
+        <p class="text-sm opacity-60">{{$inv.ContactName}} &middot; {{formatDate $inv.InvoiceDate}}</p>
+    </div>
+    <div class="flex gap-2 flex-wrap">
+        <a href="/invoices" class="btn btn-ghost btn-sm">Back</a>
+        <a href="/invoices/{{$inv.ID}}/print" class="btn btn-sm" target="_blank">Print</a>
+        {{if .User.IsAdmin}}
+            {{if eq $inv.Status "draft"}}
+            <a href="/invoices/{{$inv.ID}}/edit" class="btn btn-sm">Edit</a>
+            <form method="POST" action="/invoices/{{$inv.ID}}/send" class="inline">
+                <button type="submit" class="btn btn-info btn-sm"
+                    onclick="return confirm('Send this invoice? This will create a journal entry.')">Mark as Sent</button>
+            </form>
+            <button class="btn btn-error btn-sm"
+                hx-delete="/invoices/{{$inv.ID}}"
+                hx-confirm="Delete this draft invoice?"
+                hx-target="body">Delete</button>
+            {{end}}
+        {{end}}
+    </div>
+</div>
+
+<!-- Status badge -->
+<div class="mb-4">
+    <span class="badge
+        {{if eq $inv.Status "draft"}}badge-ghost
+        {{else if eq $inv.Status "sent"}}badge-info
+        {{else if eq $inv.Status "partial"}}badge-warning
+        {{else if eq $inv.Status "paid"}}badge-success
+        {{else if eq $inv.Status "overdue"}}badge-error
+        {{end}} badge-lg">{{$inv.Status}}</span>
+    {{if $inv.JournalID}}
+    <a href="/journals/{{$inv.JournalID}}" class="link link-primary text-sm ml-2">View Journal Entry</a>
+    {{end}}
+</div>
+
+<!-- Invoice details -->
+<div class="card bg-base-100 shadow mb-4">
+    <div class="card-body">
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+            <div>
+                <p class="text-sm opacity-60">Invoice Date</p>
+                <p class="font-semibold">{{formatDate $inv.InvoiceDate}}</p>
+            </div>
+            <div>
+                <p class="text-sm opacity-60">Due Date</p>
+                <p class="font-semibold">{{formatDate $inv.DueDate}}</p>
+            </div>
+            <div>
+                <p class="text-sm opacity-60">Total</p>
+                <p class="font-semibold font-mono">{{formatIDR $inv.Total}}</p>
+            </div>
+            <div>
+                <p class="text-sm opacity-60">Amount Due</p>
+                <p class="font-semibold font-mono {{if gt $inv.AmountDue 0}}text-error{{else}}text-success{{end}}">{{formatIDR $inv.AmountDue}}</p>
+            </div>
+        </div>
+
+        {{if $inv.Notes}}
+        <p class="text-sm opacity-60 mb-4">{{$inv.Notes}}</p>
+        {{end}}
+
+        <div class="overflow-x-auto">
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Description</th>
+                        <th>Account</th>
+                        <th class="text-right">Qty</th>
+                        <th class="text-right">Unit Price</th>
+                        <th class="text-right">Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range $inv.Lines}}
+                    <tr>
+                        <td>{{.Description}}</td>
+                        <td class="text-sm">{{.AccountCode}} - {{.AccountName}}</td>
+                        <td class="text-right">{{.Quantity}}</td>
+                        <td class="text-right font-mono">{{formatIDR .UnitPrice}}</td>
+                        <td class="text-right font-mono">{{formatIDR .Amount}}</td>
+                    </tr>
+                    {{end}}
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="4" class="text-right">Subtotal</td>
+                        <td class="text-right font-mono">{{formatIDR $inv.Subtotal}}</td>
+                    </tr>
+                    {{if gt $inv.TaxAmount 0}}
+                    <tr>
+                        <td colspan="4" class="text-right">Tax</td>
+                        <td class="text-right font-mono">{{formatIDR $inv.TaxAmount}}</td>
+                    </tr>
+                    {{end}}
+                    <tr class="font-bold">
+                        <td colspan="4" class="text-right">Total</td>
+                        <td class="text-right font-mono">{{formatIDR $inv.Total}}</td>
+                    </tr>
+                    {{if gt $inv.AmountPaid 0}}
+                    <tr class="text-success">
+                        <td colspan="4" class="text-right">Paid</td>
+                        <td class="text-right font-mono">{{formatIDR $inv.AmountPaid}}</td>
+                    </tr>
+                    <tr class="font-bold">
+                        <td colspan="4" class="text-right">Balance Due</td>
+                        <td class="text-right font-mono">{{formatIDR $inv.AmountDue}}</td>
+                    </tr>
+                    {{end}}
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Record Payment Form -->
+{{if and .User.IsAdmin (or (eq $inv.Status "sent") (eq $inv.Status "partial") (eq $inv.Status "overdue"))}}
+<div class="card bg-base-100 shadow">
+    <div class="card-body">
+        <h2 class="card-title text-lg">Record Payment</h2>
+        <form method="POST" action="/invoices/{{$inv.ID}}/payment">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div class="form-control">
+                    <label class="label"><span class="label-text">Date *</span></label>
+                    <input type="date" name="payment_date" class="input input-bordered input-sm" required>
+                </div>
+                <div class="form-control">
+                    <label class="label"><span class="label-text">Amount (Rp) *</span></label>
+                    <input type="number" name="amount" class="input input-bordered input-sm font-mono"
+                        value="{{$inv.AmountDue}}" min="1" max="{{$inv.AmountDue}}" required>
+                </div>
+                <div class="form-control">
+                    <label class="label"><span class="label-text">Deposit To *</span></label>
+                    <select name="payment_account" class="select select-bordered select-sm" required>
+                        <option value="">Select account</option>
+                        {{range $assetAccounts}}
+                        <option value="{{.ID}}">{{.Code}} - {{.Name}}</option>
+                        {{end}}
+                    </select>
+                </div>
+            </div>
+            <div class="mt-3">
+                <button type="submit" class="btn btn-success btn-sm">Record Payment</button>
+            </div>
+        </form>
+    </div>
+</div>
+{{end}}
+{{end}}

@@ -59,6 +59,17 @@ func testServer(t *testing.T) (*httptest.Server, *sql.DB) {
 	protected.HandleFunc("GET /expenses/{id}/edit", h.EditExpense)
 	protected.HandleFunc("POST /expenses/{id}", h.UpdateExpense)
 	protected.HandleFunc("DELETE /expenses/{id}", h.DeleteExpense)
+	protected.HandleFunc("GET /invoices", h.ListInvoices)
+	protected.HandleFunc("GET /invoices/new", h.NewInvoice)
+	protected.HandleFunc("POST /invoices", h.CreateInvoice)
+	protected.HandleFunc("GET /invoices/{id}", h.ViewInvoice)
+	protected.HandleFunc("GET /invoices/{id}/edit", h.EditInvoice)
+	protected.HandleFunc("POST /invoices/{id}", h.UpdateInvoice)
+	protected.HandleFunc("DELETE /invoices/{id}", h.DeleteInvoice)
+	protected.HandleFunc("POST /invoices/{id}/send", h.SendInvoice)
+	protected.HandleFunc("POST /invoices/{id}/payment", h.InvoicePayment)
+	protected.HandleFunc("GET /invoices/{id}/print", h.PrintInvoice)
+	protected.HandleFunc("GET /htmx/invoice-line", h.InvoiceLinePartial)
 
 	mux.Handle("/", auth.RequireAuth(db, protected))
 
@@ -805,5 +816,86 @@ func TestCreateExpense_ValidationError(t *testing.T) {
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("expected 200 (validation error), got %d", resp.StatusCode)
+	}
+}
+
+// --- Invoice Handler Tests ---
+
+func TestListInvoices_Handler(t *testing.T) {
+	ts, _ := testServer(t)
+	cookies := loginAsAdmin(t, ts)
+
+	client := &http.Client{}
+	req, _ := requestWithCookies("GET", ts.URL+"/invoices", cookies, "")
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+}
+
+func TestInvoiceLifecycle_Handler(t *testing.T) {
+	ts, db := testServer(t)
+	cookies := loginAsAdmin(t, ts)
+
+	// Create a customer
+	db.Exec("INSERT INTO contacts (name, contact_type, is_active) VALUES ('SD Test', 'customer', 1)")
+	var contactID, revenueID, cashID int
+	db.QueryRow("SELECT id FROM contacts WHERE name = 'SD Test'").Scan(&contactID)
+	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
+	db.QueryRow("SELECT id FROM accounts WHERE code = '1-1001'").Scan(&cashID)
+
+	noRedirect := &http.Client{CheckRedirect: func(r *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+
+	// 1. Create invoice
+	form := fmt.Sprintf(
+		"contact_id=%d&invoice_date=2026-04-04&due_date=2026-04-30&line_description=Bus+fee&line_account_id=%d&line_quantity=100&line_unit_price=5000000",
+		contactID, revenueID,
+	)
+	req, _ := requestWithCookies("POST", ts.URL+"/invoices", cookies, form)
+	resp, err := noRedirect.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("create invoice: expected 303, got %d", resp.StatusCode)
+	}
+	invLoc := resp.Header.Get("Location")
+
+	// 2. View invoice
+	client := &http.Client{}
+	req2, _ := requestWithCookies("GET", ts.URL+invLoc, cookies, "")
+	resp2, _ := client.Do(req2)
+	if resp2.StatusCode != http.StatusOK {
+		t.Errorf("view invoice: expected 200, got %d", resp2.StatusCode)
+	}
+
+	// 3. Send invoice
+	req3, _ := requestWithCookies("POST", ts.URL+invLoc+"/send", cookies, "")
+	resp3, _ := noRedirect.Do(req3)
+	if resp3.StatusCode != http.StatusSeeOther {
+		t.Errorf("send invoice: expected 303, got %d", resp3.StatusCode)
+	}
+
+	// 4. Record payment
+	payForm := fmt.Sprintf("payment_date=2026-04-10&amount=5000000&payment_account=%d", cashID)
+	req4, _ := requestWithCookies("POST", ts.URL+invLoc+"/payment", cookies, payForm)
+	resp4, _ := noRedirect.Do(req4)
+	if resp4.StatusCode != http.StatusSeeOther {
+		t.Errorf("payment: expected 303, got %d", resp4.StatusCode)
+	}
+
+	// 5. Verify final status is "paid"
+	var status string
+	invIDStr := strings.TrimPrefix(invLoc, "/invoices/")
+	db.QueryRow("SELECT status FROM invoices WHERE id = ?", invIDStr).Scan(&status)
+	if status != "paid" {
+		t.Errorf("expected status 'paid', got %q", status)
 	}
 }
