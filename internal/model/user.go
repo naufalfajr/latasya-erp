@@ -17,7 +17,7 @@ type User struct {
 }
 
 func (u *User) IsAdmin() bool {
-	return u.Role == "admin"
+	return u.Role == RoleAdmin
 }
 
 func GetUserByUsername(db *sql.DB, username string) (*User, error) {

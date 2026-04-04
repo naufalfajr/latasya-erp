@@ -3,7 +3,6 @@ package model
 import (
 	"database/sql"
 	"fmt"
-	"time"
 )
 
 type Bill struct {
@@ -44,14 +43,7 @@ type BillFilter struct {
 }
 
 func GenerateBillNumber(db *sql.DB) (string, error) {
-	now := time.Now()
-	prefix := fmt.Sprintf("BILL-%s", now.Format("200601"))
-	var count int
-	err := db.QueryRow("SELECT COUNT(*) FROM bills WHERE bill_number LIKE ?", prefix+"%").Scan(&count)
-	if err != nil {
-		return "", fmt.Errorf("count bills: %w", err)
-	}
-	return fmt.Sprintf("%s-%04d", prefix, count+1), nil
+	return GenerateDocNumber(db, "bills", "bill_number", "BILL")
 }
 
 func CreateBill(db *sql.DB, b *Bill, lines []BillLine) (int, error) {
@@ -129,7 +121,9 @@ func GetBill(db *sql.DB, id int) (*Bill, error) {
 
 	for rows.Next() {
 		var l BillLine
-		rows.Scan(&l.ID, &l.BillID, &l.Description, &l.Quantity, &l.UnitPrice, &l.Amount, &l.AccountID, &l.AccountCode, &l.AccountName)
+		if err := rows.Scan(&l.ID, &l.BillID, &l.Description, &l.Quantity, &l.UnitPrice, &l.Amount, &l.AccountID, &l.AccountCode, &l.AccountName); err != nil {
+			return nil, fmt.Errorf("scan bill line: %w", err)
+		}
 		b.Lines = append(b.Lines, l)
 	}
 
@@ -163,9 +157,11 @@ func ListBills(db *sql.DB, f BillFilter) ([]Bill, error) {
 	var bills []Bill
 	for rows.Next() {
 		var b Bill
-		rows.Scan(&b.ID, &b.BillNumber, &b.ContactID, &b.BillDate, &b.DueDate, &b.Status,
+		if err := rows.Scan(&b.ID, &b.BillNumber, &b.ContactID, &b.BillDate, &b.DueDate, &b.Status,
 			&b.Subtotal, &b.TaxAmount, &b.Total, &b.AmountPaid, &b.Notes,
-			&b.JournalID, &b.CreatedBy, &b.CreatedAt, &b.UpdatedAt, &b.ContactName)
+			&b.JournalID, &b.CreatedBy, &b.CreatedAt, &b.UpdatedAt, &b.ContactName); err != nil {
+			return nil, fmt.Errorf("scan bill: %w", err)
+		}
 		bills = append(bills, b)
 	}
 	return bills, nil
@@ -192,13 +188,19 @@ func UpdateBill(db *sql.DB, b *Bill, lines []BillLine) error {
 	}
 	defer tx.Rollback()
 
-	tx.Exec(`UPDATE bills SET contact_id=?, bill_date=?, due_date=?, subtotal=?, tax_amount=?, total=?, notes=?, updated_at=datetime('now') WHERE id=?`,
-		b.ContactID, b.BillDate, b.DueDate, b.Subtotal, b.TaxAmount, b.Total, b.Notes, b.ID)
+	if _, err := tx.Exec(`UPDATE bills SET contact_id=?, bill_date=?, due_date=?, subtotal=?, tax_amount=?, total=?, notes=?, updated_at=datetime('now') WHERE id=?`,
+		b.ContactID, b.BillDate, b.DueDate, b.Subtotal, b.TaxAmount, b.Total, b.Notes, b.ID); err != nil {
+		return fmt.Errorf("update bill: %w", err)
+	}
 
-	tx.Exec("DELETE FROM bill_lines WHERE bill_id = ?", b.ID)
+	if _, err := tx.Exec("DELETE FROM bill_lines WHERE bill_id = ?", b.ID); err != nil {
+		return fmt.Errorf("delete bill lines: %w", err)
+	}
 	for _, l := range lines {
-		tx.Exec("INSERT INTO bill_lines (bill_id, description, quantity, unit_price, amount, account_id) VALUES (?, ?, ?, ?, ?, ?)",
-			b.ID, l.Description, l.Quantity, l.UnitPrice, l.Amount, l.AccountID)
+		if _, err := tx.Exec("INSERT INTO bill_lines (bill_id, description, quantity, unit_price, amount, account_id) VALUES (?, ?, ?, ?, ?, ?)",
+			b.ID, l.Description, l.Quantity, l.UnitPrice, l.Amount, l.AccountID); err != nil {
+			return fmt.Errorf("insert bill line: %w", err)
+		}
 	}
 
 	return tx.Commit()
@@ -216,7 +218,7 @@ func ReceiveBill(db *sql.DB, id int, userID int) error {
 	}
 
 	var apAccountID int
-	db.QueryRow("SELECT id FROM accounts WHERE code = '2-1001'").Scan(&apAccountID)
+	db.QueryRow("SELECT id FROM accounts WHERE code = ?", AccountCodeAP).Scan(&apAccountID)
 	if apAccountID == 0 {
 		return fmt.Errorf("accounts payable account not found")
 	}
@@ -239,7 +241,7 @@ func ReceiveBill(db *sql.DB, id int, userID int) error {
 	// Debit tax if any
 	if b.TaxAmount > 0 {
 		var taxAccountID int
-		db.QueryRow("SELECT id FROM accounts WHERE code = '2-1200'").Scan(&taxAccountID)
+		db.QueryRow("SELECT id FROM accounts WHERE code = ?", AccountCodeTax).Scan(&taxAccountID)
 		if taxAccountID > 0 {
 			lines = append(lines, JournalLine{
 				AccountID: taxAccountID, Debit: b.TaxAmount, Credit: 0, Memo: "Tax",
@@ -276,7 +278,7 @@ func RecordBillPayment(db *sql.DB, billID int, amount int, paymentDate string, p
 	}
 
 	var apAccountID int
-	db.QueryRow("SELECT id FROM accounts WHERE code = '2-1001'").Scan(&apAccountID)
+	db.QueryRow("SELECT id FROM accounts WHERE code = ?", AccountCodeAP).Scan(&apAccountID)
 
 	// Debit AP (reduce liability), Credit Cash/Bank (reduce asset)
 	je := &JournalEntry{

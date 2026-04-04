@@ -3,7 +3,6 @@ package model
 import (
 	"database/sql"
 	"fmt"
-	"time"
 )
 
 type Invoice struct {
@@ -46,14 +45,7 @@ type InvoiceFilter struct {
 }
 
 func GenerateInvoiceNumber(db *sql.DB) (string, error) {
-	now := time.Now()
-	prefix := fmt.Sprintf("INV-%s", now.Format("200601"))
-	var count int
-	err := db.QueryRow("SELECT COUNT(*) FROM invoices WHERE invoice_number LIKE ?", prefix+"%").Scan(&count)
-	if err != nil {
-		return "", fmt.Errorf("count invoices: %w", err)
-	}
-	return fmt.Sprintf("%s-%04d", prefix, count+1), nil
+	return GenerateDocNumber(db, "invoices", "invoice_number", "INV")
 }
 
 func CreateInvoice(db *sql.DB, inv *Invoice, lines []InvoiceLine) (int, error) {
@@ -83,7 +75,7 @@ func CreateInvoice(db *sql.DB, inv *Invoice, lines []InvoiceLine) (int, error) {
 	result, err := tx.Exec(
 		`INSERT INTO invoices (invoice_number, contact_id, invoice_date, due_date, status, subtotal, tax_amount, total, amount_paid, notes, created_by)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
-		inv.InvoiceNumber, inv.ContactID, inv.InvoiceDate, inv.DueDate, "draft",
+		inv.InvoiceNumber, inv.ContactID, inv.InvoiceDate, inv.DueDate, StatusDraft,
 		inv.Subtotal, inv.TaxAmount, inv.Total, inv.Notes, inv.CreatedBy,
 	)
 	if err != nil {
@@ -228,7 +220,9 @@ func UpdateInvoice(db *sql.DB, inv *Invoice, lines []InvoiceLine) error {
 		return fmt.Errorf("update invoice: %w", err)
 	}
 
-	tx.Exec("DELETE FROM invoice_lines WHERE invoice_id = ?", inv.ID)
+	if _, err := tx.Exec("DELETE FROM invoice_lines WHERE invoice_id = ?", inv.ID); err != nil {
+		return fmt.Errorf("delete invoice lines: %w", err)
+	}
 	for _, l := range lines {
 		_, err := tx.Exec(
 			"INSERT INTO invoice_lines (invoice_id, description, quantity, unit_price, amount, account_id) VALUES (?, ?, ?, ?, ?, ?)",
@@ -255,7 +249,7 @@ func SendInvoice(db *sql.DB, id int, userID int) error {
 
 	// Create journal entry: Debit AR, Credit Revenue
 	var arAccountID int
-	db.QueryRow("SELECT id FROM accounts WHERE code = '1-1100'").Scan(&arAccountID)
+	db.QueryRow("SELECT id FROM accounts WHERE code = ?", AccountCodeAR).Scan(&arAccountID)
 	if arAccountID == 0 {
 		return fmt.Errorf("accounts receivable account not found")
 	}
@@ -288,7 +282,7 @@ func SendInvoice(db *sql.DB, id int, userID int) error {
 	// Credit tax if any
 	if inv.TaxAmount > 0 {
 		var taxAccountID int
-		db.QueryRow("SELECT id FROM accounts WHERE code = '2-1200'").Scan(&taxAccountID)
+		db.QueryRow("SELECT id FROM accounts WHERE code = ?", AccountCodeTax).Scan(&taxAccountID)
 		if taxAccountID > 0 {
 			lines = append(lines, JournalLine{
 				AccountID: taxAccountID,
@@ -325,7 +319,7 @@ func RecordInvoicePayment(db *sql.DB, invoiceID int, amount int, paymentDate str
 
 	// Create journal entry: Debit Cash/Bank, Credit AR
 	var arAccountID int
-	db.QueryRow("SELECT id FROM accounts WHERE code = '1-1100'").Scan(&arAccountID)
+	db.QueryRow("SELECT id FROM accounts WHERE code = ?", AccountCodeAR).Scan(&arAccountID)
 
 	je := &JournalEntry{
 		EntryDate:   paymentDate,

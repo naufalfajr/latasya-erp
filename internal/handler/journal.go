@@ -5,7 +5,6 @@ import (
 	"html/template"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/naufal/latasya-erp/internal/auth"
 	"github.com/naufal/latasya-erp/internal/model"
@@ -314,20 +313,3 @@ func validateJournal(je *model.JournalEntry, lines []model.JournalLine) map[stri
 	return errors
 }
 
-// parseIDR parses a string like "150000" or "150.000" into an integer
-func parseIDR(s string) int {
-	s = strings.TrimSpace(s)
-	s = strings.ReplaceAll(s, ".", "")
-	s = strings.ReplaceAll(s, ",", "")
-	s = strings.ReplaceAll(s, "Rp", "")
-	s = strings.TrimSpace(s)
-	n, _ := strconv.Atoi(s)
-	return n
-}
-
-func getIndex(slice []string, i int) string {
-	if i < len(slice) {
-		return slice[i]
-	}
-	return ""
-}

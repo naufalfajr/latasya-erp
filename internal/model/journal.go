@@ -3,7 +3,6 @@ package model
 import (
 	"database/sql"
 	"fmt"
-	"time"
 )
 
 type JournalEntry struct {
@@ -45,18 +44,7 @@ type JournalFilter struct {
 
 // GenerateReference creates a reference like JE-202604-0001
 func GenerateReference(db *sql.DB) (string, error) {
-	now := time.Now()
-	prefix := fmt.Sprintf("JE-%s", now.Format("200601"))
-
-	var count int
-	err := db.QueryRow(
-		"SELECT COUNT(*) FROM journal_entries WHERE reference LIKE ?",
-		prefix+"%",
-	).Scan(&count)
-	if err != nil {
-		return "", fmt.Errorf("count references: %w", err)
-	}
-	return fmt.Sprintf("%s-%04d", prefix, count+1), nil
+	return GenerateDocNumber(db, "journal_entries", "reference", "JE")
 }
 
 func CreateJournalEntry(db *sql.DB, je *JournalEntry, lines []JournalLine) (int, error) {
