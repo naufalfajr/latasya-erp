@@ -1,0 +1,77 @@
+{{template "base" .}}
+{{define "content"}}
+<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+    <h1 class="text-2xl font-bold">Contacts</h1>
+    {{if .User.IsAdmin}}
+    <a href="/contacts/new" class="btn btn-primary btn-sm">+ New Contact</a>
+    {{end}}
+</div>
+
+{{$data := .Data}}
+
+<!-- Filter tabs -->
+<div class="tabs tabs-boxed mb-4">
+    <a href="/contacts" class="tab {{if eq $data.Filter ""}}tab-active{{end}}">All</a>
+    <a href="/contacts?type=customer" class="tab {{if eq $data.Filter "customer"}}tab-active{{end}}">Customers</a>
+    <a href="/contacts?type=supplier" class="tab {{if eq $data.Filter "supplier"}}tab-active{{end}}">Suppliers</a>
+</div>
+
+<!-- Search -->
+<div class="form-control mb-4">
+    <input type="text" placeholder="Search contacts..."
+        class="input input-bordered input-sm w-full max-w-xs"
+        hx-get="/contacts{{if $data.Filter}}?type={{$data.Filter}}{{end}}"
+        hx-trigger="keyup changed delay:300ms"
+        hx-target="#contact-table"
+        hx-select="#contact-table"
+        hx-push-url="false"
+        name="search"
+        value="{{$data.Search}}">
+</div>
+
+<!-- Contact table -->
+<div id="contact-table" class="overflow-x-auto">
+    <table class="table table-sm">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Phone</th>
+                <th class="hidden sm:table-cell">Email</th>
+                <th class="hidden md:table-cell">Address</th>
+                {{if .User.IsAdmin}}<th>Actions</th>{{end}}
+            </tr>
+        </thead>
+        <tbody>
+            {{range $data.Contacts}}
+            <tr id="contact-{{.ID}}">
+                <td class="font-semibold">{{.Name}}</td>
+                <td><span class="badge badge-sm
+                    {{if eq .ContactType "customer"}}badge-success
+                    {{else if eq .ContactType "supplier"}}badge-warning
+                    {{else}}badge-info{{end}}">{{.ContactType}}</span></td>
+                <td class="text-sm">{{.Phone}}</td>
+                <td class="hidden sm:table-cell text-sm">{{.Email}}</td>
+                <td class="hidden md:table-cell text-sm opacity-60">{{.Address}}</td>
+                {{if $.User.IsAdmin}}
+                <td>
+                    <div class="flex gap-1">
+                        <a href="/contacts/{{.ID}}/edit" class="btn btn-ghost btn-xs">Edit</a>
+                        <button class="btn btn-ghost btn-xs text-error"
+                            hx-delete="/contacts/{{.ID}}"
+                            hx-target="#contact-{{.ID}}"
+                            hx-swap="outerHTML"
+                            hx-confirm="Delete contact {{.Name}}?">Delete</button>
+                    </div>
+                </td>
+                {{end}}
+            </tr>
+            {{else}}
+            <tr>
+                <td colspan="6" class="text-center py-8 opacity-60">No contacts found. Add your first contact.</td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+{{end}}

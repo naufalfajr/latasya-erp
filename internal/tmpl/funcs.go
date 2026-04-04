@@ -1,0 +1,62 @@
+package tmpl
+
+import (
+	"fmt"
+	"html/template"
+	"strings"
+	"time"
+)
+
+func FuncMap() template.FuncMap {
+	return template.FuncMap{
+		"formatIDR": formatIDR,
+		"formatDate": formatDate,
+		"add": func(a, b int) int { return a + b },
+		"sub": func(a, b int) int { return a - b },
+		"eq":  func(a, b string) bool { return a == b },
+		"seq": func(n int) []int {
+			s := make([]int, n)
+			for i := range s {
+				s[i] = i + 1
+			}
+			return s
+		},
+	}
+}
+
+// formatIDR formats an integer as Indonesian Rupiah: 150000 → "Rp 150.000"
+func formatIDR(amount int) string {
+	negative := amount < 0
+	if negative {
+		amount = -amount
+	}
+
+	s := fmt.Sprintf("%d", amount)
+	// Add dots as thousands separators
+	var result []string
+	for i, j := len(s), 0; i > 0; j++ {
+		end := i
+		i -= 3
+		if i < 0 {
+			i = 0
+		}
+		result = append([]string{s[i:end]}, result...)
+	}
+
+	formatted := "Rp " + strings.Join(result, ".")
+	if negative {
+		formatted = "-" + formatted
+	}
+	return formatted
+}
+
+func formatDate(s string) string {
+	t, err := time.Parse("2006-01-02", s)
+	if err != nil {
+		t, err = time.Parse(time.DateTime, s)
+		if err != nil {
+			return s
+		}
+	}
+	return t.Format("2 Jan 2006")
+}

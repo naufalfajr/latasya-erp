@@ -1,0 +1,105 @@
+{{template "base" .}}
+{{define "content"}}
+{{$data := .Data}}
+
+<div class="max-w-2xl">
+    <h1 class="text-2xl font-bold mb-6">
+        {{if $data.IsEdit}}Edit Account{{else}}New Account{{end}}
+    </h1>
+
+    <form method="POST" action="{{if $data.IsEdit}}/accounts/{{$data.Account.ID}}{{else}}/accounts{{end}}"
+        class="card bg-base-100 shadow">
+        <div class="card-body">
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <!-- Code -->
+                <div class="form-control">
+                    <label class="label" for="code">
+                        <span class="label-text">Account Code *</span>
+                    </label>
+                    <input type="text" id="code" name="code" placeholder="e.g. 1-1001"
+                        class="input input-bordered {{if index $data.Errors "code"}}input-error{{end}}"
+                        value="{{$data.Account.Code}}" required>
+                    {{if index $data.Errors "code"}}
+                    <label class="label"><span class="label-text-alt text-error">{{index $data.Errors "code"}}</span></label>
+                    {{end}}
+                </div>
+
+                <!-- Name -->
+                <div class="form-control">
+                    <label class="label" for="name">
+                        <span class="label-text">Account Name *</span>
+                    </label>
+                    <input type="text" id="name" name="name" placeholder="e.g. Cash on Hand"
+                        class="input input-bordered {{if index $data.Errors "name"}}input-error{{end}}"
+                        value="{{$data.Account.Name}}" required>
+                    {{if index $data.Errors "name"}}
+                    <label class="label"><span class="label-text-alt text-error">{{index $data.Errors "name"}}</span></label>
+                    {{end}}
+                </div>
+
+                <!-- Account Type -->
+                <div class="form-control">
+                    <label class="label" for="account_type">
+                        <span class="label-text">Account Type *</span>
+                    </label>
+                    <select id="account_type" name="account_type"
+                        class="select select-bordered {{if index $data.Errors "account_type"}}select-error{{end}}" required>
+                        <option value="" disabled {{if eq $data.Account.AccountType ""}}selected{{end}}>Select type</option>
+                        <option value="asset" {{if eq $data.Account.AccountType "asset"}}selected{{end}}>Asset</option>
+                        <option value="liability" {{if eq $data.Account.AccountType "liability"}}selected{{end}}>Liability</option>
+                        <option value="equity" {{if eq $data.Account.AccountType "equity"}}selected{{end}}>Equity</option>
+                        <option value="revenue" {{if eq $data.Account.AccountType "revenue"}}selected{{end}}>Revenue</option>
+                        <option value="expense" {{if eq $data.Account.AccountType "expense"}}selected{{end}}>Expense</option>
+                    </select>
+                    {{if index $data.Errors "account_type"}}
+                    <label class="label"><span class="label-text-alt text-error">{{index $data.Errors "account_type"}}</span></label>
+                    {{end}}
+                </div>
+
+                <!-- Normal Balance -->
+                <div class="form-control">
+                    <label class="label" for="normal_balance">
+                        <span class="label-text">Normal Balance *</span>
+                    </label>
+                    <select id="normal_balance" name="normal_balance"
+                        class="select select-bordered {{if index $data.Errors "normal_balance"}}select-error{{end}}" required>
+                        <option value="" disabled {{if eq $data.Account.NormalBalance ""}}selected{{end}}>Select balance</option>
+                        <option value="debit" {{if eq $data.Account.NormalBalance "debit"}}selected{{end}}>Debit</option>
+                        <option value="credit" {{if eq $data.Account.NormalBalance "credit"}}selected{{end}}>Credit</option>
+                    </select>
+                    {{if index $data.Errors "normal_balance"}}
+                    <label class="label"><span class="label-text-alt text-error">{{index $data.Errors "normal_balance"}}</span></label>
+                    {{end}}
+                </div>
+            </div>
+
+            <!-- Description -->
+            <div class="form-control mt-2">
+                <label class="label" for="description">
+                    <span class="label-text">Description</span>
+                </label>
+                <textarea id="description" name="description" placeholder="Optional description"
+                    class="textarea textarea-bordered" rows="2">{{$data.Account.Description}}</textarea>
+            </div>
+
+            <!-- Active -->
+            <div class="form-control mt-2">
+                <label class="label cursor-pointer justify-start gap-2">
+                    <input type="checkbox" name="is_active" class="checkbox checkbox-sm"
+                        {{if $data.Account.IsActive}}checked{{end}}>
+                    <span class="label-text">Active</span>
+                </label>
+            </div>
+
+            <!-- Actions -->
+            <div class="card-actions justify-end mt-4">
+                <a href="/accounts" class="btn btn-ghost">Cancel</a>
+                <button type="submit" class="btn btn-primary">
+                    {{if $data.IsEdit}}Update{{else}}Create{{end}} Account
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+{{end}}

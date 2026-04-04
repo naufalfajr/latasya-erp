@@ -1,0 +1,47 @@
+{{define "sidebar"}}
+<ul class="menu p-4 w-64 min-h-full bg-base-100 text-base-content">
+    <li class="mb-4">
+        <span class="text-xl font-bold">Latasya ERP</span>
+    </li>
+
+    <li><a href="/" class="{{if eq .Path "/"}}active{{end}}">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0h4"/></svg>
+        Dashboard
+    </a></li>
+
+    <li class="menu-title mt-4"><span>Transactions</span></li>
+    <li><a href="/income" class="{{if eq .Path "/income"}}active{{end}}">Income</a></li>
+    <li><a href="/expenses" class="{{if eq .Path "/expenses"}}active{{end}}">Expenses</a></li>
+    <li><a href="/journals" class="{{if eq .Path "/journals"}}active{{end}}">Journal Entries</a></li>
+
+    <li class="menu-title mt-4"><span>Sales & Purchases</span></li>
+    <li><a href="/invoices" class="{{if eq .Path "/invoices"}}active{{end}}">Invoices</a></li>
+    <li><a href="/bills" class="{{if eq .Path "/bills"}}active{{end}}">Bills</a></li>
+    <li><a href="/contacts" class="{{if eq .Path "/contacts"}}active{{end}}">Contacts</a></li>
+
+    <li class="menu-title mt-4"><span>Reports</span></li>
+    <li><a href="/reports/profit-loss" class="{{if eq .Path "/reports/profit-loss"}}active{{end}}">Profit & Loss</a></li>
+    <li><a href="/reports/balance-sheet" class="{{if eq .Path "/reports/balance-sheet"}}active{{end}}">Balance Sheet</a></li>
+    <li><a href="/reports/cash-flow" class="{{if eq .Path "/reports/cash-flow"}}active{{end}}">Cash Flow</a></li>
+    <li><a href="/reports/trial-balance" class="{{if eq .Path "/reports/trial-balance"}}active{{end}}">Trial Balance</a></li>
+    <li><a href="/reports/general-ledger" class="{{if eq .Path "/reports/general-ledger"}}active{{end}}">General Ledger</a></li>
+
+    <li class="menu-title mt-4"><span>Settings</span></li>
+    <li><a href="/accounts" class="{{if eq .Path "/accounts"}}active{{end}}">Chart of Accounts</a></li>
+    {{if .User.IsAdmin}}
+    <li><a href="/users" class="{{if eq .Path "/users"}}active{{end}}">Users</a></li>
+    {{end}}
+
+    <li class="mt-auto pt-4 border-t border-base-300">
+        <div class="flex flex-col gap-1">
+            <span class="text-sm font-semibold">{{.User.FullName}}</span>
+            <span class="text-xs opacity-60">{{.User.Role}}</span>
+        </div>
+    </li>
+    <li>
+        <form method="POST" action="/logout">
+            <button type="submit" class="w-full text-left text-error">Logout</button>
+        </form>
+    </li>
+</ul>
+{{end}}

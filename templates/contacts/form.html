@@ -1,0 +1,101 @@
+{{template "base" .}}
+{{define "content"}}
+{{$data := .Data}}
+
+<div class="max-w-2xl">
+    <h1 class="text-2xl font-bold mb-6">
+        {{if $data.IsEdit}}Edit Contact{{else}}New Contact{{end}}
+    </h1>
+
+    <form method="POST" action="{{if $data.IsEdit}}/contacts/{{$data.Contact.ID}}{{else}}/contacts{{end}}"
+        class="card bg-base-100 shadow">
+        <div class="card-body">
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <!-- Name -->
+                <div class="form-control">
+                    <label class="label" for="name">
+                        <span class="label-text">Name *</span>
+                    </label>
+                    <input type="text" id="name" name="name" placeholder="Contact name"
+                        class="input input-bordered {{if index $data.Errors "name"}}input-error{{end}}"
+                        value="{{$data.Contact.Name}}" required>
+                    {{if index $data.Errors "name"}}
+                    <label class="label"><span class="label-text-alt text-error">{{index $data.Errors "name"}}</span></label>
+                    {{end}}
+                </div>
+
+                <!-- Contact Type -->
+                <div class="form-control">
+                    <label class="label" for="contact_type">
+                        <span class="label-text">Type *</span>
+                    </label>
+                    <select id="contact_type" name="contact_type"
+                        class="select select-bordered {{if index $data.Errors "contact_type"}}select-error{{end}}" required>
+                        <option value="" disabled {{if eq $data.Contact.ContactType ""}}selected{{end}}>Select type</option>
+                        <option value="customer" {{if eq $data.Contact.ContactType "customer"}}selected{{end}}>Customer</option>
+                        <option value="supplier" {{if eq $data.Contact.ContactType "supplier"}}selected{{end}}>Supplier</option>
+                        <option value="both" {{if eq $data.Contact.ContactType "both"}}selected{{end}}>Both</option>
+                    </select>
+                    {{if index $data.Errors "contact_type"}}
+                    <label class="label"><span class="label-text-alt text-error">{{index $data.Errors "contact_type"}}</span></label>
+                    {{end}}
+                </div>
+
+                <!-- Phone -->
+                <div class="form-control">
+                    <label class="label" for="phone">
+                        <span class="label-text">Phone</span>
+                    </label>
+                    <input type="tel" id="phone" name="phone" placeholder="e.g. 08123456789"
+                        class="input input-bordered" value="{{$data.Contact.Phone}}">
+                </div>
+
+                <!-- Email -->
+                <div class="form-control">
+                    <label class="label" for="email">
+                        <span class="label-text">Email</span>
+                    </label>
+                    <input type="email" id="email" name="email" placeholder="email@example.com"
+                        class="input input-bordered" value="{{$data.Contact.Email}}">
+                </div>
+            </div>
+
+            <!-- Address -->
+            <div class="form-control mt-2">
+                <label class="label" for="address">
+                    <span class="label-text">Address</span>
+                </label>
+                <textarea id="address" name="address" placeholder="Full address"
+                    class="textarea textarea-bordered" rows="2">{{$data.Contact.Address}}</textarea>
+            </div>
+
+            <!-- Notes -->
+            <div class="form-control mt-2">
+                <label class="label" for="notes">
+                    <span class="label-text">Notes</span>
+                </label>
+                <textarea id="notes" name="notes" placeholder="Additional notes"
+                    class="textarea textarea-bordered" rows="2">{{$data.Contact.Notes}}</textarea>
+            </div>
+
+            <!-- Active -->
+            <div class="form-control mt-2">
+                <label class="label cursor-pointer justify-start gap-2">
+                    <input type="checkbox" name="is_active" class="checkbox checkbox-sm"
+                        {{if $data.Contact.IsActive}}checked{{end}}>
+                    <span class="label-text">Active</span>
+                </label>
+            </div>
+
+            <!-- Actions -->
+            <div class="card-actions justify-end mt-4">
+                <a href="/contacts" class="btn btn-ghost">Cancel</a>
+                <button type="submit" class="btn btn-primary">
+                    {{if $data.IsEdit}}Update{{else}}Create{{end}} Contact
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+{{end}}

@@ -1,0 +1,15 @@
+# Binary
+latasya-erp
+
+# Database
+*.db
+data/
+
+# Tailwind CLI
+bin/
+
+# OS
+.DS_Store
+
+# Environment
+.env

@@ -1,0 +1,100 @@
+{{template "base" .}}
+{{define "content"}}
+<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+    <h1 class="text-2xl font-bold">Chart of Accounts</h1>
+    {{if .User.IsAdmin}}
+    <a href="/accounts/new" class="btn btn-primary btn-sm">+ New Account</a>
+    {{end}}
+</div>
+
+{{$data := .Data}}
+
+<!-- Filter tabs -->
+<div class="tabs tabs-boxed mb-4 flex-wrap">
+    <a href="/accounts" class="tab {{if eq $data.Filter ""}}tab-active{{end}}">
+        All ({{index $data.TypeCounts "all"}})
+    </a>
+    <a href="/accounts?type=asset" class="tab {{if eq $data.Filter "asset"}}tab-active{{end}}">
+        Asset ({{index $data.TypeCounts "asset"}})
+    </a>
+    <a href="/accounts?type=liability" class="tab {{if eq $data.Filter "liability"}}tab-active{{end}}">
+        Liability ({{index $data.TypeCounts "liability"}})
+    </a>
+    <a href="/accounts?type=equity" class="tab {{if eq $data.Filter "equity"}}tab-active{{end}}">
+        Equity ({{index $data.TypeCounts "equity"}})
+    </a>
+    <a href="/accounts?type=revenue" class="tab {{if eq $data.Filter "revenue"}}tab-active{{end}}">
+        Revenue ({{index $data.TypeCounts "revenue"}})
+    </a>
+    <a href="/accounts?type=expense" class="tab {{if eq $data.Filter "expense"}}tab-active{{end}}">
+        Expense ({{index $data.TypeCounts "expense"}})
+    </a>
+</div>
+
+<!-- Search -->
+<div class="form-control mb-4">
+    <input type="text" placeholder="Search accounts..."
+        class="input input-bordered input-sm w-full max-w-xs"
+        hx-get="/accounts{{if $data.Filter}}?type={{$data.Filter}}{{end}}"
+        hx-trigger="keyup changed delay:300ms"
+        hx-target="#account-table"
+        hx-select="#account-table"
+        hx-push-url="false"
+        name="search"
+        value="{{$data.Search}}">
+</div>
+
+<!-- Account table -->
+<div id="account-table" class="overflow-x-auto">
+    <table class="table table-sm">
+        <thead>
+            <tr>
+                <th>Code</th>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Normal Balance</th>
+                <th class="hidden sm:table-cell">Description</th>
+                {{if .User.IsAdmin}}<th>Actions</th>{{end}}
+            </tr>
+        </thead>
+        <tbody>
+            {{range $data.Accounts}}
+            <tr id="account-{{.ID}}">
+                <td class="font-mono text-sm">{{.Code}}</td>
+                <td>
+                    {{.Name}}
+                    {{if .IsSystem}}<span class="badge badge-ghost badge-xs">system</span>{{end}}
+                </td>
+                <td><span class="badge badge-sm
+                    {{if eq .AccountType "asset"}}badge-info
+                    {{else if eq .AccountType "liability"}}badge-warning
+                    {{else if eq .AccountType "equity"}}badge-secondary
+                    {{else if eq .AccountType "revenue"}}badge-success
+                    {{else if eq .AccountType "expense"}}badge-error
+                    {{end}}">{{.AccountType}}</span></td>
+                <td class="text-sm">{{.NormalBalance}}</td>
+                <td class="hidden sm:table-cell text-sm opacity-60">{{.Description}}</td>
+                {{if $.User.IsAdmin}}
+                <td>
+                    <div class="flex gap-1">
+                        <a href="/accounts/{{.ID}}/edit" class="btn btn-ghost btn-xs">Edit</a>
+                        {{if not .IsSystem}}
+                        <button class="btn btn-ghost btn-xs text-error"
+                            hx-delete="/accounts/{{.ID}}"
+                            hx-target="#account-{{.ID}}"
+                            hx-swap="outerHTML"
+                            hx-confirm="Delete account {{.Code}} - {{.Name}}?">Delete</button>
+                        {{end}}
+                    </div>
+                </td>
+                {{end}}
+            </tr>
+            {{else}}
+            <tr>
+                <td colspan="6" class="text-center py-8 opacity-60">No accounts found</td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+{{end}}
