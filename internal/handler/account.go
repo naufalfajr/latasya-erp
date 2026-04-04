@@ -30,7 +30,11 @@ func (h *Handler) ListAccounts(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Count by type for filter tabs
-	allAccounts, _ := model.ListAccounts(h.DB, model.AccountFilter{IsActive: &active})
+	allAccounts, err := model.ListAccounts(h.DB, model.AccountFilter{IsActive: &active})
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
 	typeCounts := map[string]int{"all": len(allAccounts)}
 	for _, a := range allAccounts {
 		typeCounts[a.AccountType]++

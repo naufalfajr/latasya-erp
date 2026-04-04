@@ -103,8 +103,10 @@ func (h *Handler) render(w http.ResponseWriter, r *http.Request, page string, ti
 
 func (h *Handler) setFlash(w http.ResponseWriter, msg string) {
 	http.SetCookie(w, &http.Cookie{
-		Name:  "flash",
-		Value: msg,
-		Path:  "/",
+		Name:     "flash",
+		Value:    msg,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
 	})
 }

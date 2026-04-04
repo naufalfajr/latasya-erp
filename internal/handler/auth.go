@@ -30,7 +30,14 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user, err := model.GetUserByUsername(h.DB, username)
-	if err != nil || !auth.CheckPassword(user.Password, password) {
+	if err != nil {
+		h.render(w, r, "templates/auth/login.html", "Login", map[string]string{
+			"Error":    "Invalid username or password",
+			"Username": username,
+		})
+		return
+	}
+	if !auth.CheckPassword(user.Password, password) {
 		h.render(w, r, "templates/auth/login.html", "Login", map[string]string{
 			"Error":    "Invalid username or password",
 			"Username": username,
