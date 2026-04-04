@@ -109,9 +109,21 @@ func main() {
 	protected.HandleFunc("POST /invoices/{id}/payment", h.InvoicePayment)
 	protected.HandleFunc("GET /invoices/{id}/print", h.PrintInvoice)
 
+	// Bills
+	protected.HandleFunc("GET /bills", h.ListBills)
+	protected.HandleFunc("GET /bills/new", h.NewBill)
+	protected.HandleFunc("POST /bills", h.CreateBill)
+	protected.HandleFunc("GET /bills/{id}", h.ViewBill)
+	protected.HandleFunc("GET /bills/{id}/edit", h.EditBill)
+	protected.HandleFunc("POST /bills/{id}", h.UpdateBill)
+	protected.HandleFunc("DELETE /bills/{id}", h.DeleteBill)
+	protected.HandleFunc("POST /bills/{id}/receive", h.ReceiveBill)
+	protected.HandleFunc("POST /bills/{id}/payment", h.BillPayment)
+
 	// HTMX partials
 	protected.HandleFunc("GET /htmx/journal-line", h.JournalLinePartial)
 	protected.HandleFunc("GET /htmx/invoice-line", h.InvoiceLinePartial)
+	protected.HandleFunc("GET /htmx/bill-line", h.BillLinePartial)
 
 	mux.Handle("/", auth.RequireAuth(db, protected))
 

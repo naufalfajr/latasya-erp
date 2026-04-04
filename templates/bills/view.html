@@ -1,0 +1,132 @@
+{{template "base" .}}
+{{define "content"}}
+{{$bill := (index .Data "Bill")}}
+{{$assetAccounts := (index .Data "AssetAccounts")}}
+
+<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+    <div>
+        <h1 class="text-2xl font-bold">{{$bill.BillNumber}}</h1>
+        <p class="text-sm opacity-60">{{$bill.ContactName}} &middot; {{formatDate $bill.BillDate}}</p>
+    </div>
+    <div class="flex gap-2 flex-wrap">
+        <a href="/bills" class="btn btn-ghost btn-sm">Back</a>
+        {{if .User.IsAdmin}}
+            {{if eq $bill.Status "draft"}}
+            <a href="/bills/{{$bill.ID}}/edit" class="btn btn-sm">Edit</a>
+            <form method="POST" action="/bills/{{$bill.ID}}/receive" class="inline">
+                <button type="submit" class="btn btn-info btn-sm"
+                    onclick="return confirm('Mark as received? This will create a journal entry.')">Mark as Received</button>
+            </form>
+            <button class="btn btn-error btn-sm"
+                hx-delete="/bills/{{$bill.ID}}"
+                hx-confirm="Delete this draft bill?"
+                hx-target="body">Delete</button>
+            {{end}}
+        {{end}}
+    </div>
+</div>
+
+<div class="mb-4">
+    <span class="badge
+        {{if eq $bill.Status "draft"}}badge-ghost
+        {{else if eq $bill.Status "received"}}badge-info
+        {{else if eq $bill.Status "partial"}}badge-warning
+        {{else if eq $bill.Status "paid"}}badge-success
+        {{end}} badge-lg">{{$bill.Status}}</span>
+    {{if $bill.JournalID}}
+    <a href="/journals/{{$bill.JournalID}}" class="link link-primary text-sm ml-2">View Journal Entry</a>
+    {{end}}
+</div>
+
+<div class="card bg-base-100 shadow mb-4">
+    <div class="card-body">
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+            <div>
+                <p class="text-sm opacity-60">Bill Date</p>
+                <p class="font-semibold">{{formatDate $bill.BillDate}}</p>
+            </div>
+            <div>
+                <p class="text-sm opacity-60">Due Date</p>
+                <p class="font-semibold">{{formatDate $bill.DueDate}}</p>
+            </div>
+            <div>
+                <p class="text-sm opacity-60">Total</p>
+                <p class="font-semibold font-mono">{{formatIDR $bill.Total}}</p>
+            </div>
+            <div>
+                <p class="text-sm opacity-60">Amount Due</p>
+                <p class="font-semibold font-mono {{if gt $bill.AmountDue 0}}text-error{{else}}text-success{{end}}">{{formatIDR $bill.AmountDue}}</p>
+            </div>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Description</th>
+                        <th>Account</th>
+                        <th class="text-right">Qty</th>
+                        <th class="text-right">Unit Price</th>
+                        <th class="text-right">Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range $bill.Lines}}
+                    <tr>
+                        <td>{{.Description}}</td>
+                        <td class="text-sm">{{.AccountCode}} - {{.AccountName}}</td>
+                        <td class="text-right">{{.Quantity}}</td>
+                        <td class="text-right font-mono">{{formatIDR .UnitPrice}}</td>
+                        <td class="text-right font-mono">{{formatIDR .Amount}}</td>
+                    </tr>
+                    {{end}}
+                </tbody>
+                <tfoot>
+                    <tr><td colspan="4" class="text-right">Subtotal</td><td class="text-right font-mono">{{formatIDR $bill.Subtotal}}</td></tr>
+                    {{if gt $bill.TaxAmount 0}}
+                    <tr><td colspan="4" class="text-right">Tax</td><td class="text-right font-mono">{{formatIDR $bill.TaxAmount}}</td></tr>
+                    {{end}}
+                    <tr class="font-bold"><td colspan="4" class="text-right">Total</td><td class="text-right font-mono">{{formatIDR $bill.Total}}</td></tr>
+                    {{if gt $bill.AmountPaid 0}}
+                    <tr class="text-success"><td colspan="4" class="text-right">Paid</td><td class="text-right font-mono">{{formatIDR $bill.AmountPaid}}</td></tr>
+                    <tr class="font-bold"><td colspan="4" class="text-right">Balance Due</td><td class="text-right font-mono">{{formatIDR $bill.AmountDue}}</td></tr>
+                    {{end}}
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+
+{{if and .User.IsAdmin (or (eq $bill.Status "received") (eq $bill.Status "partial") (eq $bill.Status "overdue"))}}
+<div class="card bg-base-100 shadow">
+    <div class="card-body">
+        <h2 class="card-title text-lg">Record Payment</h2>
+        <form method="POST" action="/bills/{{$bill.ID}}/payment">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div class="form-control">
+                    <label class="label"><span class="label-text">Date *</span></label>
+                    <input type="date" name="payment_date" class="input input-bordered input-sm" required>
+                </div>
+                <div class="form-control">
+                    <label class="label"><span class="label-text">Amount (Rp) *</span></label>
+                    <input type="number" name="amount" class="input input-bordered input-sm font-mono"
+                        value="{{$bill.AmountDue}}" min="1" max="{{$bill.AmountDue}}" required>
+                </div>
+                <div class="form-control">
+                    <label class="label"><span class="label-text">Paid From *</span></label>
+                    <select name="payment_account" class="select select-bordered select-sm" required>
+                        <option value="">Select account</option>
+                        {{range $assetAccounts}}
+                        <option value="{{.ID}}">{{.Code}} - {{.Name}}</option>
+                        {{end}}
+                    </select>
+                </div>
+            </div>
+            <div class="mt-3">
+                <button type="submit" class="btn btn-success btn-sm">Record Payment</button>
+            </div>
+        </form>
+    </div>
+</div>
+{{end}}
+{{end}}
