@@ -8,10 +8,20 @@
     <link href="https://cdn.jsdelivr.net/npm/daisyui@4/dist/full.min.css" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/app.css">
     <script src="/static/js/htmx.min.js"></script>
+    <style>
+        /* HTMX loading indicator */
+        .htmx-indicator { opacity: 0; transition: opacity 200ms ease-in; }
+        .htmx-request .htmx-indicator, .htmx-request.htmx-indicator { opacity: 1; }
+        /* Top loading bar */
+        #page-loader { position: fixed; top: 0; left: 0; width: 100%; height: 3px; background: oklch(var(--p)); z-index: 9999; }
+    </style>
 </head>
 <body class="min-h-screen bg-base-200">
+    <!-- Global loading bar (shown during any HTMX request) -->
+    <div id="page-loader" class="htmx-indicator"></div>
+
     {{if .User}}
-    <div class="drawer lg:drawer-open">
+    <div class="drawer lg:drawer-open" hx-indicator="#page-loader">
         <input id="sidebar-toggle" type="checkbox" class="drawer-toggle">
         <div class="drawer-content flex flex-col">
             {{template "nav" .}}
@@ -30,6 +40,21 @@
         {{block "content" .}}{{end}}
     </main>
     {{end}}
+
+    <script>
+    // HTMX error handling — show alert on network/server errors
+    document.body.addEventListener('htmx:responseError', function(e) {
+        var status = e.detail.xhr.status;
+        if (status === 403) {
+            alert('Access denied. Admin privileges required.');
+        } else if (status >= 500) {
+            alert('Server error. Please try again.');
+        }
+    });
+    document.body.addEventListener('htmx:sendError', function() {
+        alert('Network error. Please check your connection.');
+    });
+    </script>
 </body>
 </html>
 {{end}}

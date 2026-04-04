@@ -1,10 +1,14 @@
 package main
 
 import (
+	"context"
 	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	latasyaerp "github.com/naufal/latasya-erp"
 	"github.com/naufal/latasya-erp/internal/auth"
@@ -145,11 +149,35 @@ func main() {
 
 	mux.Handle("/", auth.RequireAuth(db, protected))
 
-	slog.Info("starting server", "port", port, "dev", devMode)
-	if err := http.ListenAndServe(":"+port, mux); err != nil {
-		slog.Error("server error", "error", err)
-		os.Exit(1)
+	srv := &http.Server{
+		Addr:         ":" + port,
+		Handler:      mux,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  60 * time.Second,
 	}
+
+	// Graceful shutdown
+	done := make(chan os.Signal, 1)
+	signal.Notify(done, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		slog.Info("starting server", "port", port, "dev", devMode)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			slog.Error("server error", "error", err)
+			os.Exit(1)
+		}
+	}()
+
+	<-done
+	slog.Info("shutting down server...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		slog.Error("shutdown error", "error", err)
+	}
+	slog.Info("server stopped")
 }
 
 func envOr(key, fallback string) string {
