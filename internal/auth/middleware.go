@@ -25,9 +25,8 @@ func RequireAuth(db *sql.DB, next http.Handler) http.Handler {
 			return
 		}
 
-		userID, err := GetSessionUserID(db, cookie.Value)
+		session, err := GetSession(db, cookie.Value)
 		if err != nil {
-			// Invalid or expired session — clear cookie
 			http.SetCookie(w, &http.Cookie{
 				Name:   "session_id",
 				Value:  "",
@@ -38,13 +37,14 @@ func RequireAuth(db *sql.DB, next http.Handler) http.Handler {
 			return
 		}
 
-		user, err := model.GetUserByID(db, userID)
+		user, err := model.GetUserByID(db, session.UserID)
 		if err != nil || !user.IsActive {
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
 		}
 
 		ctx := context.WithValue(r.Context(), userContextKey, user)
+		ctx = withCSRF(ctx, session.CSRFToken)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

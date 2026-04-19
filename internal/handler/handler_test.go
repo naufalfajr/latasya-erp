@@ -10,8 +10,11 @@ import (
 	"testing"
 
 	"github.com/naufal/latasya-erp/internal/auth"
+	"github.com/naufal/latasya-erp/internal/handler"
 	"github.com/naufal/latasya-erp/internal/testutil"
 )
+
+const adminTestPassword = "admin-test-password"
 
 // testServer sets up a full HTTP test server with all routes wired up.
 func testServer(t *testing.T) (*httptest.Server, *sql.DB) {
@@ -95,7 +98,25 @@ func testServer(t *testing.T) (*httptest.Server, *sql.DB) {
 	protected.Handle("/users", auth.RequireAdmin(adminMux))
 	protected.Handle("/users/", auth.RequireAdmin(adminMux))
 
-	mux.Handle("/", auth.RequireAuth(db, protected))
+	protected.HandleFunc("GET /password/change", h.PasswordChangePage)
+	protected.HandleFunc("POST /password/change", h.PasswordChange)
+
+	mux.Handle("/", auth.RequireAuth(db, auth.CSRFProtect(handler.EnforcePasswordChange(protected))))
+
+	// Replace the seeded admin/admin with a non-default password and clear the
+	// forced-change flag so tests logging in as admin aren't bounced to the
+	// password-change page (the login handler re-flags the literal admin/admin
+	// pair for legacy safety).
+	hash, err := auth.HashPassword(adminTestPassword)
+	if err != nil {
+		t.Fatalf("hash admin password: %v", err)
+	}
+	if _, err := db.Exec(
+		"UPDATE users SET password=?, must_change_password=0 WHERE username='admin'",
+		hash,
+	); err != nil {
+		t.Fatalf("update admin: %v", err)
+	}
 
 	ts := httptest.NewServer(mux)
 	t.Cleanup(ts.Close)
@@ -109,7 +130,7 @@ func loginAsAdmin(t *testing.T, ts *httptest.Server) []*http.Cookie {
 		return http.ErrUseLastResponse // don't follow redirects
 	}}
 
-	form := url.Values{"username": {"admin"}, "password": {"admin"}}
+	form := url.Values{"username": {"admin"}, "password": {adminTestPassword}}
 	resp, err := client.PostForm(ts.URL+"/login", form)
 	if err != nil {
 		t.Fatalf("login request failed: %v", err)
@@ -142,7 +163,7 @@ func loginAsViewer(t *testing.T, ts *httptest.Server, db *sql.DB) []*http.Cookie
 	return resp.Cookies()
 }
 
-func requestWithCookies(method, url string, cookies []*http.Cookie, body string) (*http.Request, error) {
+func requestWithCookies(db *sql.DB, method, url string, cookies []*http.Cookie, body string) (*http.Request, error) {
 	var req *http.Request
 	var err error
 	if body != "" {
@@ -159,6 +180,19 @@ func requestWithCookies(method, url string, cookies []*http.Cookie, body string)
 	}
 	for _, c := range cookies {
 		req.AddCookie(c)
+	}
+	// Auto-attach CSRF token for state-changing requests (server also accepts
+	// it as form field, but setting the header works for both form and empty
+	// bodies without rewriting the body).
+	if db != nil && method != http.MethodGet && method != http.MethodHead {
+		for _, c := range cookies {
+			if c.Name == "session_id" && c.Value != "" {
+				if token, err := auth.GetSessionCSRF(db, c.Value); err == nil {
+					req.Header.Set("X-CSRF-Token", token)
+				}
+				break
+			}
+		}
 	}
 	return req, nil
 }
@@ -247,11 +281,11 @@ func TestDashboard_RequiresAuth(t *testing.T) {
 }
 
 func TestDashboard_Authenticated(t *testing.T) {
-	ts, _ := testServer(t)
+	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
 	client := &http.Client{}
-	req, _ := requestWithCookies("GET", ts.URL+"/", cookies, "")
+	req, _ := requestWithCookies(db, "GET", ts.URL+"/", cookies, "")
 	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -264,14 +298,14 @@ func TestDashboard_Authenticated(t *testing.T) {
 }
 
 func TestLogout(t *testing.T) {
-	ts, _ := testServer(t)
+	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
 	client := &http.Client{CheckRedirect: func(r *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
 	}}
 
-	req, _ := requestWithCookies("POST", ts.URL+"/logout", cookies, "")
+	req, _ := requestWithCookies(db, "POST", ts.URL+"/logout", cookies, "")
 	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -283,7 +317,7 @@ func TestLogout(t *testing.T) {
 	}
 
 	// After logout, dashboard should redirect
-	req2, _ := requestWithCookies("GET", ts.URL+"/", resp.Cookies(), "")
+	req2, _ := requestWithCookies(db, "GET", ts.URL+"/", resp.Cookies(), "")
 	resp2, err := client.Do(req2)
 	if err != nil {
 		t.Fatal(err)
@@ -298,11 +332,11 @@ func TestLogout(t *testing.T) {
 // --- Account Handler Tests ---
 
 func TestListAccounts_Authenticated(t *testing.T) {
-	ts, _ := testServer(t)
+	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
 	client := &http.Client{}
-	req, _ := requestWithCookies("GET", ts.URL+"/accounts", cookies, "")
+	req, _ := requestWithCookies(db, "GET", ts.URL+"/accounts", cookies, "")
 	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -315,7 +349,7 @@ func TestListAccounts_Authenticated(t *testing.T) {
 }
 
 func TestCreateAccount_Admin(t *testing.T) {
-	ts, _ := testServer(t)
+	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
 	client := &http.Client{CheckRedirect: func(r *http.Request, via []*http.Request) error {
@@ -323,7 +357,7 @@ func TestCreateAccount_Admin(t *testing.T) {
 	}}
 
 	form := "code=9-9999&name=Test+Account&account_type=asset&normal_balance=debit&is_active=on"
-	req, _ := requestWithCookies("POST", ts.URL+"/accounts", cookies, form)
+	req, _ := requestWithCookies(db, "POST", ts.URL+"/accounts", cookies, form)
 	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -336,7 +370,7 @@ func TestCreateAccount_Admin(t *testing.T) {
 }
 
 func TestCreateAccount_ValidationError(t *testing.T) {
-	ts, _ := testServer(t)
+	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
 	client := &http.Client{CheckRedirect: func(r *http.Request, via []*http.Request) error {
@@ -345,7 +379,7 @@ func TestCreateAccount_ValidationError(t *testing.T) {
 
 	// Missing required fields
 	form := "code=&name=&account_type=&normal_balance="
-	req, _ := requestWithCookies("POST", ts.URL+"/accounts", cookies, form)
+	req, _ := requestWithCookies(db, "POST", ts.URL+"/accounts", cookies, form)
 	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -359,7 +393,7 @@ func TestCreateAccount_ValidationError(t *testing.T) {
 }
 
 func TestDeleteAccount_HTMX(t *testing.T) {
-	ts, _ := testServer(t)
+	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
 	client := &http.Client{CheckRedirect: func(r *http.Request, via []*http.Request) error {
@@ -368,14 +402,14 @@ func TestDeleteAccount_HTMX(t *testing.T) {
 
 	// First create an account to delete
 	form := "code=9-8888&name=To+Delete&account_type=asset&normal_balance=debit&is_active=on"
-	req, _ := requestWithCookies("POST", ts.URL+"/accounts", cookies, form)
+	req, _ := requestWithCookies(db, "POST", ts.URL+"/accounts", cookies, form)
 	client.Do(req)
 
 	// Find the account ID
 	var id int
 	// We need to find it — simplest is to try deleting by a known range
 	// Actually, let's just test with a high ID that we know we created
-	req2, _ := requestWithCookies("DELETE", ts.URL+"/accounts/100", cookies, "")
+	req2, _ := requestWithCookies(db, "DELETE", ts.URL+"/accounts/100", cookies, "")
 	req2.Header.Set("HX-Request", "true")
 	resp, err := client.Do(req2)
 	if err != nil {
@@ -394,11 +428,11 @@ func TestDeleteAccount_HTMX(t *testing.T) {
 // --- Contact Handler Tests ---
 
 func TestListContacts_Authenticated(t *testing.T) {
-	ts, _ := testServer(t)
+	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
 	client := &http.Client{}
-	req, _ := requestWithCookies("GET", ts.URL+"/contacts", cookies, "")
+	req, _ := requestWithCookies(db, "GET", ts.URL+"/contacts", cookies, "")
 	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -411,7 +445,7 @@ func TestListContacts_Authenticated(t *testing.T) {
 }
 
 func TestCreateContact_Admin(t *testing.T) {
-	ts, _ := testServer(t)
+	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
 	client := &http.Client{CheckRedirect: func(r *http.Request, via []*http.Request) error {
@@ -419,7 +453,7 @@ func TestCreateContact_Admin(t *testing.T) {
 	}}
 
 	form := "name=SD+Negeri+1&contact_type=customer&phone=08123456789&is_active=on"
-	req, _ := requestWithCookies("POST", ts.URL+"/contacts", cookies, form)
+	req, _ := requestWithCookies(db, "POST", ts.URL+"/contacts", cookies, form)
 	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -432,7 +466,7 @@ func TestCreateContact_Admin(t *testing.T) {
 }
 
 func TestCreateContact_ValidationError(t *testing.T) {
-	ts, _ := testServer(t)
+	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
 	client := &http.Client{CheckRedirect: func(r *http.Request, via []*http.Request) error {
@@ -440,7 +474,7 @@ func TestCreateContact_ValidationError(t *testing.T) {
 	}}
 
 	form := "name=&contact_type="
-	req, _ := requestWithCookies("POST", ts.URL+"/contacts", cookies, form)
+	req, _ := requestWithCookies(db, "POST", ts.URL+"/contacts", cookies, form)
 	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -459,7 +493,7 @@ func TestAccounts_ViewerCanView(t *testing.T) {
 	cookies := loginAsViewer(t, ts, db)
 
 	client := &http.Client{}
-	req, _ := requestWithCookies("GET", ts.URL+"/accounts", cookies, "")
+	req, _ := requestWithCookies(db, "GET", ts.URL+"/accounts", cookies, "")
 	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -476,7 +510,7 @@ func TestContacts_ViewerCanView(t *testing.T) {
 	cookies := loginAsViewer(t, ts, db)
 
 	client := &http.Client{}
-	req, _ := requestWithCookies("GET", ts.URL+"/contacts", cookies, "")
+	req, _ := requestWithCookies(db, "GET", ts.URL+"/contacts", cookies, "")
 	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -491,11 +525,11 @@ func TestContacts_ViewerCanView(t *testing.T) {
 // --- Journal Handler Tests ---
 
 func TestListJournals_Authenticated(t *testing.T) {
-	ts, _ := testServer(t)
+	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
 	client := &http.Client{}
-	req, _ := requestWithCookies("GET", ts.URL+"/journals", cookies, "")
+	req, _ := requestWithCookies(db, "GET", ts.URL+"/journals", cookies, "")
 	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -508,11 +542,11 @@ func TestListJournals_Authenticated(t *testing.T) {
 }
 
 func TestNewJournal_Form(t *testing.T) {
-	ts, _ := testServer(t)
+	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
 	client := &http.Client{}
-	req, _ := requestWithCookies("GET", ts.URL+"/journals/new", cookies, "")
+	req, _ := requestWithCookies(db, "GET", ts.URL+"/journals/new", cookies, "")
 	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -541,7 +575,7 @@ func TestCreateJournal_Success(t *testing.T) {
 		"entry_date=2026-04-04&description=Test+journal&line_account_id=%d&line_account_id=%d&line_debit=5000000&line_debit=0&line_credit=0&line_credit=5000000&line_memo=Cash&line_memo=Revenue",
 		cashID, revenueID,
 	)
-	req, _ := requestWithCookies("POST", ts.URL+"/journals", cookies, form)
+	req, _ := requestWithCookies(db, "POST", ts.URL+"/journals", cookies, form)
 	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -575,7 +609,7 @@ func TestCreateJournal_ValidationError_MissingDate(t *testing.T) {
 		"entry_date=&description=Test&line_account_id=%d&line_account_id=%d&line_debit=1000&line_debit=0&line_credit=0&line_credit=1000&line_memo=&line_memo=",
 		cashID, revenueID,
 	)
-	req, _ := requestWithCookies("POST", ts.URL+"/journals", cookies, form)
+	req, _ := requestWithCookies(db, "POST", ts.URL+"/journals", cookies, form)
 	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -603,7 +637,7 @@ func TestCreateJournal_ValidationError_Unbalanced(t *testing.T) {
 		"entry_date=2026-04-04&description=Unbalanced&line_account_id=%d&line_account_id=%d&line_debit=5000&line_debit=0&line_credit=0&line_credit=3000&line_memo=&line_memo=",
 		cashID, revenueID,
 	)
-	req, _ := requestWithCookies("POST", ts.URL+"/journals", cookies, form)
+	req, _ := requestWithCookies(db, "POST", ts.URL+"/journals", cookies, form)
 	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -631,13 +665,13 @@ func TestViewJournal(t *testing.T) {
 		"entry_date=2026-04-04&description=View+test&line_account_id=%d&line_account_id=%d&line_debit=1000&line_debit=0&line_credit=0&line_credit=1000&line_memo=&line_memo=",
 		cashID, revenueID,
 	)
-	req, _ := requestWithCookies("POST", ts.URL+"/journals", cookies, form)
+	req, _ := requestWithCookies(db, "POST", ts.URL+"/journals", cookies, form)
 	resp, _ := client.Do(req)
 	loc := resp.Header.Get("Location")
 
 	// View the created entry
 	client2 := &http.Client{}
-	req2, _ := requestWithCookies("GET", ts.URL+loc, cookies, "")
+	req2, _ := requestWithCookies(db, "GET", ts.URL+loc, cookies, "")
 	resp2, err := client2.Do(req2)
 	if err != nil {
 		t.Fatal(err)
@@ -650,11 +684,11 @@ func TestViewJournal(t *testing.T) {
 }
 
 func TestJournalLinePartial_HTMX(t *testing.T) {
-	ts, _ := testServer(t)
+	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
 	client := &http.Client{}
-	req, _ := requestWithCookies("GET", ts.URL+"/htmx/journal-line", cookies, "")
+	req, _ := requestWithCookies(db, "GET", ts.URL+"/htmx/journal-line", cookies, "")
 	req.Header.Set("HX-Request", "true")
 	resp, err := client.Do(req)
 	if err != nil {
@@ -670,11 +704,11 @@ func TestJournalLinePartial_HTMX(t *testing.T) {
 // --- Income Handler Tests ---
 
 func TestListIncome(t *testing.T) {
-	ts, _ := testServer(t)
+	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
 	client := &http.Client{}
-	req, _ := requestWithCookies("GET", ts.URL+"/income", cookies, "")
+	req, _ := requestWithCookies(db, "GET", ts.URL+"/income", cookies, "")
 	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -702,7 +736,7 @@ func TestCreateIncome_Success(t *testing.T) {
 		"entry_date=2026-04-04&description=School+bus+payment&amount=5000000&revenue_account=%d&deposit_account=%d",
 		revenueID, cashID,
 	)
-	req, _ := requestWithCookies("POST", ts.URL+"/income", cookies, form)
+	req, _ := requestWithCookies(db, "POST", ts.URL+"/income", cookies, form)
 	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -735,7 +769,7 @@ func TestCreateIncome_Success(t *testing.T) {
 }
 
 func TestCreateIncome_ValidationError(t *testing.T) {
-	ts, _ := testServer(t)
+	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
 	client := &http.Client{CheckRedirect: func(r *http.Request, via []*http.Request) error {
@@ -743,7 +777,7 @@ func TestCreateIncome_ValidationError(t *testing.T) {
 	}}
 
 	form := "entry_date=&description=&amount=0&revenue_account=&deposit_account="
-	req, _ := requestWithCookies("POST", ts.URL+"/income", cookies, form)
+	req, _ := requestWithCookies(db, "POST", ts.URL+"/income", cookies, form)
 	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -758,11 +792,11 @@ func TestCreateIncome_ValidationError(t *testing.T) {
 // --- Expense Handler Tests ---
 
 func TestListExpenses(t *testing.T) {
-	ts, _ := testServer(t)
+	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
 	client := &http.Client{}
-	req, _ := requestWithCookies("GET", ts.URL+"/expenses", cookies, "")
+	req, _ := requestWithCookies(db, "GET", ts.URL+"/expenses", cookies, "")
 	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -790,7 +824,7 @@ func TestCreateExpense_Success(t *testing.T) {
 		"entry_date=2026-04-04&description=Diesel+fuel+Bus+01&amount=500000&expense_account=%d&payment_account=%d",
 		fuelID, cashID,
 	)
-	req, _ := requestWithCookies("POST", ts.URL+"/expenses", cookies, form)
+	req, _ := requestWithCookies(db, "POST", ts.URL+"/expenses", cookies, form)
 	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -823,7 +857,7 @@ func TestCreateExpense_Success(t *testing.T) {
 }
 
 func TestCreateExpense_ValidationError(t *testing.T) {
-	ts, _ := testServer(t)
+	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
 	client := &http.Client{CheckRedirect: func(r *http.Request, via []*http.Request) error {
@@ -831,7 +865,7 @@ func TestCreateExpense_ValidationError(t *testing.T) {
 	}}
 
 	form := "entry_date=&description=&amount=0&expense_account=&payment_account="
-	req, _ := requestWithCookies("POST", ts.URL+"/expenses", cookies, form)
+	req, _ := requestWithCookies(db, "POST", ts.URL+"/expenses", cookies, form)
 	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -846,11 +880,11 @@ func TestCreateExpense_ValidationError(t *testing.T) {
 // --- Invoice Handler Tests ---
 
 func TestListInvoices_Handler(t *testing.T) {
-	ts, _ := testServer(t)
+	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
 	client := &http.Client{}
-	req, _ := requestWithCookies("GET", ts.URL+"/invoices", cookies, "")
+	req, _ := requestWithCookies(db, "GET", ts.URL+"/invoices", cookies, "")
 	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -882,7 +916,7 @@ func TestInvoiceLifecycle_Handler(t *testing.T) {
 		"contact_id=%d&invoice_date=2026-04-04&due_date=2026-04-30&line_description=Bus+fee&line_account_id=%d&line_quantity=100&line_unit_price=5000000",
 		contactID, revenueID,
 	)
-	req, _ := requestWithCookies("POST", ts.URL+"/invoices", cookies, form)
+	req, _ := requestWithCookies(db, "POST", ts.URL+"/invoices", cookies, form)
 	resp, err := noRedirect.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -894,14 +928,14 @@ func TestInvoiceLifecycle_Handler(t *testing.T) {
 
 	// 2. View invoice
 	client := &http.Client{}
-	req2, _ := requestWithCookies("GET", ts.URL+invLoc, cookies, "")
+	req2, _ := requestWithCookies(db, "GET", ts.URL+invLoc, cookies, "")
 	resp2, _ := client.Do(req2)
 	if resp2.StatusCode != http.StatusOK {
 		t.Errorf("view invoice: expected 200, got %d", resp2.StatusCode)
 	}
 
 	// 3. Send invoice
-	req3, _ := requestWithCookies("POST", ts.URL+invLoc+"/send", cookies, "")
+	req3, _ := requestWithCookies(db, "POST", ts.URL+invLoc+"/send", cookies, "")
 	resp3, _ := noRedirect.Do(req3)
 	if resp3.StatusCode != http.StatusSeeOther {
 		t.Errorf("send invoice: expected 303, got %d", resp3.StatusCode)
@@ -909,7 +943,7 @@ func TestInvoiceLifecycle_Handler(t *testing.T) {
 
 	// 4. Record payment
 	payForm := fmt.Sprintf("payment_date=2026-04-10&amount=5000000&payment_account=%d", cashID)
-	req4, _ := requestWithCookies("POST", ts.URL+invLoc+"/payment", cookies, payForm)
+	req4, _ := requestWithCookies(db, "POST", ts.URL+invLoc+"/payment", cookies, payForm)
 	resp4, _ := noRedirect.Do(req4)
 	if resp4.StatusCode != http.StatusSeeOther {
 		t.Errorf("payment: expected 303, got %d", resp4.StatusCode)
@@ -927,11 +961,11 @@ func TestInvoiceLifecycle_Handler(t *testing.T) {
 // --- Bill Handler Tests ---
 
 func TestListBills_Handler(t *testing.T) {
-	ts, _ := testServer(t)
+	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
 	client := &http.Client{}
-	req, _ := requestWithCookies("GET", ts.URL+"/bills", cookies, "")
+	req, _ := requestWithCookies(db, "GET", ts.URL+"/bills", cookies, "")
 	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -962,7 +996,7 @@ func TestBillLifecycle_Handler(t *testing.T) {
 		"contact_id=%d&bill_date=2026-04-04&due_date=2026-04-30&line_description=Diesel&line_account_id=%d&line_quantity=100&line_unit_price=2000000",
 		contactID, fuelID,
 	)
-	req, _ := requestWithCookies("POST", ts.URL+"/bills", cookies, form)
+	req, _ := requestWithCookies(db, "POST", ts.URL+"/bills", cookies, form)
 	resp, _ := noRedirect.Do(req)
 	if resp.StatusCode != http.StatusSeeOther {
 		t.Fatalf("create bill: expected 303, got %d", resp.StatusCode)
@@ -970,7 +1004,7 @@ func TestBillLifecycle_Handler(t *testing.T) {
 	billLoc := resp.Header.Get("Location")
 
 	// 2. Receive bill
-	req2, _ := requestWithCookies("POST", ts.URL+billLoc+"/receive", cookies, "")
+	req2, _ := requestWithCookies(db, "POST", ts.URL+billLoc+"/receive", cookies, "")
 	resp2, _ := noRedirect.Do(req2)
 	if resp2.StatusCode != http.StatusSeeOther {
 		t.Errorf("receive bill: expected 303, got %d", resp2.StatusCode)
@@ -978,7 +1012,7 @@ func TestBillLifecycle_Handler(t *testing.T) {
 
 	// 3. Record payment
 	payForm := fmt.Sprintf("payment_date=2026-04-10&amount=2000000&payment_account=%d", cashID)
-	req3, _ := requestWithCookies("POST", ts.URL+billLoc+"/payment", cookies, payForm)
+	req3, _ := requestWithCookies(db, "POST", ts.URL+billLoc+"/payment", cookies, payForm)
 	resp3, _ := noRedirect.Do(req3)
 	if resp3.StatusCode != http.StatusSeeOther {
 		t.Errorf("payment: expected 303, got %d", resp3.StatusCode)
@@ -996,7 +1030,7 @@ func TestBillLifecycle_Handler(t *testing.T) {
 // --- Report Handler Tests ---
 
 func TestReportPages_Authenticated(t *testing.T) {
-	ts, _ := testServer(t)
+	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 	client := &http.Client{}
 
@@ -1009,7 +1043,7 @@ func TestReportPages_Authenticated(t *testing.T) {
 	}
 
 	for _, page := range pages {
-		req, _ := requestWithCookies("GET", ts.URL+page, cookies, "")
+		req, _ := requestWithCookies(db, "GET", ts.URL+page, cookies, "")
 		resp, err := client.Do(req)
 		if err != nil {
 			t.Fatalf("%s: %v", page, err)
@@ -1033,7 +1067,7 @@ func TestReportPages_ViewerCanAccess(t *testing.T) {
 	}
 
 	for _, page := range pages {
-		req, _ := requestWithCookies("GET", ts.URL+page, cookies, "")
+		req, _ := requestWithCookies(db, "GET", ts.URL+page, cookies, "")
 		resp, err := client.Do(req)
 		if err != nil {
 			t.Fatalf("%s: %v", page, err)
@@ -1048,11 +1082,11 @@ func TestReportPages_ViewerCanAccess(t *testing.T) {
 // --- User Management Tests ---
 
 func TestListUsers_AdminOnly(t *testing.T) {
-	ts, _ := testServer(t)
+	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
 	client := &http.Client{}
-	req, _ := requestWithCookies("GET", ts.URL+"/users", cookies, "")
+	req, _ := requestWithCookies(db, "GET", ts.URL+"/users", cookies, "")
 	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -1069,7 +1103,7 @@ func TestListUsers_ViewerDenied(t *testing.T) {
 	cookies := loginAsViewer(t, ts, db)
 
 	client := &http.Client{}
-	req, _ := requestWithCookies("GET", ts.URL+"/users", cookies, "")
+	req, _ := requestWithCookies(db, "GET", ts.URL+"/users", cookies, "")
 	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -1082,7 +1116,7 @@ func TestListUsers_ViewerDenied(t *testing.T) {
 }
 
 func TestCreateUser_Admin(t *testing.T) {
-	ts, _ := testServer(t)
+	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
 	noRedirect := &http.Client{CheckRedirect: func(r *http.Request, via []*http.Request) error {
@@ -1090,7 +1124,7 @@ func TestCreateUser_Admin(t *testing.T) {
 	}}
 
 	form := "username=newuser&full_name=New+User&password=test1234&role=viewer&is_active=on"
-	req, _ := requestWithCookies("POST", ts.URL+"/users", cookies, form)
+	req, _ := requestWithCookies(db, "POST", ts.URL+"/users", cookies, form)
 	resp, err := noRedirect.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -1103,7 +1137,7 @@ func TestCreateUser_Admin(t *testing.T) {
 }
 
 func TestCreateUser_ValidationError(t *testing.T) {
-	ts, _ := testServer(t)
+	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
 	noRedirect := &http.Client{CheckRedirect: func(r *http.Request, via []*http.Request) error {
@@ -1111,7 +1145,7 @@ func TestCreateUser_ValidationError(t *testing.T) {
 	}}
 
 	form := "username=&full_name=&password=&role=invalid"
-	req, _ := requestWithCookies("POST", ts.URL+"/users", cookies, form)
+	req, _ := requestWithCookies(db, "POST", ts.URL+"/users", cookies, form)
 	resp, err := noRedirect.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -1143,12 +1177,12 @@ func TestDashboard_WithData(t *testing.T) {
 		"entry_date=2026-04-04&description=Test+income&amount=5000000&revenue_account=%d&deposit_account=%d",
 		revenueID, cashID,
 	)
-	req, _ := requestWithCookies("POST", ts.URL+"/income", cookies, form)
+	req, _ := requestWithCookies(db, "POST", ts.URL+"/income", cookies, form)
 	noRedirect.Do(req)
 
 	// Check dashboard renders
 	client := &http.Client{}
-	req2, _ := requestWithCookies("GET", ts.URL+"/", cookies, "")
+	req2, _ := requestWithCookies(db, "GET", ts.URL+"/", cookies, "")
 	resp, err := client.Do(req2)
 	if err != nil {
 		t.Fatal(err)

@@ -16,7 +16,8 @@
         #page-loader { position: fixed; top: 0; left: 0; width: 100%; height: 3px; background: oklch(var(--p)); z-index: 9999; }
     </style>
 </head>
-<body class="min-h-screen bg-base-200">
+<body class="min-h-screen bg-base-200"
+    {{if .CSRFToken}}hx-headers='{"X-CSRF-Token": "{{.CSRFToken}}"}'{{end}}>
     <!-- Global loading bar (shown during any HTMX request) -->
     <div id="page-loader" class="htmx-indicator"></div>
 

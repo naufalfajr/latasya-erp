@@ -147,7 +147,11 @@ func main() {
 	protected.HandleFunc("GET /htmx/invoice-line", h.InvoiceLinePartial)
 	protected.HandleFunc("GET /htmx/bill-line", h.BillLinePartial)
 
-	mux.Handle("/", auth.RequireAuth(db, protected))
+	// Password change (self-service + forced on first login)
+	protected.HandleFunc("GET /password/change", h.PasswordChangePage)
+	protected.HandleFunc("POST /password/change", h.PasswordChange)
+
+	mux.Handle("/", auth.RequireAuth(db, auth.CSRFProtect(handler.EnforcePasswordChange(protected))))
 
 	srv := &http.Server{
 		Addr:         ":" + port,

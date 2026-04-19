@@ -14,6 +14,7 @@
             {{if eq $bill.Status "draft"}}
             <a href="/bills/{{$bill.ID}}/edit" class="btn btn-sm">Edit</a>
             <form method="POST" action="/bills/{{$bill.ID}}/receive" class="inline">
+                {{template "csrf" $}}
                 <button type="submit" class="btn btn-info btn-sm"
                     onclick="return confirm('Mark as received? This will create a journal entry.')">Mark as Received</button>
             </form>
@@ -102,6 +103,7 @@
     <div class="card-body">
         <h2 class="card-title text-lg">Record Payment</h2>
         <form method="POST" action="/bills/{{$bill.ID}}/payment">
+            {{template "csrf" $}}
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div class="form-control">
                     <label class="label"><span class="label-text">Date *</span></label>

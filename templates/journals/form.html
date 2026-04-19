@@ -20,6 +20,7 @@
 
     <form method="POST" action="{{if $data.IsEdit}}/journals/{{$data.Entry.ID}}{{else}}/journals{{end}}"
         class="card bg-base-100 shadow">
+        {{template "csrf" $}}
         <div class="card-body">
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">

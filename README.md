@@ -2,7 +2,7 @@
 
 Simple bookkeeping web app for a transport business (school bus & travel) in Indonesia.
 
-Built with Go stdlib, HTMX, Tailwind CSS + DaisyUI, and SQLite. Deploys as a single Docker container behind Cloudflare Tunnel.
+Built with Go stdlib, HTMX, Tailwind CSS + DaisyUI, and SQLite. Deploys as a single static binary behind Cloudflare Tunnel.
 
 ## Features
 
@@ -26,7 +26,7 @@ Built with Go stdlib, HTMX, Tailwind CSS + DaisyUI, and SQLite. Deploys as a sin
 | Frontend | HTMX + Tailwind CSS + DaisyUI (CDN) |
 | Database | SQLite via `modernc.org/sqlite` (pure Go, no CGO) |
 | Auth | Session-based (bcrypt + HttpOnly cookie) |
-| Deploy | Docker + Cloudflare Tunnel |
+| Deploy | systemd + Cloudflare Tunnel |
 
 No Node.js, no npm, no JS framework. Single binary with embedded templates and static files.
 
@@ -51,25 +51,51 @@ make run        # terminal 2
 
 Open http://localhost:8080. Login with `admin` / `admin`.
 
-### Run with Docker
-
-```bash
-# Local development
-docker compose -f docker-compose.dev.yml up -d
-```
-
-Open http://localhost:8080.
-
 ### Deploy to VPS (with Cloudflare Tunnel)
 
+Prerequisites: domain on Cloudflare DNS, a Linux VPS (amd64), SSH access.
+
+**One-time VPS setup:**
+
 ```bash
-# On your VPS
-git clone <repo> && cd latasya-erp
-echo "TUNNEL_TOKEN=your-cloudflare-tunnel-token" > .env
-docker compose up -d
+sudo useradd --system --no-create-home --shell /usr/sbin/nologin latasya
+sudo mkdir -p /var/lib/latasya
+sudo chown latasya:latasya /var/lib/latasya
+sudo chmod 750 /var/lib/latasya
+sudo timedatectl set-timezone Asia/Jakarta
 ```
 
-Requires a domain on Cloudflare DNS with a tunnel configured to point to `http://latasya-erp:8080`.
+Install the systemd unit:
+
+```bash
+sudo cp deploy/latasya-erp.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable latasya-erp
+```
+
+**Build and ship the binary (from your Mac):**
+
+```bash
+make build-linux                     # produces ./latasya-erp for linux/amd64
+scp latasya-erp user@vps:/tmp/
+ssh user@vps 'sudo install -m 755 /tmp/latasya-erp /usr/local/bin/latasya-erp && sudo systemctl restart latasya-erp'
+```
+
+**Cloudflare Tunnel (one-time):**
+
+```bash
+curl -L https://pkg.cloudflare.com/install.sh | sudo bash
+sudo apt install cloudflared
+cloudflared tunnel login
+cloudflared tunnel create latasya
+sudo cp deploy/cloudflared-config.yml.example /etc/cloudflared/config.yml
+# edit config.yml: set tunnel id, credentials path, hostname
+sudo cloudflared tunnel route dns latasya latasya.naufalf.net
+sudo cloudflared service install
+sudo systemctl enable --now cloudflared
+```
+
+The tunnel is outbound-only — you can keep ports 80/443/8080 closed on the VPS firewall.
 
 ## Project Structure
 
@@ -87,9 +113,7 @@ latasya-erp/
 ├── templates/                   # HTML templates (embedded)
 ├── static/                      # CSS, JS (embedded)
 ├── embed.go                     # Go embed directives
-├── Dockerfile                   # Multi-stage build (~15MB image)
-├── docker-compose.yml           # Production (app + Cloudflare Tunnel)
-├── docker-compose.dev.yml       # Development (app only, port 8080)
+├── deploy/                      # systemd unit + cloudflared config example
 └── Makefile
 ```
 
@@ -135,7 +159,6 @@ Environment variables (all optional):
 | `PORT` | `8080` | Server port |
 | `DB_PATH` | `./latasya.db` | SQLite database file path |
 | `DEV_MODE` | `false` | Re-parse templates on each request |
-| `TUNNEL_TOKEN` | — | Cloudflare Tunnel token (production only) |
 
 ## Testing
 
@@ -164,7 +187,8 @@ All monetary values are stored as integers in IDR (Indonesian Rupiah). IDR has n
 - Admin-only enforcement on all write endpoints (POST/DELETE)
 - All SQL queries parameterized (no injection)
 - HTML auto-escaped by `html/template` (no XSS)
-- Docker runs as non-root user
+- systemd service runs as non-root `latasya` user with filesystem sandboxing
+- Cloudflare Tunnel: no inbound ports exposed on the VPS
 - HTTP server timeouts (Read: 15s, Write: 30s, Idle: 60s)
 
 ## License

@@ -53,6 +53,12 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Catch legacy deploys where admin is still using the seeded default.
+	if username == "admin" && password == "admin" && !user.MustChangePassword {
+		_ = model.SetMustChangePassword(h.DB, user.ID, true)
+		user.MustChangePassword = true
+	}
+
 	// Invalidate existing sessions to prevent session fixation
 	auth.DeleteUserSessions(h.DB, user.ID)
 
@@ -72,6 +78,10 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		MaxAge:   7 * 24 * 60 * 60,
 	})
 
+	if user.MustChangePassword {
+		http.Redirect(w, r, "/password/change", http.StatusSeeOther)
+		return
+	}
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 

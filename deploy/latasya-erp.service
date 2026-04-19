@@ -1,0 +1,44 @@
+[Unit]
+Description=Latasya ERP
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=latasya
+Group=latasya
+WorkingDirectory=/var/lib/latasya
+ExecStart=/usr/local/bin/latasya-erp
+Environment=PORT=8080
+Environment=DB_PATH=/var/lib/latasya/latasya.db
+Restart=on-failure
+RestartSec=3
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectHostname=true
+ProtectClock=true
+ProtectProc=invisible
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictAddressFamilies=AF_INET AF_INET6
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+UMask=0077
+ReadWritePaths=/var/lib/latasya
+
+[Install]
+WantedBy=multi-user.target

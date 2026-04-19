@@ -23,11 +23,12 @@ type Handler struct {
 }
 
 type PageData struct {
-	User  *model.User
-	Title string
-	Flash string
-	Path  string
-	Data  any
+	User      *model.User
+	Title     string
+	Flash     string
+	Path      string
+	CSRFToken string
+	Data      any
 }
 
 // shared templates that every page includes
@@ -36,6 +37,7 @@ var sharedTemplates = []string{
 	"templates/partials/nav.html",
 	"templates/partials/sidebar.html",
 	"templates/partials/flash.html",
+	"templates/partials/csrf.html",
 }
 
 func (h *Handler) getTemplate(pages ...string) (*template.Template, error) {
@@ -72,10 +74,11 @@ func (h *Handler) getTemplate(pages ...string) (*template.Template, error) {
 
 func (h *Handler) render(w http.ResponseWriter, r *http.Request, page string, title string, data any, extraTemplates ...string) {
 	pd := PageData{
-		User:  auth.UserFromContext(r.Context()),
-		Title: title,
-		Path:  r.URL.Path,
-		Data:  data,
+		User:      auth.UserFromContext(r.Context()),
+		Title:     title,
+		Path:      r.URL.Path,
+		CSRFToken: auth.CSRFFromContext(r.Context()),
+		Data:      data,
 	}
 
 	if cookie, err := r.Cookie("flash"); err == nil {

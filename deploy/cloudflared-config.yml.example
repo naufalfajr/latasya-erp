@@ -1,0 +1,13 @@
+# Copy to /etc/cloudflared/config.yml on the VPS and fill in <tunnel-id>.
+# Create the tunnel and credentials file with:
+#   cloudflared tunnel login
+#   cloudflared tunnel create latasya
+#   cloudflared tunnel route dns latasya latasya.naufalf.net
+
+tunnel: <tunnel-id>
+credentials-file: /etc/cloudflared/<tunnel-id>.json
+
+ingress:
+  - hostname: latasya.naufalf.net
+    service: http://127.0.0.1:8080
+  - service: http_status:404

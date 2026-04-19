@@ -15,6 +15,7 @@
             {{if eq $inv.Status "draft"}}
             <a href="/invoices/{{$inv.ID}}/edit" class="btn btn-sm">Edit</a>
             <form method="POST" action="/invoices/{{$inv.ID}}/send" class="inline">
+                {{template "csrf" $}}
                 <button type="submit" class="btn btn-info btn-sm"
                     onclick="return confirm('Send this invoice? This will create a journal entry.')">Mark as Sent</button>
             </form>
@@ -126,6 +127,7 @@
     <div class="card-body">
         <h2 class="card-title text-lg">Record Payment</h2>
         <form method="POST" action="/invoices/{{$inv.ID}}/payment">
+            {{template "csrf" $}}
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div class="form-control">
                     <label class="label"><span class="label-text">Date *</span></label>

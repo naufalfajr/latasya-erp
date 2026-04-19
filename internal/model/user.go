@@ -6,26 +6,40 @@ import (
 )
 
 type User struct {
-	ID        int
-	Username  string
-	Password  string
-	FullName  string
-	Role      string
-	IsActive  bool
-	CreatedAt string
-	UpdatedAt string
+	ID                 int
+	Username           string
+	Password           string
+	FullName           string
+	Role               string
+	IsActive           bool
+	MustChangePassword bool
+	CreatedAt          string
+	UpdatedAt          string
 }
 
 func (u *User) IsAdmin() bool {
 	return u.Role == RoleAdmin
 }
 
-func GetUserByUsername(db *sql.DB, username string) (*User, error) {
+const userColumns = "id, username, password, full_name, role, is_active, must_change_password, created_at, updated_at"
+
+func scanUser(row interface{ Scan(...any) error }) (*User, error) {
 	u := &User{}
-	err := db.QueryRow(
-		"SELECT id, username, password, full_name, role, is_active, created_at, updated_at FROM users WHERE username = ?",
+	err := row.Scan(
+		&u.ID, &u.Username, &u.Password, &u.FullName, &u.Role,
+		&u.IsActive, &u.MustChangePassword, &u.CreatedAt, &u.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return u, nil
+}
+
+func GetUserByUsername(db *sql.DB, username string) (*User, error) {
+	u, err := scanUser(db.QueryRow(
+		"SELECT "+userColumns+" FROM users WHERE username = ?",
 		username,
-	).Scan(&u.ID, &u.Username, &u.Password, &u.FullName, &u.Role, &u.IsActive, &u.CreatedAt, &u.UpdatedAt)
+	))
 	if err != nil {
 		return nil, fmt.Errorf("get user by username: %w", err)
 	}
@@ -33,11 +47,10 @@ func GetUserByUsername(db *sql.DB, username string) (*User, error) {
 }
 
 func GetUserByID(db *sql.DB, id int) (*User, error) {
-	u := &User{}
-	err := db.QueryRow(
-		"SELECT id, username, password, full_name, role, is_active, created_at, updated_at FROM users WHERE id = ?",
+	u, err := scanUser(db.QueryRow(
+		"SELECT "+userColumns+" FROM users WHERE id = ?",
 		id,
-	).Scan(&u.ID, &u.Username, &u.Password, &u.FullName, &u.Role, &u.IsActive, &u.CreatedAt, &u.UpdatedAt)
+	))
 	if err != nil {
 		return nil, fmt.Errorf("get user by id: %w", err)
 	}
@@ -46,7 +59,7 @@ func GetUserByID(db *sql.DB, id int) (*User, error) {
 
 func ListUsers(db *sql.DB) ([]User, error) {
 	rows, err := db.Query(
-		"SELECT id, username, '', full_name, role, is_active, created_at, updated_at FROM users ORDER BY id",
+		"SELECT id, username, '', full_name, role, is_active, must_change_password, created_at, updated_at FROM users ORDER BY id",
 	)
 	if err != nil {
 		return nil, fmt.Errorf("list users: %w", err)
@@ -56,7 +69,10 @@ func ListUsers(db *sql.DB) ([]User, error) {
 	var users []User
 	for rows.Next() {
 		var u User
-		if err := rows.Scan(&u.ID, &u.Username, &u.Password, &u.FullName, &u.Role, &u.IsActive, &u.CreatedAt, &u.UpdatedAt); err != nil {
+		if err := rows.Scan(
+			&u.ID, &u.Username, &u.Password, &u.FullName, &u.Role,
+			&u.IsActive, &u.MustChangePassword, &u.CreatedAt, &u.UpdatedAt,
+		); err != nil {
 			return nil, fmt.Errorf("scan user: %w", err)
 		}
 		users = append(users, u)
@@ -69,8 +85,8 @@ func ListUsers(db *sql.DB) ([]User, error) {
 
 func CreateUser(db *sql.DB, u *User) error {
 	_, err := db.Exec(
-		"INSERT INTO users (username, password, full_name, role, is_active) VALUES (?, ?, ?, ?, ?)",
-		u.Username, u.Password, u.FullName, u.Role, u.IsActive,
+		"INSERT INTO users (username, password, full_name, role, is_active, must_change_password) VALUES (?, ?, ?, ?, ?, ?)",
+		u.Username, u.Password, u.FullName, u.Role, u.IsActive, u.MustChangePassword,
 	)
 	if err != nil {
 		return fmt.Errorf("create user: %w", err)
@@ -96,6 +112,18 @@ func UpdateUserPassword(db *sql.DB, id int, hashedPassword string) error {
 	)
 	if err != nil {
 		return fmt.Errorf("update user password: %w", err)
+	}
+	return nil
+}
+
+// SetMustChangePassword toggles the forced-password-change flag for a user.
+func SetMustChangePassword(db *sql.DB, id int, must bool) error {
+	_, err := db.Exec(
+		"UPDATE users SET must_change_password=?, updated_at=datetime('now') WHERE id=?",
+		must, id,
+	)
+	if err != nil {
+		return fmt.Errorf("set must_change_password: %w", err)
 	}
 	return nil
 }

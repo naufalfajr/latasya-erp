@@ -19,7 +19,7 @@ func Seed(db *sql.DB) error {
 		return nil
 	}
 
-	slog.Info("seeding default admin user")
+	slog.Info("seeding default admin user (password change required on first login)")
 
 	hash, err := bcrypt.GenerateFromPassword([]byte("admin"), bcrypt.DefaultCost)
 	if err != nil {
@@ -27,7 +27,7 @@ func Seed(db *sql.DB) error {
 	}
 
 	_, err = db.Exec(
-		"INSERT INTO users (username, password, full_name, role) VALUES (?, ?, ?, ?)",
+		"INSERT INTO users (username, password, full_name, role, must_change_password) VALUES (?, ?, ?, ?, 1)",
 		"admin", string(hash), "Administrator", "admin",
 	)
 	if err != nil {

@@ -15,6 +15,7 @@
 
     <form method="POST" action="{{if $data.IsEdit}}/expenses/{{$data.Entry.ID}}{{else}}/expenses{{end}}"
         class="card bg-base-100 shadow">
+        {{template "csrf" $}}
         <div class="card-body">
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">

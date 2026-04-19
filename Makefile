@@ -1,4 +1,4 @@
-.PHONY: dev run build css css-watch clean test
+.PHONY: dev run build build-linux css css-watch clean test
 
 # Tailwind standalone CLI
 TAILWIND := ./bin/tailwindcss
@@ -21,9 +21,14 @@ css-watch: $(TAILWIND)
 run:
 	DEV_MODE=true go run ./cmd/server
 
-# Build production binary
+# Build production binary (host OS/arch)
 build: css
 	CGO_ENABLED=0 go build -o latasya-erp ./cmd/server
+
+# Cross-compile for the Linux VPS (amd64 by default; override with GOARCH=arm64)
+GOARCH ?= amd64
+build-linux: css
+	GOOS=linux GOARCH=$(GOARCH) CGO_ENABLED=0 go build -o latasya-erp ./cmd/server
 
 # Run tests
 test:

@@ -32,10 +32,11 @@ func (h *Handler) NewUser(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	u := &model.User{
-		Username: r.FormValue("username"),
-		FullName: r.FormValue("full_name"),
-		Role:     r.FormValue("role"),
-		IsActive: r.FormValue("is_active") == "on",
+		Username:           r.FormValue("username"),
+		FullName:           r.FormValue("full_name"),
+		Role:               r.FormValue("role"),
+		IsActive:           r.FormValue("is_active") == "on",
+		MustChangePassword: true,
 	}
 	password := r.FormValue("password")
 
@@ -143,6 +144,14 @@ func (h *Handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		if err := model.UpdateUserPassword(h.DB, id, hashed); err != nil {
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 			return
+		}
+		// Admin-reset password requires the target user to change it on next login,
+		// unless the admin is editing their own account.
+		if currentUser.ID != id {
+			if err := model.SetMustChangePassword(h.DB, id, true); err != nil {
+				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+				return
+			}
 		}
 	}
 

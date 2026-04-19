@@ -9,6 +9,7 @@
 
     <form method="POST" action="{{if $data.IsEdit}}/users/{{$data.User.ID}}{{else}}/users{{end}}"
         class="card bg-base-100 shadow">
+        {{template "csrf" $}}
         <div class="card-body">
 
             {{if not $data.IsEdit}}
