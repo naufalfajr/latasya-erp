@@ -1,0 +1,67 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-main
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: true
+      - run: go test ./...
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: true
+
+      - name: Download Tailwind CLI
+        run: |
+          mkdir -p bin
+          curl -sL https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-linux-x64 -o bin/tailwindcss
+          chmod +x bin/tailwindcss
+
+      - name: Build CSS
+        run: ./bin/tailwindcss -i static/css/input.css -o static/css/app.css --minify
+
+      - name: Build binary
+        run: GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o latasya-erp ./cmd/server
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          echo "${{ secrets.VPS_SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Ship binary
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          scp -i ~/.ssh/deploy_key latasya-erp "$VPS_USER@$VPS_HOST:/tmp/latasya-erp"
+
+      - name: Install and restart
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          ssh -i ~/.ssh/deploy_key "$VPS_USER@$VPS_HOST" \
+            'sudo install -m 755 /tmp/latasya-erp /usr/local/bin/latasya-erp && sudo systemctl restart latasya-erp'
