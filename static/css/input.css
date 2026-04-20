@@ -1,3 +1,6 @@
 @import "tailwindcss";
 
 @source "../../templates";
+
+@plugin "../../bin/daisyui.mjs";
+@plugin "../../bin/daisyui-theme.mjs";

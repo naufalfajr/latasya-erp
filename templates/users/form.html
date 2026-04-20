@@ -14,42 +14,40 @@
 
             {{if not $data.IsEdit}}
             <!-- Username (only on create) -->
-            <div class="form-control">
-                <label class="label"><span class="label-text">Username *</span></label>
+            <div class="flex flex-col gap-1">
+                <label class="label">Username *</label>
                 <input type="text" name="username" placeholder="Username"
-                    class="input input-bordered {{if index $data.Errors "username"}}input-error{{end}}"
+                    class="input {{if index $data.Errors "username"}}input-error{{end}}"
                     value="{{$data.User.Username}}" required>
                 {{if index $data.Errors "username"}}
-                <label class="label"><span class="label-text-alt text-error">{{index $data.Errors "username"}}</span></label>
+                <span class="text-xs text-error">{{index $data.Errors "username"}}</span>
                 {{end}}
             </div>
             {{else}}
-            <div class="form-control">
-                <label class="label"><span class="label-text">Username</span></label>
-                <input type="text" class="input input-bordered bg-base-200" value="{{$data.User.Username}}" disabled>
+            <div class="flex flex-col gap-1">
+                <label class="label">Username</label>
+                <input type="text" class="input bg-base-200" value="{{$data.User.Username}}" disabled>
             </div>
             {{end}}
 
             <!-- Full Name -->
-            <div class="form-control">
-                <label class="label"><span class="label-text">Full Name *</span></label>
+            <div class="flex flex-col gap-1">
+                <label class="label">Full Name *</label>
                 <input type="text" name="full_name" placeholder="Full name"
-                    class="input input-bordered {{if index $data.Errors "full_name"}}input-error{{end}}"
+                    class="input {{if index $data.Errors "full_name"}}input-error{{end}}"
                     value="{{$data.User.FullName}}" required>
                 {{if index $data.Errors "full_name"}}
-                <label class="label"><span class="label-text-alt text-error">{{index $data.Errors "full_name"}}</span></label>
+                <span class="text-xs text-error">{{index $data.Errors "full_name"}}</span>
                 {{end}}
             </div>
 
             <!-- Password -->
-            <div class="form-control">
-                <label class="label" for="user_password">
-                    <span class="label-text">Password {{if not $data.IsEdit}}*{{else}}(leave blank to keep current){{end}}</span>
-                </label>
+            <div class="flex flex-col gap-1">
+                <label class="label" for="user_password">Password {{if not $data.IsEdit}}*{{else}}(leave blank to keep current){{end}}</label>
                 <div class="relative">
                     <input type="password" id="user_password" name="password"
                         placeholder="{{if $data.IsEdit}}New password{{else}}Password{{end}}"
-                        class="input input-bordered w-full pr-12 {{if index $data.Errors "password"}}input-error{{end}}"
+                        class="input w-full pr-12 {{if index $data.Errors "password"}}input-error{{end}}"
                         {{if not $data.IsEdit}}required{{end}} minlength="4">
                     <button type="button"
                         class="btn btn-ghost btn-sm btn-square absolute top-1/2 right-1 -translate-y-1/2"
@@ -61,14 +59,14 @@
                     </button>
                 </div>
                 {{if index $data.Errors "password"}}
-                <label class="label"><span class="label-text-alt text-error">{{index $data.Errors "password"}}</span></label>
+                <span class="text-xs text-error">{{index $data.Errors "password"}}</span>
                 {{end}}
             </div>
 
             <!-- Role -->
-            <div class="form-control">
-                <label class="label"><span class="label-text">Role *</span></label>
-                <select name="role" class="select select-bordered {{if index $data.Errors "role"}}select-error{{end}}" required>
+            <div class="flex flex-col gap-1">
+                <label class="label">Role *</label>
+                <select name="role" class="select {{if index $data.Errors "role"}}select-error{{end}}" required>
                     {{range $data.Roles}}
                     <option value="{{.Name}}" {{if eq $data.User.Role .Name}}selected{{end}}>
                         {{.Name}}{{if .Description}} — {{.Description}}{{end}}
@@ -76,16 +74,16 @@
                     {{end}}
                 </select>
                 {{if index $data.Errors "role"}}
-                <label class="label"><span class="label-text-alt text-error">{{index $data.Errors "role"}}</span></label>
+                <span class="text-xs text-error">{{index $data.Errors "role"}}</span>
                 {{end}}
             </div>
 
             <!-- Active -->
-            <div class="form-control">
+            <div class="flex flex-col gap-1">
                 <label class="label cursor-pointer justify-start gap-2">
                     <input type="checkbox" name="is_active" class="checkbox checkbox-sm"
                         {{if $data.User.IsActive}}checked{{end}}>
-                    <span class="label-text">Active</span>
+                    <span>Active</span>
                 </label>
             </div>
 

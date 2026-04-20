@@ -2,10 +2,10 @@
 <tr>
     <td>
         <input type="text" name="line_description" placeholder="Description"
-            class="input input-bordered input-sm w-full">
+            class="input input-sm w-full">
     </td>
     <td>
-        <select name="line_account_id" class="select select-bordered select-sm w-full">
+        <select name="line_account_id" class="select select-sm w-full">
             <option value="">Account</option>
             {{range .Accounts}}
             <option value="{{.ID}}">{{.Code}} - {{.Name}}</option>
@@ -13,10 +13,10 @@
         </select>
     </td>
     <td>
-        <input type="number" name="line_quantity" class="input input-bordered input-sm w-full" value="100" min="1">
+        <input type="number" name="line_quantity" class="input input-sm w-full" value="100" min="1">
     </td>
     <td>
-        <input type="number" name="line_unit_price" placeholder="0" class="input input-bordered input-sm w-full font-mono" min="0">
+        <input type="number" name="line_unit_price" placeholder="0" class="input input-sm w-full font-mono" min="0">
     </td>
     <td class="font-mono text-sm line-amount">0</td>
     <td>

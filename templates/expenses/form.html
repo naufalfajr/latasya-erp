@@ -20,66 +20,66 @@
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <!-- Date -->
-                <div class="form-control">
-                    <label class="label"><span class="label-text">Date *</span></label>
+                <div class="flex flex-col gap-1">
+                    <label class="label">Date *</label>
                     <input type="date" name="entry_date"
-                        class="input input-bordered {{if index $data.Errors "entry_date"}}input-error{{end}}"
+                        class="input {{if index $data.Errors "entry_date"}}input-error{{end}}"
                         value="{{$data.Entry.EntryDate}}" required>
                     {{if index $data.Errors "entry_date"}}
-                    <label class="label"><span class="label-text-alt text-error">{{index $data.Errors "entry_date"}}</span></label>
+                    <span class="text-xs text-error">{{index $data.Errors "entry_date"}}</span>
                     {{end}}
                 </div>
 
                 <!-- Amount -->
-                <div class="form-control">
-                    <label class="label"><span class="label-text">Amount (Rp) *</span></label>
+                <div class="flex flex-col gap-1">
+                    <label class="label">Amount (Rp) *</label>
                     <input type="number" name="amount" placeholder="e.g. 500000"
-                        class="input input-bordered font-mono {{if index $data.Errors "amount"}}input-error{{end}}"
+                        class="input font-mono {{if index $data.Errors "amount"}}input-error{{end}}"
                         value="{{if gt $data.Amount 0}}{{$data.Amount}}{{end}}" min="1" required>
                     {{if index $data.Errors "amount"}}
-                    <label class="label"><span class="label-text-alt text-error">{{index $data.Errors "amount"}}</span></label>
+                    <span class="text-xs text-error">{{index $data.Errors "amount"}}</span>
                     {{end}}
                 </div>
 
                 <!-- Expense Account -->
-                <div class="form-control">
-                    <label class="label"><span class="label-text">Expense Account *</span></label>
+                <div class="flex flex-col gap-1">
+                    <label class="label">Expense Account *</label>
                     <select name="expense_account"
-                        class="select select-bordered {{if index $data.Errors "expense_account"}}select-error{{end}}" required>
+                        class="select {{if index $data.Errors "expense_account"}}select-error{{end}}" required>
                         <option value="">Select expense account</option>
                         {{range $data.ExpenseAccounts}}
                         <option value="{{.ID}}" {{if eq .ID $data.ExpenseAccount}}selected{{end}}>{{.Code}} - {{.Name}}</option>
                         {{end}}
                     </select>
                     {{if index $data.Errors "expense_account"}}
-                    <label class="label"><span class="label-text-alt text-error">{{index $data.Errors "expense_account"}}</span></label>
+                    <span class="text-xs text-error">{{index $data.Errors "expense_account"}}</span>
                     {{end}}
                 </div>
 
                 <!-- Paid From -->
-                <div class="form-control">
-                    <label class="label"><span class="label-text">Paid From *</span></label>
+                <div class="flex flex-col gap-1">
+                    <label class="label">Paid From *</label>
                     <select name="payment_account"
-                        class="select select-bordered {{if index $data.Errors "payment_account"}}select-error{{end}}" required>
+                        class="select {{if index $data.Errors "payment_account"}}select-error{{end}}" required>
                         <option value="">Select payment account</option>
                         {{range $data.PaymentAccounts}}
                         <option value="{{.ID}}" {{if eq .ID $data.PaymentAccount}}selected{{end}}>{{.Code}} - {{.Name}}</option>
                         {{end}}
                     </select>
                     {{if index $data.Errors "payment_account"}}
-                    <label class="label"><span class="label-text-alt text-error">{{index $data.Errors "payment_account"}}</span></label>
+                    <span class="text-xs text-error">{{index $data.Errors "payment_account"}}</span>
                     {{end}}
                 </div>
             </div>
 
             <!-- Description -->
-            <div class="form-control mt-2">
-                <label class="label"><span class="label-text">Description *</span></label>
+            <div class="flex flex-col gap-1 mt-2">
+                <label class="label">Description *</label>
                 <input type="text" name="description" placeholder="e.g. Diesel fuel for Bus 01"
-                    class="input input-bordered {{if index $data.Errors "description"}}input-error{{end}}"
+                    class="input {{if index $data.Errors "description"}}input-error{{end}}"
                     value="{{$data.Entry.Description}}" required>
                 {{if index $data.Errors "description"}}
-                <label class="label"><span class="label-text-alt text-error">{{index $data.Errors "description"}}</span></label>
+                <span class="text-xs text-error">{{index $data.Errors "description"}}</span>
                 {{end}}
             </div>
 

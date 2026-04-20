@@ -6,9 +6,9 @@
 <h1 class="text-2xl font-bold mb-6">Balance Sheet</h1>
 
 <form class="flex flex-wrap gap-2 mb-4 items-end">
-    <div class="form-control">
-        <label class="label label-text text-xs">As of</label>
-        <input type="date" name="date" value="{{index $data "AsOf"}}" class="input input-bordered input-sm">
+    <div class="flex flex-col gap-1">
+        <label class="label text-xs">As of</label>
+        <input type="date" name="date" value="{{index $data "AsOf"}}" class="input input-sm">
     </div>
     <button type="submit" class="btn btn-sm btn-primary">Apply</button>
 </form>

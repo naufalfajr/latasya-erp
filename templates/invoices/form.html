@@ -18,9 +18,9 @@
 
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
                 <!-- Customer -->
-                <div class="form-control">
-                    <label class="label"><span class="label-text">Customer *</span></label>
-                    <select name="contact_id" class="select select-bordered {{if index $data.Errors "contact_id"}}select-error{{end}}" required>
+                <div class="flex flex-col gap-1">
+                    <label class="label">Customer *</label>
+                    <select name="contact_id" class="select {{if index $data.Errors "contact_id"}}select-error{{end}}" required>
                         <option value="">Select customer</option>
                         {{$selContact := $data.Invoice.ContactID}}
                         {{range $data.Contacts}}
@@ -28,23 +28,23 @@
                         {{end}}
                     </select>
                     {{if index $data.Errors "contact_id"}}
-                    <label class="label"><span class="label-text-alt text-error">{{index $data.Errors "contact_id"}}</span></label>
+                    <span class="text-xs text-error">{{index $data.Errors "contact_id"}}</span>
                     {{end}}
                 </div>
 
                 <!-- Invoice Date -->
-                <div class="form-control">
-                    <label class="label"><span class="label-text">Invoice Date *</span></label>
+                <div class="flex flex-col gap-1">
+                    <label class="label">Invoice Date *</label>
                     <input type="date" name="invoice_date"
-                        class="input input-bordered {{if index $data.Errors "invoice_date"}}input-error{{end}}"
+                        class="input {{if index $data.Errors "invoice_date"}}input-error{{end}}"
                         value="{{$data.Invoice.InvoiceDate}}" required>
                 </div>
 
                 <!-- Due Date -->
-                <div class="form-control">
-                    <label class="label"><span class="label-text">Due Date *</span></label>
+                <div class="flex flex-col gap-1">
+                    <label class="label">Due Date *</label>
                     <input type="date" name="due_date"
-                        class="input input-bordered {{if index $data.Errors "due_date"}}input-error{{end}}"
+                        class="input {{if index $data.Errors "due_date"}}input-error{{end}}"
                         value="{{$data.Invoice.DueDate}}" required>
                 </div>
             </div>
@@ -52,7 +52,7 @@
             <!-- Line items -->
             <div class="mb-4">
                 <div class="flex justify-between items-center mb-2">
-                    <label class="label-text font-semibold">Line Items *</label>
+                    <label class="font-semibold">Line Items *</label>
                     {{if index $data.Errors "lines"}}
                     <span class="text-error text-sm">{{index $data.Errors "lines"}}</span>
                     {{end}}
@@ -88,14 +88,14 @@
 
             <!-- Tax -->
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-                <div class="form-control">
-                    <label class="label"><span class="label-text">Tax Amount (Rp)</span></label>
-                    <input type="number" name="tax_amount" class="input input-bordered font-mono"
+                <div class="flex flex-col gap-1">
+                    <label class="label">Tax Amount (Rp)</label>
+                    <input type="number" name="tax_amount" class="input font-mono"
                         value="{{if gt $data.Invoice.TaxAmount 0}}{{$data.Invoice.TaxAmount}}{{end}}" min="0">
                 </div>
-                <div class="form-control">
-                    <label class="label"><span class="label-text">Notes</span></label>
-                    <input type="text" name="notes" class="input input-bordered"
+                <div class="flex flex-col gap-1">
+                    <label class="label">Notes</label>
+                    <input type="text" name="notes" class="input"
                         value="{{$data.Invoice.Notes}}" placeholder="Optional notes">
                 </div>
             </div>
@@ -129,10 +129,10 @@ function removeInvLine(btn) { btn.closest('tr').remove(); }
 <tr>
     <td>
         <input type="text" name="line_description" placeholder="Description"
-            class="input input-bordered input-sm w-full" value="{{.Line.Description}}">
+            class="input input-sm w-full" value="{{.Line.Description}}">
     </td>
     <td>
-        <select name="line_account_id" class="select select-bordered select-sm w-full">
+        <select name="line_account_id" class="select select-sm w-full">
             <option value="">Account</option>
             {{$selAcct := .Line.AccountID}}
             {{range .Accounts}}
@@ -141,11 +141,11 @@ function removeInvLine(btn) { btn.closest('tr').remove(); }
         </select>
     </td>
     <td>
-        <input type="number" name="line_quantity" class="input input-bordered input-sm w-full"
+        <input type="number" name="line_quantity" class="input input-sm w-full"
             value="{{if gt .Line.Quantity 0}}{{.Line.Quantity}}{{else}}100{{end}}" min="1">
     </td>
     <td>
-        <input type="number" name="line_unit_price" placeholder="0" class="input input-bordered input-sm w-full font-mono"
+        <input type="number" name="line_unit_price" placeholder="0" class="input input-sm w-full font-mono"
             value="{{if gt .Line.UnitPrice 0}}{{.Line.UnitPrice}}{{end}}" min="0">
     </td>
     <td class="font-mono text-sm line-amount">{{if gt .Line.Amount 0}}{{.Line.Amount}}{{else}}0{{end}}</td>

@@ -17,9 +17,9 @@
         <div class="card-body">
 
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-                <div class="form-control">
-                    <label class="label"><span class="label-text">Supplier *</span></label>
-                    <select name="contact_id" class="select select-bordered {{if index $data.Errors "contact_id"}}select-error{{end}}" required>
+                <div class="flex flex-col gap-1">
+                    <label class="label">Supplier *</label>
+                    <select name="contact_id" class="select {{if index $data.Errors "contact_id"}}select-error{{end}}" required>
                         <option value="">Select supplier</option>
                         {{$selContact := $data.Bill.ContactID}}
                         {{range $data.Contacts}}
@@ -27,21 +27,21 @@
                         {{end}}
                     </select>
                 </div>
-                <div class="form-control">
-                    <label class="label"><span class="label-text">Bill Date *</span></label>
-                    <input type="date" name="bill_date" class="input input-bordered {{if index $data.Errors "bill_date"}}input-error{{end}}"
+                <div class="flex flex-col gap-1">
+                    <label class="label">Bill Date *</label>
+                    <input type="date" name="bill_date" class="input {{if index $data.Errors "bill_date"}}input-error{{end}}"
                         value="{{$data.Bill.BillDate}}" required>
                 </div>
-                <div class="form-control">
-                    <label class="label"><span class="label-text">Due Date *</span></label>
-                    <input type="date" name="due_date" class="input input-bordered {{if index $data.Errors "due_date"}}input-error{{end}}"
+                <div class="flex flex-col gap-1">
+                    <label class="label">Due Date *</label>
+                    <input type="date" name="due_date" class="input {{if index $data.Errors "due_date"}}input-error{{end}}"
                         value="{{$data.Bill.DueDate}}" required>
                 </div>
             </div>
 
             <div class="mb-4">
                 <div class="flex justify-between items-center mb-2">
-                    <label class="label-text font-semibold">Line Items *</label>
+                    <label class="font-semibold">Line Items *</label>
                     {{if index $data.Errors "lines"}}
                     <span class="text-error text-sm">{{index $data.Errors "lines"}}</span>
                     {{end}}
@@ -74,14 +74,14 @@
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-                <div class="form-control">
-                    <label class="label"><span class="label-text">Tax Amount (Rp)</span></label>
-                    <input type="number" name="tax_amount" class="input input-bordered font-mono"
+                <div class="flex flex-col gap-1">
+                    <label class="label">Tax Amount (Rp)</label>
+                    <input type="number" name="tax_amount" class="input font-mono"
                         value="{{if gt $data.Bill.TaxAmount 0}}{{$data.Bill.TaxAmount}}{{end}}" min="0">
                 </div>
-                <div class="form-control">
-                    <label class="label"><span class="label-text">Notes</span></label>
-                    <input type="text" name="notes" class="input input-bordered" value="{{$data.Bill.Notes}}">
+                <div class="flex flex-col gap-1">
+                    <label class="label">Notes</label>
+                    <input type="text" name="notes" class="input" value="{{$data.Bill.Notes}}">
                 </div>
             </div>
 
@@ -102,9 +102,9 @@ function removeBillLine(btn) { btn.closest('tr').remove(); }
 
 {{define "bill-line-row"}}
 <tr>
-    <td><input type="text" name="line_description" placeholder="Description" class="input input-bordered input-sm w-full" value="{{.Line.Description}}"></td>
+    <td><input type="text" name="line_description" placeholder="Description" class="input input-sm w-full" value="{{.Line.Description}}"></td>
     <td>
-        <select name="line_account_id" class="select select-bordered select-sm w-full">
+        <select name="line_account_id" class="select select-sm w-full">
             <option value="">Account</option>
             {{$selAcct := .Line.AccountID}}
             {{range .Accounts}}
@@ -112,8 +112,8 @@ function removeBillLine(btn) { btn.closest('tr').remove(); }
             {{end}}
         </select>
     </td>
-    <td><input type="number" name="line_quantity" class="input input-bordered input-sm w-full" value="{{if gt .Line.Quantity 0}}{{.Line.Quantity}}{{else}}100{{end}}" min="1"></td>
-    <td><input type="number" name="line_unit_price" placeholder="0" class="input input-bordered input-sm w-full font-mono" value="{{if gt .Line.UnitPrice 0}}{{.Line.UnitPrice}}{{end}}" min="0"></td>
+    <td><input type="number" name="line_quantity" class="input input-sm w-full" value="{{if gt .Line.Quantity 0}}{{.Line.Quantity}}{{else}}100{{end}}" min="1"></td>
+    <td><input type="number" name="line_unit_price" placeholder="0" class="input input-sm w-full font-mono" value="{{if gt .Line.UnitPrice 0}}{{.Line.UnitPrice}}{{end}}" min="0"></td>
     <td class="font-mono text-sm">{{if gt .Line.Amount 0}}{{.Line.Amount}}{{else}}0{{end}}</td>
     <td><button type="button" class="btn btn-ghost btn-xs text-error" onclick="removeBillLine(this)">X</button></td>
 </tr>

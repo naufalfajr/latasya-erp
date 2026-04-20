@@ -105,18 +105,18 @@
         <form method="POST" action="/bills/{{$bill.ID}}/payment">
             {{template "csrf" $}}
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div class="form-control">
-                    <label class="label"><span class="label-text">Date *</span></label>
-                    <input type="date" name="payment_date" class="input input-bordered input-sm" required>
+                <div class="flex flex-col gap-1">
+                    <label class="label">Date *</label>
+                    <input type="date" name="payment_date" class="input input-sm" required>
                 </div>
-                <div class="form-control">
-                    <label class="label"><span class="label-text">Amount (Rp) *</span></label>
-                    <input type="number" name="amount" class="input input-bordered input-sm font-mono"
+                <div class="flex flex-col gap-1">
+                    <label class="label">Amount (Rp) *</label>
+                    <input type="number" name="amount" class="input input-sm font-mono"
                         value="{{$bill.AmountDue}}" min="1" max="{{$bill.AmountDue}}" required>
                 </div>
-                <div class="form-control">
-                    <label class="label"><span class="label-text">Paid From *</span></label>
-                    <select name="payment_account" class="select select-bordered select-sm" required>
+                <div class="flex flex-col gap-1">
+                    <label class="label">Paid From *</label>
+                    <select name="payment_account" class="select select-sm" required>
                         <option value="">Select account</option>
                         {{range $assetAccounts}}
                         <option value="{{.ID}}">{{.Code}} - {{.Name}}</option>

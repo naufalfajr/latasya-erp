@@ -25,28 +25,24 @@
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                 <!-- Date -->
-                <div class="form-control">
-                    <label class="label" for="entry_date">
-                        <span class="label-text">Date *</span>
-                    </label>
+                <div class="flex flex-col gap-1">
+                    <label class="label" for="entry_date">Date *</label>
                     <input type="date" id="entry_date" name="entry_date"
-                        class="input input-bordered {{if index $data.Errors "entry_date"}}input-error{{end}}"
+                        class="input {{if index $data.Errors "entry_date"}}input-error{{end}}"
                         value="{{$data.Entry.EntryDate}}" required>
                     {{if index $data.Errors "entry_date"}}
-                    <label class="label"><span class="label-text-alt text-error">{{index $data.Errors "entry_date"}}</span></label>
+                    <span class="text-xs text-error">{{index $data.Errors "entry_date"}}</span>
                     {{end}}
                 </div>
 
                 <!-- Description -->
-                <div class="form-control">
-                    <label class="label" for="description">
-                        <span class="label-text">Description *</span>
-                    </label>
+                <div class="flex flex-col gap-1">
+                    <label class="label" for="description">Description *</label>
                     <input type="text" id="description" name="description" placeholder="e.g. Fuel purchase for Bus 01"
-                        class="input input-bordered {{if index $data.Errors "description"}}input-error{{end}}"
+                        class="input {{if index $data.Errors "description"}}input-error{{end}}"
                         value="{{$data.Entry.Description}}" required>
                     {{if index $data.Errors "description"}}
-                    <label class="label"><span class="label-text-alt text-error">{{index $data.Errors "description"}}</span></label>
+                    <span class="text-xs text-error">{{index $data.Errors "description"}}</span>
                     {{end}}
                 </div>
             </div>
@@ -54,7 +50,7 @@
             <!-- Journal Lines -->
             <div class="mb-4">
                 <div class="flex justify-between items-center mb-2">
-                    <label class="label-text font-semibold">Lines *</label>
+                    <label class="font-semibold">Lines *</label>
                     {{if index $data.Errors "lines"}}
                     <span class="text-error text-sm">{{index $data.Errors "lines"}}</span>
                     {{end}}
@@ -79,8 +75,8 @@
                         <tfoot>
                             <tr class="font-bold">
                                 <td colspan="2" class="text-right">Total</td>
-                                <td><input type="text" id="total-debit" class="input input-sm input-bordered w-full font-mono bg-base-200" readonly value="0"></td>
-                                <td><input type="text" id="total-credit" class="input input-sm input-bordered w-full font-mono bg-base-200" readonly value="0"></td>
+                                <td><input type="text" id="total-debit" class="input input-sm w-full font-mono bg-base-200" readonly value="0"></td>
+                                <td><input type="text" id="total-credit" class="input input-sm w-full font-mono bg-base-200" readonly value="0"></td>
                                 <td></td>
                             </tr>
                         </tfoot>
@@ -160,7 +156,7 @@ updateTotals();
 {{define "journal-line-row"}}
 <tr>
     <td>
-        <select name="line_account_id" class="select select-bordered select-sm w-full">
+        <select name="line_account_id" class="select select-sm w-full">
             <option value="">Select account</option>
             {{$selectedID := .Line.AccountID}}
             {{range .Accounts}}
@@ -169,15 +165,15 @@ updateTotals();
         </select>
     </td>
     <td>
-        <input type="text" name="line_memo" placeholder="Memo" class="input input-bordered input-sm w-full"
+        <input type="text" name="line_memo" placeholder="Memo" class="input input-sm w-full"
             value="{{.Line.Memo}}">
     </td>
     <td>
-        <input type="number" name="line_debit" placeholder="0" class="input input-bordered input-sm w-full font-mono"
+        <input type="number" name="line_debit" placeholder="0" class="input input-sm w-full font-mono"
             value="{{if gt .Line.Debit 0}}{{.Line.Debit}}{{end}}" min="0">
     </td>
     <td>
-        <input type="number" name="line_credit" placeholder="0" class="input input-bordered input-sm w-full font-mono"
+        <input type="number" name="line_credit" placeholder="0" class="input input-sm w-full font-mono"
             value="{{if gt .Line.Credit 0}}{{.Line.Credit}}{{end}}" min="0">
     </td>
     <td>

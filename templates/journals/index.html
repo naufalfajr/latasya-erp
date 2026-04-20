@@ -12,21 +12,21 @@
 <!-- Filters -->
 <div class="flex flex-wrap gap-2 mb-4">
     <input type="date" name="from" value="{{$data.Filter.DateFrom}}" placeholder="From"
-        class="input input-bordered input-sm"
+        class="input input-sm"
         hx-get="/journals"
         hx-trigger="change"
         hx-target="#journal-table"
         hx-select="#journal-table"
         hx-include="[name='to'],[name='search']">
     <input type="date" name="to" value="{{$data.Filter.DateTo}}" placeholder="To"
-        class="input input-bordered input-sm"
+        class="input input-sm"
         hx-get="/journals"
         hx-trigger="change"
         hx-target="#journal-table"
         hx-select="#journal-table"
         hx-include="[name='from'],[name='search']">
     <input type="text" name="search" value="{{$data.Filter.Search}}" placeholder="Search..."
-        class="input input-bordered input-sm w-full max-w-xs"
+        class="input input-sm w-full max-w-xs"
         hx-get="/journals"
         hx-trigger="keyup changed delay:300ms"
         hx-target="#journal-table"

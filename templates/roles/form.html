@@ -14,42 +14,40 @@
 
             {{if not $data.IsEdit}}
             <!-- Name -->
-            <div class="form-control">
-                <label class="label"><span class="label-text">Name *</span></label>
+            <div class="flex flex-col gap-1">
+                <label class="label">Name *</label>
                 <input type="text" name="name" placeholder="e.g. manager"
-                    class="input input-bordered {{if index $data.Errors "name"}}input-error{{end}}"
+                    class="input {{if index $data.Errors "name"}}input-error{{end}}"
                     value="{{$data.Role.Name}}" required>
-                <label class="label">
-                    <span class="label-text-alt opacity-60">Lowercase letters, digits, hyphens or underscores. Must start with a letter.</span>
-                </label>
+                <span class="text-xs opacity-60">Lowercase letters, digits, hyphens or underscores. Must start with a letter.</span>
                 {{if index $data.Errors "name"}}
-                <label class="label"><span class="label-text-alt text-error">{{index $data.Errors "name"}}</span></label>
+                <span class="text-xs text-error">{{index $data.Errors "name"}}</span>
                 {{end}}
             </div>
             {{else}}
-            <div class="form-control">
-                <label class="label"><span class="label-text">Name</span></label>
-                <input type="text" class="input input-bordered bg-base-200" value="{{$data.Role.Name}}" disabled>
+            <div class="flex flex-col gap-1">
+                <label class="label">Name</label>
+                <input type="text" class="input bg-base-200" value="{{$data.Role.Name}}" disabled>
                 {{if $data.Role.IsSystem}}
-                <label class="label"><span class="label-text-alt opacity-60">System role — name cannot be changed.</span></label>
+                <span class="text-xs opacity-60">System role — name cannot be changed.</span>
                 {{end}}
             </div>
             {{end}}
 
             <!-- Description -->
-            <div class="form-control">
-                <label class="label"><span class="label-text">Description</span></label>
+            <div class="flex flex-col gap-1">
+                <label class="label">Description</label>
                 <input type="text" name="description" placeholder="Short description"
-                    class="input input-bordered"
+                    class="input"
                     value="{{$data.Role.Description}}">
             </div>
 
             <!-- Capabilities -->
-            <div class="form-control">
+            <div class="flex flex-col gap-1">
                 <label class="label">
-                    <span class="label-text">Capabilities</span>
+                    <span>Capabilities</span>
                     {{if index $data.Errors "capabilities"}}
-                    <span class="label-text-alt text-error">{{index $data.Errors "capabilities"}}</span>
+                    <span class="text-xs text-error">{{index $data.Errors "capabilities"}}</span>
                     {{end}}
                 </label>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 p-3 border border-base-300 rounded-lg">
@@ -58,7 +56,7 @@
                         <input type="checkbox" name="capabilities" value="{{.}}"
                             class="checkbox checkbox-sm"
                             {{if hasString . $data.Role.Capabilities}}checked{{end}}>
-                        <span class="label-text font-mono text-xs">{{.}}</span>
+                        <span class="font-mono text-xs">{{.}}</span>
                     </label>
                     {{end}}
                 </div>

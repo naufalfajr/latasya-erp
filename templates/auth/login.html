@@ -16,22 +16,18 @@
         {{end}}
 
         <form method="POST" action="/login">
-            <div class="form-control mb-4">
-                <label class="label" for="username">
-                    <span class="label-text">Username</span>
-                </label>
+            <div class="flex flex-col gap-1 mb-4">
+                <label class="label" for="username">Username</label>
                 <input type="text" id="username" name="username" placeholder="Username"
-                    class="input input-bordered w-full"
+                    class="input w-full"
                     value="{{if .Data}}{{index .Data "Username"}}{{end}}"
                     required autofocus>
             </div>
-            <div class="form-control mb-6">
-                <label class="label" for="password">
-                    <span class="label-text">Password</span>
-                </label>
+            <div class="flex flex-col gap-1 mb-6">
+                <label class="label" for="password">Password</label>
                 <div class="relative">
                     <input type="password" id="password" name="password" placeholder="Password"
-                        class="input input-bordered w-full pr-12" required>
+                        class="input w-full pr-12" required>
                     <button type="button"
                         class="btn btn-ghost btn-sm btn-square absolute top-1/2 right-1 -translate-y-1/2"
                         data-pw-toggle="password" aria-label="Show password">
