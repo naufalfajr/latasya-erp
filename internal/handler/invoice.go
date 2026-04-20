@@ -301,7 +301,7 @@ func parseInvoiceLines(r *http.Request) []model.InvoiceLine {
 	var lines []model.InvoiceLine
 	for i := range descriptions {
 		desc := getIndex(descriptions, i)
-		qty := parseIDR(getIndex(quantities, i))
+		qty := parseQuantity(getIndex(quantities, i))
 		if qty == 0 {
 			qty = 100 // default 1.00
 		}

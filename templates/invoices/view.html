@@ -84,7 +84,7 @@
                     <tr>
                         <td>{{.Description}}</td>
                         <td class="text-sm">{{.AccountCode}} - {{.AccountName}}</td>
-                        <td class="text-right">{{.Quantity}}</td>
+                        <td class="text-right">{{formatQty .Quantity}}</td>
                         <td class="text-right font-mono">{{formatIDR .UnitPrice}}</td>
                         <td class="text-right font-mono">{{formatIDR .Amount}}</td>
                     </tr>

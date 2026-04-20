@@ -112,9 +112,10 @@
 
 <script>
 function calcLineAmount(row) {
-    var qty = parseInt(row.querySelector('[name="line_quantity"]').value || '100');
+    var qty = parseFloat(row.querySelector('[name="line_quantity"]').value || '1');
     var price = parseInt(row.querySelector('[name="line_unit_price"]').value || '0');
-    row.querySelector('.line-amount').textContent = (qty * price / 100).toLocaleString('id-ID');
+    if (isNaN(qty)) qty = 0;
+    row.querySelector('.line-amount').textContent = Math.round(qty * price).toLocaleString('id-ID');
 }
 document.addEventListener('input', function(e) {
     if (e.target.name === 'line_quantity' || e.target.name === 'line_unit_price') {
@@ -142,7 +143,8 @@ function removeInvLine(btn) { btn.closest('tr').remove(); }
     </td>
     <td>
         <input type="number" name="line_quantity" class="input input-sm w-full"
-            value="{{if gt .Line.Quantity 0}}{{.Line.Quantity}}{{else}}100{{end}}" min="1">
+            value="{{if gt .Line.Quantity 0}}{{formatQty .Line.Quantity}}{{else}}1{{end}}"
+            step="0.01" min="0">
     </td>
     <td>
         <input type="number" name="line_unit_price" placeholder="0" class="input input-sm w-full font-mono"

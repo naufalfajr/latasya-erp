@@ -452,7 +452,7 @@ func TestBookkeeper_CanCreateInvoice(t *testing.T) {
 		return http.ErrUseLastResponse
 	}}
 	form := fmt.Sprintf(
-		"contact_id=%d&invoice_date=2026-04-04&due_date=2026-04-30&line_description=Service&line_account_id=%d&line_quantity=100&line_unit_price=1000000",
+		"contact_id=%d&invoice_date=2026-04-04&due_date=2026-04-30&line_description=Service&line_account_id=%d&line_quantity=1&line_unit_price=1000000",
 		contactID, revenueID,
 	)
 	req, _ := requestWithCookies(db, "POST", ts.URL+"/invoices", cookies, form)

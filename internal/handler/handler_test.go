@@ -943,7 +943,7 @@ func TestInvoiceLifecycle_Handler(t *testing.T) {
 
 	// 1. Create invoice
 	form := fmt.Sprintf(
-		"contact_id=%d&invoice_date=2026-04-04&due_date=2026-04-30&line_description=Bus+fee&line_account_id=%d&line_quantity=100&line_unit_price=5000000",
+		"contact_id=%d&invoice_date=2026-04-04&due_date=2026-04-30&line_description=Bus+fee&line_account_id=%d&line_quantity=1&line_unit_price=5000000",
 		contactID, revenueID,
 	)
 	req, _ := requestWithCookies(db, "POST", ts.URL+"/invoices", cookies, form)
@@ -1023,7 +1023,7 @@ func TestBillLifecycle_Handler(t *testing.T) {
 
 	// 1. Create bill
 	form := fmt.Sprintf(
-		"contact_id=%d&bill_date=2026-04-04&due_date=2026-04-30&line_description=Diesel&line_account_id=%d&line_quantity=100&line_unit_price=2000000",
+		"contact_id=%d&bill_date=2026-04-04&due_date=2026-04-30&line_description=Diesel&line_account_id=%d&line_quantity=1&line_unit_price=2000000",
 		contactID, fuelID,
 	)
 	req, _ := requestWithCookies(db, "POST", ts.URL+"/bills", cookies, form)

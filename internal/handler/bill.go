@@ -246,7 +246,7 @@ func parseBillLines(r *http.Request) []model.BillLine {
 	var lines []model.BillLine
 	for i := range descriptions {
 		desc := getIndex(descriptions, i)
-		qty := parseIDR(getIndex(quantities, i))
+		qty := parseQuantity(getIndex(quantities, i))
 		if qty == 0 {
 			qty = 100
 		}

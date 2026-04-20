@@ -10,6 +10,7 @@ import (
 func FuncMap() template.FuncMap {
 	return template.FuncMap{
 		"formatIDR": formatIDR,
+		"formatQty": formatQty,
 		"formatDate": formatDate,
 		"add": func(a, b int) int { return a + b },
 		"sub": func(a, b int) int { return a - b },
@@ -65,6 +66,22 @@ func formatIDR(amount int) string {
 		formatted = "-" + formatted
 	}
 	return formatted
+}
+
+// formatQty converts the internal ×100 fixed-point quantity back to a human
+// decimal string: 100 → "1", 150 → "1.5", 125 → "1.25", 25 → "0.25".
+// Trailing zeros are stripped.
+func formatQty(n int) string {
+	whole := n / 100
+	frac := n % 100
+	switch {
+	case frac == 0:
+		return fmt.Sprintf("%d", whole)
+	case frac%10 == 0:
+		return fmt.Sprintf("%d.%d", whole, frac/10)
+	default:
+		return fmt.Sprintf("%d.%02d", whole, frac)
+	}
 }
 
 func formatDate(s string) string {

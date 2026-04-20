@@ -112,7 +112,7 @@ function removeBillLine(btn) { btn.closest('tr').remove(); }
             {{end}}
         </select>
     </td>
-    <td><input type="number" name="line_quantity" class="input input-sm w-full" value="{{if gt .Line.Quantity 0}}{{.Line.Quantity}}{{else}}100{{end}}" min="1"></td>
+    <td><input type="number" name="line_quantity" class="input input-sm w-full" value="{{if gt .Line.Quantity 0}}{{formatQty .Line.Quantity}}{{else}}1{{end}}" step="0.01" min="0"></td>
     <td><input type="number" name="line_unit_price" placeholder="0" class="input input-sm w-full font-mono" value="{{if gt .Line.UnitPrice 0}}{{.Line.UnitPrice}}{{end}}" min="0"></td>
     <td class="font-mono text-sm">{{if gt .Line.Amount 0}}{{.Line.Amount}}{{else}}0{{end}}</td>
     <td><button type="button" class="btn btn-ghost btn-xs text-error" onclick="removeBillLine(this)">X</button></td>
