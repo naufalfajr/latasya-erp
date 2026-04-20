@@ -11,7 +11,7 @@
     <div class="flex gap-2 flex-wrap">
         <a href="/invoices" class="btn btn-ghost btn-sm">Back</a>
         <a href="/invoices/{{$inv.ID}}/print" class="btn btn-sm" target="_blank">Print</a>
-        {{if .User.IsAdmin}}
+        {{if .User.HasCapability "invoices.manage"}}
             {{if eq $inv.Status "draft"}}
             <a href="/invoices/{{$inv.ID}}/edit" class="btn btn-sm">Edit</a>
             <form method="POST" action="/invoices/{{$inv.ID}}/send" class="inline">
@@ -122,7 +122,7 @@
 </div>
 
 <!-- Record Payment Form -->
-{{if and .User.IsAdmin (or (eq $inv.Status "sent") (eq $inv.Status "partial") (eq $inv.Status "overdue"))}}
+{{if and (.User.HasCapability "invoices.manage") (or (eq $inv.Status "sent") (eq $inv.Status "partial") (eq $inv.Status "overdue"))}}
 <div class="card bg-base-100 shadow">
     <div class="card-body">
         <h2 class="card-title text-lg">Record Payment</h2>

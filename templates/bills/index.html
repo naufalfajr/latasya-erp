@@ -2,7 +2,7 @@
 {{define "content"}}
 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
     <h1 class="text-2xl font-bold">Bills</h1>
-    {{if .User.IsAdmin}}
+    {{if .User.HasCapability "bills.manage"}}
     <a href="/bills/new" class="btn btn-primary btn-sm">+ New Bill</a>
     {{end}}
 </div>

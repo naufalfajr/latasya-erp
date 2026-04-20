@@ -2,7 +2,7 @@
 {{define "content"}}
 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
     <h1 class="text-2xl font-bold">Contacts</h1>
-    {{if .User.IsAdmin}}
+    {{if .User.HasCapability "contacts.manage"}}
     <a href="/contacts/new" class="btn btn-primary btn-sm">+ New Contact</a>
     {{end}}
 </div>
@@ -40,7 +40,7 @@
                 <th class="hidden sm:table-cell">Email</th>
                 <th class="hidden md:table-cell">Address</th>
                 <th class="hidden md:table-cell">Notes</th>
-                {{if .User.IsAdmin}}<th>Actions</th>{{end}}
+                {{if .User.HasCapability "contacts.manage"}}<th>Actions</th>{{end}}
             </tr>
         </thead>
         <tbody>
@@ -55,7 +55,7 @@
                 <td class="hidden sm:table-cell text-sm">{{.Email}}</td>
                 <td class="hidden md:table-cell text-sm opacity-60">{{.Address}}</td>
                 <td class="hidden md:table-cell text-sm opacity-60">{{.Notes}}</td>
-                {{if $.User.IsAdmin}}
+                {{if $.User.HasCapability "contacts.manage"}}
                 <td>
                     <div class="flex gap-1">
                         <a href="/contacts/{{.ID}}/edit" class="btn btn-ghost btn-xs">Edit</a>

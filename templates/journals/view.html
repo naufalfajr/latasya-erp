@@ -9,7 +9,7 @@
     </div>
     <div class="flex gap-2">
         <a href="/journals" class="btn btn-ghost btn-sm">Back</a>
-        {{if .User.IsAdmin}}
+        {{if .User.HasCapability "journals.manage"}}
             {{if or (eq $je.SourceType "") (eq $je.SourceType "manual")}}
             <a href="/journals/{{$je.ID}}/edit" class="btn btn-sm">Edit</a>
             <button class="btn btn-error btn-sm"

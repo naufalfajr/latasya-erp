@@ -2,7 +2,7 @@
 {{define "content"}}
 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
     <h1 class="text-2xl font-bold">Expenses</h1>
-    {{if .User.IsAdmin}}
+    {{if .User.HasCapability "expenses.manage"}}
     <a href="/expenses/new" class="btn btn-primary btn-sm">+ Record Expense</a>
     {{end}}
 </div>
@@ -30,7 +30,7 @@
                 <td>
                     <div class="flex gap-1">
                         <a href="/journals/{{.ID}}" class="btn btn-ghost btn-xs">View</a>
-                        {{if $.User.IsAdmin}}
+                        {{if $.User.HasCapability "expenses.manage"}}
                         <a href="/expenses/{{.ID}}/edit" class="btn btn-ghost btn-xs">Edit</a>
                         <button class="btn btn-ghost btn-xs text-error"
                             hx-delete="/expenses/{{.ID}}"

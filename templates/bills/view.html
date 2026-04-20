@@ -10,7 +10,7 @@
     </div>
     <div class="flex gap-2 flex-wrap">
         <a href="/bills" class="btn btn-ghost btn-sm">Back</a>
-        {{if .User.IsAdmin}}
+        {{if .User.HasCapability "bills.manage"}}
             {{if eq $bill.Status "draft"}}
             <a href="/bills/{{$bill.ID}}/edit" class="btn btn-sm">Edit</a>
             <form method="POST" action="/bills/{{$bill.ID}}/receive" class="inline">
@@ -98,7 +98,7 @@
     </div>
 </div>
 
-{{if and .User.IsAdmin (or (eq $bill.Status "received") (eq $bill.Status "partial") (eq $bill.Status "overdue"))}}
+{{if and (.User.HasCapability "bills.manage") (or (eq $bill.Status "received") (eq $bill.Status "partial") (eq $bill.Status "overdue"))}}
 <div class="card bg-base-100 shadow">
     <div class="card-body">
         <h2 class="card-title text-lg">Record Payment</h2>
