@@ -39,6 +39,7 @@
                 <th>Phone</th>
                 <th class="hidden sm:table-cell">Email</th>
                 <th class="hidden md:table-cell">Address</th>
+                <th class="hidden md:table-cell">Notes</th>
                 {{if .User.IsAdmin}}<th>Actions</th>{{end}}
             </tr>
         </thead>
@@ -53,6 +54,7 @@
                 <td class="text-sm">{{.Phone}}</td>
                 <td class="hidden sm:table-cell text-sm">{{.Email}}</td>
                 <td class="hidden md:table-cell text-sm opacity-60">{{.Address}}</td>
+                <td class="hidden md:table-cell text-sm opacity-60">{{.Notes}}</td>
                 {{if $.User.IsAdmin}}
                 <td>
                     <div class="flex gap-1">

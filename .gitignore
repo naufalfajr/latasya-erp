@@ -3,6 +3,7 @@ latasya-erp
 
 # Database
 *.db
+*.db-*
 data/
 
 # Tailwind CLI
