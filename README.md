@@ -13,7 +13,7 @@ Built with Go stdlib, HTMX, Tailwind CSS + DaisyUI, and SQLite. Deploys as a sin
 - **Chart of Accounts** — 45 predefined accounts for Indonesian transport business (fuel, tolls, KIR, PKB/STNK, THR, etc.)
 - **Contacts** — manage customers and suppliers
 - **Financial Reports** — Trial Balance, Profit & Loss, Balance Sheet, Cash Flow, General Ledger
-- **User Management** — admin (full CRUD) and viewer (reports only) roles
+- **User Management** — capability-based roles (admin, bookkeeper, viewer) with a `/roles` page to manage custom roles
 - **Dashboard** — cash balance, monthly revenue/expenses, outstanding invoices/bills
 - **Responsive** — works on desktop and mobile (DaisyUI drawer layout)
 - **HTMX** — SPA-like navigation with `hx-boost`, inline delete, live search, dynamic form rows
@@ -149,6 +149,24 @@ Predefined for an Indonesian transport business:
 - **Balance Sheet** — Assets = Liabilities + Equity + Retained Earnings
 - **Cash Flow** — opening cash + inflows - outflows = closing cash
 - **General Ledger** — per-account transaction list with running balance
+
+## Development Notes
+
+### Key Patterns
+
+- **Template rendering**: `handler.render(w, r, "templates/foo/bar.html", "Title", data, ...extraTemplates)` loads base + partials + page. Cached in production, re-parsed every request when `DEV_MODE=true`. Each page is parsed separately to avoid `{{define "content"}}` collisions.
+- **Authorization**: Write endpoints are wrapped with `auth.CapabilityOnly(model.CapXxxManage, handler)` — the capability-to-role mapping lives in the `roles` table and is editable via `/roles`. Admin implicitly holds every capability.
+- **Journal entries are the core**: Income, expenses, invoices, and bills all create journal entries. No separate transaction tables — reports read from `journal_entries` and `journal_lines`.
+- **SQLite single connection**: `SetMaxOpenConns(1)` prevents "database is locked". Generate document numbers *before* starting transactions.
+- **Tests**: Each test calls `testutil.SetupTestDB()` for an isolated in-memory DB. `handler_test.go` sets up a full `httptest.Server` with all routes wired, mirroring `cmd/server/main.go`.
+
+### Conventions
+
+- **Currency**: stored as integer IDR. `formatIDR(150000)` → `"Rp 150.000"`. No subunits, no floats.
+- **Quantity**: stored as integer scaled ×100 (so `150` means `1.5`). Forms accept/display decimal via `formatQty` / `parseQuantity`.
+- **Account codes**: `1-xxxx` assets, `2-xxxx` liabilities, `3-xxxx` equity, `4-xxxx` revenue, `5-xxxx` expenses.
+- **Document numbers**: auto-generated as `PREFIX-YYYYMM-NNNN` (e.g. `JE-202604-0001`).
+- **Migrations**: numbered SQL files in `migrations/`, tracked in `schema_migrations`, applied on startup with foreign-key enforcement temporarily disabled.
 
 ## Configuration
 
