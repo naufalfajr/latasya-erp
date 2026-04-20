@@ -28,10 +28,13 @@ func Open(dbPath string) (*sql.DB, error) {
 	// For file databases, this also avoids SQLite "database is locked" issues
 	db.SetMaxOpenConns(1)
 
-	// Set PRAGMAs for performance and safety
+	// Set PRAGMAs for performance and safety. foreign_keys is intentionally
+	// left OFF here — some migrations rebuild referenced tables (e.g. the
+	// users-table rebuild in 006) which is only feasible with FK enforcement
+	// disabled. We turn FKs back ON after migrations complete.
 	pragmas := []string{
 		"PRAGMA journal_mode = WAL",
-		"PRAGMA foreign_keys = ON",
+		"PRAGMA foreign_keys = OFF",
 		"PRAGMA busy_timeout = 5000",
 		"PRAGMA synchronous = NORMAL",
 	}
@@ -43,6 +46,15 @@ func Open(dbPath string) (*sql.DB, error) {
 
 	if err := migrate(db); err != nil {
 		return nil, fmt.Errorf("migrate: %w", err)
+	}
+
+	// Re-enable FK enforcement for runtime queries and verify the schema is
+	// still referentially consistent after the migration run.
+	if _, err := db.Exec("PRAGMA foreign_key_check"); err != nil {
+		return nil, fmt.Errorf("foreign_key_check: %w", err)
+	}
+	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
+		return nil, fmt.Errorf("enable foreign_keys: %w", err)
 	}
 
 	return db, nil

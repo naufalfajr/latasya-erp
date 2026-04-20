@@ -1,9 +1,7 @@
--- Defer FK enforcement until commit so the users-table rebuild below can
--- complete without fighting the sessions(user_id) FK reference. IDs are
--- preserved during the rebuild, so the FK is satisfied again at commit time.
-PRAGMA defer_foreign_keys = ON;
-
 -- Roles table with JSON-encoded capabilities list per role.
+-- The users-table rebuild below relies on FK enforcement being disabled by
+-- the migration runner — IDs are preserved during the rebuild so integrity
+-- is maintained, and the runner runs `PRAGMA foreign_key_check` afterwards.
 CREATE TABLE IF NOT EXISTS roles (
     name         TEXT    PRIMARY KEY,
     description  TEXT    NOT NULL DEFAULT '',
