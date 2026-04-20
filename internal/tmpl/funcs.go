@@ -30,6 +30,14 @@ func FuncMap() template.FuncMap {
 			}
 			return m
 		},
+		"hasString": func(needle string, haystack []string) bool {
+			for _, s := range haystack {
+				if s == needle {
+					return true
+				}
+			}
+			return false
+		},
 	}
 }
 

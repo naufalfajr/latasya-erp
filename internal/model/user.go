@@ -15,10 +15,33 @@ type User struct {
 	MustChangePassword bool
 	CreatedAt          string
 	UpdatedAt          string
+
+	// Capabilities is populated by the auth middleware on each request from
+	// the user's role. Admin users get a nil/empty slice since HasCapability
+	// short-circuits on the role name.
+	Capabilities []string
 }
 
 func (u *User) IsAdmin() bool {
 	return u.Role == RoleAdmin
+}
+
+// HasCapability reports whether the user's role grants the given capability.
+// Admin always returns true. Use this from handlers and templates to gate
+// feature-level access.
+func (u *User) HasCapability(cap string) bool {
+	if u == nil {
+		return false
+	}
+	if u.Role == RoleAdmin {
+		return true
+	}
+	for _, c := range u.Capabilities {
+		if c == cap {
+			return true
+		}
+	}
+	return false
 }
 
 const userColumns = "id, username, password, full_name, role, is_active, must_change_password, created_at, updated_at"

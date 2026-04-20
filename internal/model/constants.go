@@ -2,9 +2,39 @@ package model
 
 // User roles
 const (
-	RoleAdmin  = "admin"
-	RoleViewer = "viewer"
+	RoleAdmin      = "admin"
+	RoleBookkeeper = "bookkeeper"
+	RoleViewer     = "viewer"
 )
+
+// Capabilities. Admin role implicitly holds every capability.
+const (
+	CapAccountsManage = "accounts.manage"
+	CapUsersManage    = "users.manage"
+	CapRolesManage    = "roles.manage"
+	CapContactsManage = "contacts.manage"
+	CapJournalsManage = "journals.manage"
+	CapIncomeManage   = "income.manage"
+	CapExpensesManage = "expenses.manage"
+	CapInvoicesManage = "invoices.manage"
+	CapBillsManage    = "bills.manage"
+	CapReportsView    = "reports.view"
+)
+
+// AllCapabilities lists every capability the system knows about. Used to
+// render the checkbox grid in the role form and to grant everything to admin.
+var AllCapabilities = []string{
+	CapAccountsManage,
+	CapUsersManage,
+	CapRolesManage,
+	CapContactsManage,
+	CapJournalsManage,
+	CapIncomeManage,
+	CapExpensesManage,
+	CapInvoicesManage,
+	CapBillsManage,
+	CapReportsView,
+}
 
 // Account types
 const (
@@ -37,7 +67,7 @@ const (
 
 // Well-known account codes
 const (
-	AccountCodeAR = "1-1100" // Accounts Receivable
-	AccountCodeAP = "2-1001" // Accounts Payable
+	AccountCodeAR  = "1-1100" // Accounts Receivable
+	AccountCodeAP  = "2-1001" // Accounts Payable
 	AccountCodeTax = "2-1200" // Tax Payable
 )

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"database/sql"
 	"net/http"
 	"strconv"
 
@@ -10,6 +11,7 @@ import (
 
 type userFormData struct {
 	User   *model.User
+	Roles  []model.Role
 	Errors map[string]string
 	IsEdit bool
 }
@@ -24,8 +26,14 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) NewUser(w http.ResponseWriter, r *http.Request) {
+	roles, err := model.ListRoles(h.DB)
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
 	h.render(w, r, "templates/users/form.html", "New User", userFormData{
 		User:   &model.User{IsActive: true, Role: model.RoleViewer},
+		Roles:  roles,
 		Errors: make(map[string]string),
 	})
 }
@@ -40,10 +48,11 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	password := r.FormValue("password")
 
-	errors := validateUser(u, password, false)
+	errors := validateUser(h.DB, u, password, false)
 	if len(errors) > 0 {
+		roles, _ := model.ListRoles(h.DB)
 		h.render(w, r, "templates/users/form.html", "New User", userFormData{
-			User: u, Errors: errors,
+			User: u, Roles: roles, Errors: errors,
 		})
 		return
 	}
@@ -57,8 +66,9 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 
 	if err := model.CreateUser(h.DB, u); err != nil {
 		errors := map[string]string{"username": "Username already exists"}
+		roles, _ := model.ListRoles(h.DB)
 		h.render(w, r, "templates/users/form.html", "New User", userFormData{
-			User: u, Errors: errors,
+			User: u, Roles: roles, Errors: errors,
 		})
 		return
 	}
@@ -80,8 +90,14 @@ func (h *Handler) EditUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	roles, err := model.ListRoles(h.DB)
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
 	h.render(w, r, "templates/users/form.html", "Edit User", userFormData{
-		User: u, Errors: make(map[string]string), IsEdit: true,
+		User: u, Roles: roles, Errors: make(map[string]string), IsEdit: true,
 	})
 }
 
@@ -109,7 +125,7 @@ func (h *Handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	if u.FullName == "" {
 		errors["full_name"] = "Full name is required"
 	}
-	if u.Role != model.RoleAdmin && u.Role != model.RoleViewer {
+	if !isValidRole(h.DB, u.Role) {
 		errors["role"] = "Invalid role"
 	}
 
@@ -124,8 +140,9 @@ func (h *Handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		if existing != nil {
 			u.Username = existing.Username
 		}
+		roles, _ := model.ListRoles(h.DB)
 		h.render(w, r, "templates/users/form.html", "Edit User", userFormData{
-			User: u, Errors: errors, IsEdit: true,
+			User: u, Roles: roles, Errors: errors, IsEdit: true,
 		})
 		return
 	}
@@ -195,7 +212,7 @@ func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/users", http.StatusSeeOther)
 }
 
-func validateUser(u *model.User, password string, isEdit bool) map[string]string {
+func validateUser(db *sql.DB, u *model.User, password string, isEdit bool) map[string]string {
 	errors := make(map[string]string)
 	if u.Username == "" {
 		errors["username"] = "Username is required"
@@ -203,7 +220,7 @@ func validateUser(u *model.User, password string, isEdit bool) map[string]string
 	if u.FullName == "" {
 		errors["full_name"] = "Full name is required"
 	}
-	if u.Role != model.RoleAdmin && u.Role != model.RoleViewer {
+	if !isValidRole(db, u.Role) {
 		errors["role"] = "Invalid role"
 	}
 	if !isEdit && password == "" {
@@ -213,4 +230,12 @@ func validateUser(u *model.User, password string, isEdit bool) map[string]string
 		errors["password"] = "Password must be at least 4 characters"
 	}
 	return errors
+}
+
+func isValidRole(db *sql.DB, name string) bool {
+	if name == "" {
+		return false
+	}
+	_, err := model.GetRoleByName(db, name)
+	return err == nil
 }

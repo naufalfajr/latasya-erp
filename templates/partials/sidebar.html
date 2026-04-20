@@ -28,8 +28,11 @@
 
     <li class="menu-title mt-4"><span>Settings</span></li>
     <li><a href="/accounts" class="{{if eq .Path "/accounts"}}active{{end}}">Chart of Accounts</a></li>
-    {{if .User.IsAdmin}}
+    {{if .User.HasCapability "users.manage"}}
     <li><a href="/users" class="{{if eq .Path "/users"}}active{{end}}">Users</a></li>
+    {{end}}
+    {{if .User.HasCapability "roles.manage"}}
+    <li><a href="/roles" class="{{if eq .Path "/roles"}}active{{end}}">Roles</a></li>
     {{end}}
 
     <li class="mt-auto pt-4 border-t border-base-300">

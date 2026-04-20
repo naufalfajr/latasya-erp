@@ -1,0 +1,76 @@
+{{template "base" .}}
+{{define "content"}}
+{{$data := .Data}}
+
+<div class="max-w-2xl">
+    <h1 class="text-2xl font-bold mb-6">
+        {{if $data.IsEdit}}Edit Role{{else}}New Role{{end}}
+    </h1>
+
+    <form method="POST" action="{{if $data.IsEdit}}/roles/{{$data.Role.Name}}{{else}}/roles{{end}}"
+        class="card bg-base-100 shadow">
+        {{template "csrf" $}}
+        <div class="card-body">
+
+            {{if not $data.IsEdit}}
+            <!-- Name -->
+            <div class="form-control">
+                <label class="label"><span class="label-text">Name *</span></label>
+                <input type="text" name="name" placeholder="e.g. manager"
+                    class="input input-bordered {{if index $data.Errors "name"}}input-error{{end}}"
+                    value="{{$data.Role.Name}}" required>
+                <label class="label">
+                    <span class="label-text-alt opacity-60">Lowercase letters, digits, hyphens or underscores. Must start with a letter.</span>
+                </label>
+                {{if index $data.Errors "name"}}
+                <label class="label"><span class="label-text-alt text-error">{{index $data.Errors "name"}}</span></label>
+                {{end}}
+            </div>
+            {{else}}
+            <div class="form-control">
+                <label class="label"><span class="label-text">Name</span></label>
+                <input type="text" class="input input-bordered bg-base-200" value="{{$data.Role.Name}}" disabled>
+                {{if $data.Role.IsSystem}}
+                <label class="label"><span class="label-text-alt opacity-60">System role — name cannot be changed.</span></label>
+                {{end}}
+            </div>
+            {{end}}
+
+            <!-- Description -->
+            <div class="form-control">
+                <label class="label"><span class="label-text">Description</span></label>
+                <input type="text" name="description" placeholder="Short description"
+                    class="input input-bordered"
+                    value="{{$data.Role.Description}}">
+            </div>
+
+            <!-- Capabilities -->
+            <div class="form-control">
+                <label class="label">
+                    <span class="label-text">Capabilities</span>
+                    {{if index $data.Errors "capabilities"}}
+                    <span class="label-text-alt text-error">{{index $data.Errors "capabilities"}}</span>
+                    {{end}}
+                </label>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 p-3 border border-base-300 rounded-lg">
+                    {{range $data.AllCapabilities}}
+                    <label class="label cursor-pointer justify-start gap-2">
+                        <input type="checkbox" name="capabilities" value="{{.}}"
+                            class="checkbox checkbox-sm"
+                            {{if hasString . $data.Role.Capabilities}}checked{{end}}>
+                        <span class="label-text font-mono text-xs">{{.}}</span>
+                    </label>
+                    {{end}}
+                </div>
+            </div>
+
+            <div class="card-actions justify-end mt-4">
+                <a href="/roles" class="btn btn-ghost">Cancel</a>
+                <button type="submit" class="btn btn-primary">
+                    {{if $data.IsEdit}}Update{{else}}Create{{end}} Role
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+{{end}}

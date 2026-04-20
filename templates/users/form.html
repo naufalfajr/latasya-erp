@@ -58,8 +58,11 @@
             <div class="form-control">
                 <label class="label"><span class="label-text">Role *</span></label>
                 <select name="role" class="select select-bordered {{if index $data.Errors "role"}}select-error{{end}}" required>
-                    <option value="viewer" {{if eq $data.User.Role "viewer"}}selected{{end}}>Viewer (reports only)</option>
-                    <option value="admin" {{if eq $data.User.Role "admin"}}selected{{end}}>Admin (full access)</option>
+                    {{range $data.Roles}}
+                    <option value="{{.Name}}" {{if eq $data.User.Role .Name}}selected{{end}}>
+                        {{.Name}}{{if .Description}} — {{.Description}}{{end}}
+                    </option>
+                    {{end}}
                 </select>
                 {{if index $data.Errors "role"}}
                 <label class="label"><span class="label-text-alt text-error">{{index $data.Errors "role"}}</span></label>
