@@ -8,11 +8,17 @@
     <link rel="stylesheet" href="/static/css/app.css">
     <script src="/static/js/htmx.min.js"></script>
     <style>
+        /* Native cross-document view transitions (Chrome/Edge/Safari) */
+        @view-transition { navigation: auto; }
+
         /* HTMX loading indicator */
         .htmx-indicator { opacity: 0; transition: opacity 200ms ease-in; }
         .htmx-request .htmx-indicator, .htmx-request.htmx-indicator { opacity: 1; }
         /* Top loading bar */
         #page-loader { position: fixed; top: 0; left: 0; width: 100%; height: 3px; background: var(--color-primary); z-index: 9999; }
+        /* Full-page navigation loader (non-HTMX link clicks, form submits) */
+        body.is-navigating #page-loader { opacity: 1; animation: page-loader-pulse 900ms ease-in-out infinite; }
+        @keyframes page-loader-pulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
     </style>
 </head>
 <body class="min-h-screen bg-base-200"
@@ -53,6 +59,16 @@
     });
     document.body.addEventListener('htmx:sendError', function() {
         alert('Network error. Please check your connection.');
+    });
+
+    // Show the top loading bar during full-page navigations (link clicks,
+    // form submits, back/forward). HTMX requests already use #page-loader
+    // via hx-indicator.
+    window.addEventListener('beforeunload', function() {
+        document.body.classList.add('is-navigating');
+    });
+    window.addEventListener('pageshow', function(e) {
+        if (e.persisted) document.body.classList.remove('is-navigating');
     });
     </script>
 </body>
