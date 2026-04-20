@@ -29,11 +29,32 @@
                 <label class="label" for="password">
                     <span class="label-text">Password</span>
                 </label>
-                <input type="password" id="password" name="password" placeholder="Password"
-                    class="input input-bordered w-full" required>
+                <div class="relative">
+                    <input type="password" id="password" name="password" placeholder="Password"
+                        class="input input-bordered w-full pr-12" required>
+                    <button type="button"
+                        class="btn btn-ghost btn-sm btn-square absolute top-1/2 right-1 -translate-y-1/2"
+                        data-pw-toggle="password" aria-label="Show password">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                            <circle cx="12" cy="12" r="3"/>
+                        </svg>
+                    </button>
+                </div>
             </div>
             <button type="submit" class="btn btn-primary w-full">Sign In</button>
         </form>
     </div>
 </div>
+<script>
+document.querySelectorAll('[data-pw-toggle]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        var input = document.getElementById(btn.dataset.pwToggle);
+        if (!input) return;
+        var show = input.type === 'password';
+        input.type = show ? 'text' : 'password';
+        btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+    });
+});
+</script>
 {{end}}
