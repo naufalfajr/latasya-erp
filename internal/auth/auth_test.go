@@ -87,9 +87,10 @@ func TestTouchSession_SlidesIdleWindow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse expires_at: %v", err)
 	}
-	// Should now be well into the future (close to +10h).
-	if time.Until(gotT) < 8*time.Hour {
-		t.Errorf("expected expires_at pushed ~10h ahead, got %s (in %s)", got, time.Until(gotT))
+	// We rewound expires_at to 1h in the past; TouchSession should push it
+	// back into the future regardless of the configured idle timeout.
+	if !gotT.After(time.Now()) {
+		t.Errorf("expected expires_at slid to the future, got %s (in %s)", got, time.Until(gotT))
 	}
 }
 

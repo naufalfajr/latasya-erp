@@ -12,18 +12,18 @@ const (
 	// sessionIdleTimeout is the sliding idle window. Each authenticated
 	// request refreshes expires_at to now + this value, so an idle user is
 	// logged out after this much inactivity.
-	sessionIdleTimeout = 10 * time.Hour
+	sessionIdleTimeout = 6 * time.Hour
 
 	// sessionAbsoluteMaxAge is the hard cap on a session's lifetime from
 	// creation. TouchSession never pushes expires_at past this point, so
 	// even a continuously-active session must re-login after this long.
-	sessionAbsoluteMaxAge = 72 * time.Hour
+	sessionAbsoluteMaxAge = 48 * time.Hour
 
 	// sessionRefreshThreshold throttles writes: RequireAuth only calls
 	// TouchSession when the remaining idle time drops below this. At worst
 	// the stored expiry lags real activity by this much, which is fine for
 	// a 10h idle window.
-	sessionRefreshThreshold = 5 * time.Hour
+	sessionRefreshThreshold = 3 * time.Hour
 )
 
 // SessionInfo holds the fields fetched together when resolving a session.

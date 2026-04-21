@@ -75,7 +75,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 		Secure:   !h.DevMode,
 		SameSite: http.SameSiteLaxMode,
-		MaxAge:   72 * 60 * 60,
+		MaxAge:   48 * 60 * 60,
 	})
 
 	if user.MustChangePassword {
