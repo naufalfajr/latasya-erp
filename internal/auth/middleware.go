@@ -43,6 +43,10 @@ func RequireAuth(db *sql.DB, next http.Handler) http.Handler {
 			return
 		}
 
+		if ShouldRefresh(session) {
+			_ = TouchSession(db, cookie.Value)
+		}
+
 		// Load role capabilities for non-admin users; admin's HasCapability
 		// short-circuits so we skip the query.
 		if user.Role != model.RoleAdmin {
