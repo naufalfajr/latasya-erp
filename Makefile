@@ -33,14 +33,19 @@ css-watch: $(TAILWIND) $(DAISYUI) $(DAISYUI_THEME)
 run:
 	DEV_MODE=true go run ./cmd/server
 
+# Build identity, surfaced at /healthz. CI overrides with the commit SHA;
+# local builds stay "dev".
+VERSION ?= dev
+LDFLAGS := -X main.version=$(VERSION)
+
 # Build production binary (host OS/arch)
 build: css
-	CGO_ENABLED=0 go build -o latasya-erp ./cmd/server
+	CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o latasya-erp ./cmd/server
 
 # Cross-compile for the Linux VPS (amd64 by default; override with GOARCH=arm64)
 GOARCH ?= amd64
 build-linux: css
-	GOOS=linux GOARCH=$(GOARCH) CGO_ENABLED=0 go build -o latasya-erp ./cmd/server
+	GOOS=linux GOARCH=$(GOARCH) CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o latasya-erp ./cmd/server
 
 # Run tests
 test:

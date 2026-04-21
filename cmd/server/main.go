@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -17,6 +18,10 @@ import (
 	"github.com/naufal/latasya-erp/internal/model"
 	"github.com/naufal/latasya-erp/internal/tmpl"
 )
+
+// version identifies the build. Overridden at link time via
+// `-ldflags "-X main.version=<sha>"`; stays "dev" for local `go run`.
+var version = "dev"
 
 func main() {
 	port := envOr("PORT", "8080")
@@ -51,6 +56,23 @@ func main() {
 	// Static files
 	staticSub, _ := fs.Sub(latasyaerp.StaticFS, "static")
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServerFS(staticSub)))
+
+	// Health probe (no auth). Returns the build SHA and the count of applied
+	// migrations so deploy verification can confirm the right binary is live
+	// and its schema ran.
+	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+
+		var migrations int
+		if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM schema_migrations").Scan(&migrations); err != nil {
+			http.Error(w, "db unreachable", http.StatusServiceUnavailable)
+			return
+		}
+
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		fmt.Fprintf(w, "ok version=%s migrations=%d\n", version, migrations)
+	})
 
 	// Auth routes (no auth required)
 	mux.HandleFunc("GET /login", h.LoginPage)
