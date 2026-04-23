@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/auth"
 	"github.com/naufal/latasya-erp/internal/model"
 )
@@ -83,6 +84,30 @@ func (h *Handler) CreateInvoice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	created, _ := model.GetInvoice(h.DB, invID)
+	invoiceNumber := ""
+	total := 0
+	if created != nil {
+		invoiceNumber = created.InvoiceNumber
+		total = created.Total
+	}
+	audit.Log(r.Context(), h.DB, audit.Event{
+		Action:      "invoice.create",
+		TargetType:  "invoice",
+		TargetID:    int64(invID),
+		TargetLabel: invoiceNumber,
+		Metadata: map[string]any{
+			"after": map[string]any{
+				"contact_id":   inv.ContactID,
+				"invoice_date": inv.InvoiceDate,
+				"due_date":     inv.DueDate,
+				"tax_amount":   inv.TaxAmount,
+				"total":        total,
+				"line_count":   len(lines),
+			},
+		},
+	})
+
 	h.setFlash(w, "Invoice created successfully")
 	http.Redirect(w, r, fmt.Sprintf("/invoices/%d", invID), http.StatusSeeOther)
 }
@@ -142,6 +167,13 @@ func (h *Handler) UpdateInvoice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Snapshot the pre-update state so audit can record a before/after diff.
+	oldInv, err := model.GetInvoice(h.DB, id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
 	r.ParseForm()
 	contactID, _ := strconv.Atoi(r.FormValue("contact_id"))
 	taxAmount := parseIDR(r.FormValue("tax_amount"))
@@ -178,6 +210,38 @@ func (h *Handler) UpdateInvoice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Re-fetch to capture derived totals after the line rewrite.
+	newInv, _ := model.GetInvoice(h.DB, id)
+	oldFields := map[string]any{
+		"contact_id":   oldInv.ContactID,
+		"invoice_date": oldInv.InvoiceDate,
+		"due_date":     oldInv.DueDate,
+		"tax_amount":   oldInv.TaxAmount,
+		"notes":        oldInv.Notes,
+		"total":        oldInv.Total,
+	}
+	newFields := map[string]any{
+		"contact_id":   inv.ContactID,
+		"invoice_date": inv.InvoiceDate,
+		"due_date":     inv.DueDate,
+		"tax_amount":   inv.TaxAmount,
+		"notes":        inv.Notes,
+	}
+	if newInv != nil {
+		newFields["total"] = newInv.Total
+	}
+	metadata := audit.Diff(oldFields, newFields,
+		[]string{"contact_id", "invoice_date", "due_date", "tax_amount", "notes", "total"})
+	if metadata != nil {
+		audit.Log(r.Context(), h.DB, audit.Event{
+			Action:      "invoice.update",
+			TargetType:  "invoice",
+			TargetID:    int64(id),
+			TargetLabel: oldInv.InvoiceNumber,
+			Metadata:    metadata,
+		})
+	}
+
 	h.setFlash(w, "Invoice updated successfully")
 	http.Redirect(w, r, fmt.Sprintf("/invoices/%d", id), http.StatusSeeOther)
 }
@@ -193,6 +257,18 @@ func (h *Handler) SendInvoice(w http.ResponseWriter, r *http.Request) {
 	if err := model.SendInvoice(h.DB, id, user.ID); err != nil {
 		h.setFlash(w, "Error: "+err.Error())
 	} else {
+		if inv, err := model.GetInvoice(h.DB, id); err == nil {
+			audit.Log(r.Context(), h.DB, audit.Event{
+				Action:      "invoice.send",
+				TargetType:  "invoice",
+				TargetID:    int64(id),
+				TargetLabel: inv.InvoiceNumber,
+				Metadata: map[string]any{
+					"after":      map[string]any{"status": inv.Status},
+					"journal_id": inv.JournalID,
+				},
+			})
+		}
 		h.setFlash(w, "Invoice sent — journal entry created")
 	}
 
@@ -220,6 +296,25 @@ func (h *Handler) InvoicePayment(w http.ResponseWriter, r *http.Request) {
 	if err := model.RecordInvoicePayment(h.DB, id, amount, paymentDate, paymentAccountID, user.ID); err != nil {
 		h.setFlash(w, "Error: "+err.Error())
 	} else {
+		inv, _ := model.GetInvoice(h.DB, id)
+		invoiceNumber := ""
+		status := ""
+		if inv != nil {
+			invoiceNumber = inv.InvoiceNumber
+			status = inv.Status
+		}
+		audit.Log(r.Context(), h.DB, audit.Event{
+			Action:      "invoice.payment",
+			TargetType:  "invoice",
+			TargetID:    int64(id),
+			TargetLabel: invoiceNumber,
+			Metadata: map[string]any{
+				"amount":             amount,
+				"payment_date":       paymentDate,
+				"payment_account_id": paymentAccountID,
+				"status_after":       status,
+			},
+		})
 		h.setFlash(w, "Payment recorded successfully")
 	}
 
@@ -233,10 +328,31 @@ func (h *Handler) DeleteInvoice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Snapshot pre-delete so the audit row carries enough context to
+	// understand what disappeared.
+	existing, _ := model.GetInvoice(h.DB, id)
+
 	if err := model.DeleteInvoice(h.DB, id); err != nil {
 		h.setFlash(w, "Error: "+err.Error())
 		http.Redirect(w, r, fmt.Sprintf("/invoices/%d", id), http.StatusSeeOther)
 		return
+	}
+
+	if existing != nil {
+		audit.Log(r.Context(), h.DB, audit.Event{
+			Action:      "invoice.delete",
+			TargetType:  "invoice",
+			TargetID:    int64(id),
+			TargetLabel: existing.InvoiceNumber,
+			Metadata: map[string]any{
+				"before": map[string]any{
+					"contact_id":   existing.ContactID,
+					"invoice_date": existing.InvoiceDate,
+					"status":       existing.Status,
+					"total":        existing.Total,
+				},
+			},
+		})
 	}
 
 	if r.Header.Get("HX-Request") == "true" {

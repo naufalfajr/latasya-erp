@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/auth"
 	"github.com/naufal/latasya-erp/internal/model"
 )
@@ -108,6 +109,21 @@ func (h *Handler) CreateJournal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	audit.Log(r.Context(), h.DB, audit.Event{
+		Action:      "journal.create",
+		TargetType:  "journal",
+		TargetID:    int64(entryID),
+		TargetLabel: je.Description,
+		Metadata: map[string]any{
+			"after": map[string]any{
+				"entry_date":  je.EntryDate,
+				"description": je.Description,
+				"line_count":  len(lines),
+				"total":       journalTotalDebit(lines),
+			},
+		},
+	})
+
 	h.setFlash(w, "Journal entry created successfully")
 	http.Redirect(w, r, fmt.Sprintf("/journals/%d", entryID), http.StatusSeeOther)
 }
@@ -166,6 +182,12 @@ func (h *Handler) UpdateJournal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	oldJE, err := model.GetJournalEntry(h.DB, id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
 	r.ParseForm()
 
 	je := &model.JournalEntry{
@@ -204,6 +226,27 @@ func (h *Handler) UpdateJournal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	oldFields := map[string]any{
+		"entry_date":  oldJE.EntryDate,
+		"description": oldJE.Description,
+		"total":       journalTotalDebit(oldJE.Lines),
+	}
+	newFields := map[string]any{
+		"entry_date":  je.EntryDate,
+		"description": je.Description,
+		"total":       journalTotalDebit(lines),
+	}
+	metadata := audit.Diff(oldFields, newFields, []string{"entry_date", "description", "total"})
+	if metadata != nil {
+		audit.Log(r.Context(), h.DB, audit.Event{
+			Action:      "journal.update",
+			TargetType:  "journal",
+			TargetID:    int64(id),
+			TargetLabel: je.Description,
+			Metadata:    metadata,
+		})
+	}
+
 	h.setFlash(w, "Journal entry updated successfully")
 	http.Redirect(w, r, fmt.Sprintf("/journals/%d", id), http.StatusSeeOther)
 }
@@ -215,10 +258,29 @@ func (h *Handler) DeleteJournal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	existing, _ := model.GetJournalEntry(h.DB, id)
+
 	if err := model.DeleteJournalEntry(h.DB, id); err != nil {
 		h.setFlash(w, "Error: "+err.Error())
 		http.Redirect(w, r, fmt.Sprintf("/journals/%d", id), http.StatusSeeOther)
 		return
+	}
+
+	if existing != nil {
+		audit.Log(r.Context(), h.DB, audit.Event{
+			Action:      "journal.delete",
+			TargetType:  "journal",
+			TargetID:    int64(id),
+			TargetLabel: existing.Description,
+			Metadata: map[string]any{
+				"before": map[string]any{
+					"entry_date":  existing.EntryDate,
+					"description": existing.Description,
+					"total":       journalTotalDebit(existing.Lines),
+					"source_type": existing.SourceType,
+				},
+			},
+		})
 	}
 
 	if r.Header.Get("HX-Request") == "true" {
@@ -248,6 +310,17 @@ func (h *Handler) JournalLinePartial(w http.ResponseWriter, r *http.Request) {
 	}
 
 	t.ExecuteTemplate(w, "journal-line", data)
+}
+
+// journalTotalDebit returns the sum of debits across lines. For a balanced
+// entry, credits sum to the same value; audit rows record only the debit
+// side to keep metadata compact.
+func journalTotalDebit(lines []model.JournalLine) int {
+	total := 0
+	for _, l := range lines {
+		total += l.Debit
+	}
+	return total
 }
 
 // parseJournalLines extracts journal lines from form data

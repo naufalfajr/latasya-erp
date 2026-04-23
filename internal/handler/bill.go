@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/auth"
 	"github.com/naufal/latasya-erp/internal/model"
 )
@@ -80,6 +81,30 @@ func (h *Handler) CreateBill(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	created, _ := model.GetBill(h.DB, billID)
+	billNumber := ""
+	total := 0
+	if created != nil {
+		billNumber = created.BillNumber
+		total = created.Total
+	}
+	audit.Log(r.Context(), h.DB, audit.Event{
+		Action:      "bill.create",
+		TargetType:  "bill",
+		TargetID:    int64(billID),
+		TargetLabel: billNumber,
+		Metadata: map[string]any{
+			"after": map[string]any{
+				"contact_id": b.ContactID,
+				"bill_date":  b.BillDate,
+				"due_date":   b.DueDate,
+				"tax_amount": b.TaxAmount,
+				"total":      total,
+				"line_count": len(lines),
+			},
+		},
+	})
+
 	h.setFlash(w, "Bill created successfully")
 	http.Redirect(w, r, fmt.Sprintf("/bills/%d", billID), http.StatusSeeOther)
 }
@@ -132,6 +157,11 @@ func (h *Handler) UpdateBill(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	oldBill, err := model.GetBill(h.DB, id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
 	r.ParseForm()
 	contactID, _ := strconv.Atoi(r.FormValue("contact_id"))
 	taxAmount := parseIDR(r.FormValue("tax_amount"))
@@ -163,6 +193,37 @@ func (h *Handler) UpdateBill(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	newBill, _ := model.GetBill(h.DB, id)
+	oldFields := map[string]any{
+		"contact_id": oldBill.ContactID,
+		"bill_date":  oldBill.BillDate,
+		"due_date":   oldBill.DueDate,
+		"tax_amount": oldBill.TaxAmount,
+		"notes":      oldBill.Notes,
+		"total":      oldBill.Total,
+	}
+	newFields := map[string]any{
+		"contact_id": b.ContactID,
+		"bill_date":  b.BillDate,
+		"due_date":   b.DueDate,
+		"tax_amount": b.TaxAmount,
+		"notes":      b.Notes,
+	}
+	if newBill != nil {
+		newFields["total"] = newBill.Total
+	}
+	metadata := audit.Diff(oldFields, newFields,
+		[]string{"contact_id", "bill_date", "due_date", "tax_amount", "notes", "total"})
+	if metadata != nil {
+		audit.Log(r.Context(), h.DB, audit.Event{
+			Action:      "bill.update",
+			TargetType:  "bill",
+			TargetID:    int64(id),
+			TargetLabel: oldBill.BillNumber,
+			Metadata:    metadata,
+		})
+	}
+
 	h.setFlash(w, "Bill updated successfully")
 	http.Redirect(w, r, fmt.Sprintf("/bills/%d", id), http.StatusSeeOther)
 }
@@ -177,6 +238,18 @@ func (h *Handler) ReceiveBill(w http.ResponseWriter, r *http.Request) {
 	if err := model.ReceiveBill(h.DB, id, user.ID); err != nil {
 		h.setFlash(w, "Error: "+err.Error())
 	} else {
+		if b, err := model.GetBill(h.DB, id); err == nil {
+			audit.Log(r.Context(), h.DB, audit.Event{
+				Action:      "bill.receive",
+				TargetType:  "bill",
+				TargetID:    int64(id),
+				TargetLabel: b.BillNumber,
+				Metadata: map[string]any{
+					"after":      map[string]any{"status": b.Status},
+					"journal_id": b.JournalID,
+				},
+			})
+		}
 		h.setFlash(w, "Bill received — journal entry created")
 	}
 	http.Redirect(w, r, fmt.Sprintf("/bills/%d", id), http.StatusSeeOther)
@@ -202,6 +275,25 @@ func (h *Handler) BillPayment(w http.ResponseWriter, r *http.Request) {
 	if err := model.RecordBillPayment(h.DB, id, amount, paymentDate, paymentAccountID, user.ID); err != nil {
 		h.setFlash(w, "Error: "+err.Error())
 	} else {
+		b, _ := model.GetBill(h.DB, id)
+		billNumber := ""
+		status := ""
+		if b != nil {
+			billNumber = b.BillNumber
+			status = b.Status
+		}
+		audit.Log(r.Context(), h.DB, audit.Event{
+			Action:      "bill.payment",
+			TargetType:  "bill",
+			TargetID:    int64(id),
+			TargetLabel: billNumber,
+			Metadata: map[string]any{
+				"amount":             amount,
+				"payment_date":       paymentDate,
+				"payment_account_id": paymentAccountID,
+				"status_after":       status,
+			},
+		})
 		h.setFlash(w, "Payment recorded successfully")
 	}
 	http.Redirect(w, r, fmt.Sprintf("/bills/%d", id), http.StatusSeeOther)
@@ -213,11 +305,31 @@ func (h *Handler) DeleteBill(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	existing, _ := model.GetBill(h.DB, id)
+
 	if err := model.DeleteBill(h.DB, id); err != nil {
 		h.setFlash(w, "Error: "+err.Error())
 		http.Redirect(w, r, fmt.Sprintf("/bills/%d", id), http.StatusSeeOther)
 		return
 	}
+
+	if existing != nil {
+		audit.Log(r.Context(), h.DB, audit.Event{
+			Action:      "bill.delete",
+			TargetType:  "bill",
+			TargetID:    int64(id),
+			TargetLabel: existing.BillNumber,
+			Metadata: map[string]any{
+				"before": map[string]any{
+					"contact_id": existing.ContactID,
+					"bill_date":  existing.BillDate,
+					"status":     existing.Status,
+					"total":      existing.Total,
+				},
+			},
+		})
+	}
+
 	if r.Header.Get("HX-Request") == "true" {
 		w.WriteHeader(http.StatusOK)
 		return

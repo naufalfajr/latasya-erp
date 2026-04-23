@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/auth"
 	"github.com/naufal/latasya-erp/internal/model"
 )
@@ -101,6 +102,22 @@ func (h *Handler) CreateIncome(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	audit.Log(r.Context(), h.DB, audit.Event{
+		Action:      "income.create",
+		TargetType:  "income",
+		TargetID:    int64(entryID),
+		TargetLabel: je.Description,
+		Metadata: map[string]any{
+			"after": map[string]any{
+				"entry_date":      je.EntryDate,
+				"description":     je.Description,
+				"amount":          amount,
+				"revenue_account": revenueAccountID,
+				"deposit_account": depositAccountID,
+			},
+		},
+	})
+
 	h.setFlash(w, "Income recorded successfully")
 	http.Redirect(w, r, fmt.Sprintf("/journals/%d", entryID), http.StatusSeeOther)
 }
@@ -139,6 +156,12 @@ func (h *Handler) EditIncome(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) UpdateIncome(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	oldJE, err := model.GetJournalEntry(h.DB, id)
+	if err != nil || oldJE.SourceType != model.SourceIncome {
 		http.NotFound(w, r)
 		return
 	}
@@ -203,6 +226,33 @@ func (h *Handler) UpdateIncome(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	oldAmount, oldRevenueAcct, oldDepositAcct := extractIncomeShape(oldJE)
+	oldFields := map[string]any{
+		"entry_date":      oldJE.EntryDate,
+		"description":     oldJE.Description,
+		"amount":          oldAmount,
+		"revenue_account": oldRevenueAcct,
+		"deposit_account": oldDepositAcct,
+	}
+	newFields := map[string]any{
+		"entry_date":      je.EntryDate,
+		"description":     je.Description,
+		"amount":          amount,
+		"revenue_account": revenueAccountID,
+		"deposit_account": depositAccountID,
+	}
+	metadata := audit.Diff(oldFields, newFields,
+		[]string{"entry_date", "description", "amount", "revenue_account", "deposit_account"})
+	if metadata != nil {
+		audit.Log(r.Context(), h.DB, audit.Event{
+			Action:      "income.update",
+			TargetType:  "income",
+			TargetID:    int64(id),
+			TargetLabel: je.Description,
+			Metadata:    metadata,
+		})
+	}
+
 	h.setFlash(w, "Income updated successfully")
 	http.Redirect(w, r, fmt.Sprintf("/journals/%d", id), http.StatusSeeOther)
 }
@@ -214,10 +264,31 @@ func (h *Handler) DeleteIncome(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	existing, _ := model.GetJournalEntry(h.DB, id)
+
 	if err := model.DeleteJournalEntryBySource(h.DB, id, model.SourceIncome); err != nil {
 		h.setFlash(w, "Error: "+err.Error())
 		http.Redirect(w, r, "/income", http.StatusSeeOther)
 		return
+	}
+
+	if existing != nil {
+		amount, revenueAcct, depositAcct := extractIncomeShape(existing)
+		audit.Log(r.Context(), h.DB, audit.Event{
+			Action:      "income.delete",
+			TargetType:  "income",
+			TargetID:    int64(id),
+			TargetLabel: existing.Description,
+			Metadata: map[string]any{
+				"before": map[string]any{
+					"entry_date":      existing.EntryDate,
+					"description":     existing.Description,
+					"amount":          amount,
+					"revenue_account": revenueAcct,
+					"deposit_account": depositAcct,
+				},
+			},
+		})
 	}
 
 	if r.Header.Get("HX-Request") == "true" {
@@ -240,4 +311,20 @@ func (h *Handler) newIncomeFormData() incomeFormData {
 		DepositAccounts: depositAccounts,
 		Errors:          make(map[string]string),
 	}
+}
+
+// extractIncomeShape pulls the user-facing "amount + revenue + deposit
+// account" out of the journal lines that income.create wrote (debit on the
+// deposit asset, credit on the revenue account).
+func extractIncomeShape(je *model.JournalEntry) (amount, revenueAccount, depositAccount int) {
+	for _, l := range je.Lines {
+		if l.Debit > 0 {
+			depositAccount = l.AccountID
+			amount = l.Debit
+		}
+		if l.Credit > 0 {
+			revenueAccount = l.AccountID
+		}
+	}
+	return
 }

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/auth"
 	"github.com/naufal/latasya-erp/internal/model"
 )
@@ -102,6 +103,22 @@ func (h *Handler) CreateExpense(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	audit.Log(r.Context(), h.DB, audit.Event{
+		Action:      "expense.create",
+		TargetType:  "expense",
+		TargetID:    int64(entryID),
+		TargetLabel: je.Description,
+		Metadata: map[string]any{
+			"after": map[string]any{
+				"entry_date":      je.EntryDate,
+				"description":     je.Description,
+				"amount":          amount,
+				"expense_account": expenseAccountID,
+				"payment_account": paymentAccountID,
+			},
+		},
+	})
+
 	h.setFlash(w, "Expense recorded successfully")
 	http.Redirect(w, r, fmt.Sprintf("/journals/%d", entryID), http.StatusSeeOther)
 }
@@ -139,6 +156,12 @@ func (h *Handler) EditExpense(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) UpdateExpense(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	oldJE, err := model.GetJournalEntry(h.DB, id)
+	if err != nil || oldJE.SourceType != model.SourceExpense {
 		http.NotFound(w, r)
 		return
 	}
@@ -203,6 +226,33 @@ func (h *Handler) UpdateExpense(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	oldAmount, oldExpenseAcct, oldPaymentAcct := extractExpenseShape(oldJE)
+	oldFields := map[string]any{
+		"entry_date":      oldJE.EntryDate,
+		"description":     oldJE.Description,
+		"amount":          oldAmount,
+		"expense_account": oldExpenseAcct,
+		"payment_account": oldPaymentAcct,
+	}
+	newFields := map[string]any{
+		"entry_date":      je.EntryDate,
+		"description":     je.Description,
+		"amount":          amount,
+		"expense_account": expenseAccountID,
+		"payment_account": paymentAccountID,
+	}
+	metadata := audit.Diff(oldFields, newFields,
+		[]string{"entry_date", "description", "amount", "expense_account", "payment_account"})
+	if metadata != nil {
+		audit.Log(r.Context(), h.DB, audit.Event{
+			Action:      "expense.update",
+			TargetType:  "expense",
+			TargetID:    int64(id),
+			TargetLabel: je.Description,
+			Metadata:    metadata,
+		})
+	}
+
 	h.setFlash(w, "Expense updated successfully")
 	http.Redirect(w, r, fmt.Sprintf("/journals/%d", id), http.StatusSeeOther)
 }
@@ -214,10 +264,31 @@ func (h *Handler) DeleteExpense(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	existing, _ := model.GetJournalEntry(h.DB, id)
+
 	if err := model.DeleteJournalEntryBySource(h.DB, id, model.SourceExpense); err != nil {
 		h.setFlash(w, "Error: "+err.Error())
 		http.Redirect(w, r, "/expenses", http.StatusSeeOther)
 		return
+	}
+
+	if existing != nil {
+		amount, expenseAcct, paymentAcct := extractExpenseShape(existing)
+		audit.Log(r.Context(), h.DB, audit.Event{
+			Action:      "expense.delete",
+			TargetType:  "expense",
+			TargetID:    int64(id),
+			TargetLabel: existing.Description,
+			Metadata: map[string]any{
+				"before": map[string]any{
+					"entry_date":      existing.EntryDate,
+					"description":     existing.Description,
+					"amount":          amount,
+					"expense_account": expenseAcct,
+					"payment_account": paymentAcct,
+				},
+			},
+		})
 	}
 
 	if r.Header.Get("HX-Request") == "true" {
@@ -240,4 +311,20 @@ func (h *Handler) newExpenseFormData() expenseFormData {
 		PaymentAccounts: paymentAccounts,
 		Errors:          make(map[string]string),
 	}
+}
+
+// extractExpenseShape pulls "amount + expense + payment account" out of the
+// journal lines that expense.create wrote (debit on expense, credit on the
+// asset paying it out).
+func extractExpenseShape(je *model.JournalEntry) (amount, expenseAccount, paymentAccount int) {
+	for _, l := range je.Lines {
+		if l.Debit > 0 {
+			expenseAccount = l.AccountID
+			amount = l.Debit
+		}
+		if l.Credit > 0 {
+			paymentAccount = l.AccountID
+		}
+	}
+	return
 }
