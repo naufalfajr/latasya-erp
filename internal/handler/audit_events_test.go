@@ -580,3 +580,161 @@ func TestAudit_ExpenseUpdate_DiffsAmount(t *testing.T) {
 		t.Errorf("expense.update should not include unchanged entry_date, got %q", row.Metadata)
 	}
 }
+
+// --- Account (master data) --------------------------------------------------
+
+func TestAudit_AccountCreateAndDelete(t *testing.T) {
+	ts, db := testServer(t)
+	cookies := loginAsAdmin(t, ts)
+
+	createForm := url.Values{
+		"code":           {"1-9902"},
+		"name":           {"Audit Wallet"},
+		"account_type":   {"asset"},
+		"normal_balance": {"debit"},
+		"is_active":      {"on"},
+	}
+	req, _ := requestWithCookies(db, "POST", ts.URL+"/accounts", cookies, createForm.Encode())
+	resp, _ := noRedirectClient().Do(req)
+	resp.Body.Close()
+
+	createRow := latestAuditFor(t, db, "account.create")
+	if createRow.TargetLabel != "1-9902" {
+		t.Errorf("account.create target_label = %q, want 1-9902", createRow.TargetLabel)
+	}
+	if !strings.Contains(createRow.Metadata, "Audit Wallet") {
+		t.Errorf("account.create metadata should contain name, got %q", createRow.Metadata)
+	}
+
+	var accountID int
+	db.QueryRow("SELECT id FROM accounts WHERE code = '1-9902'").Scan(&accountID)
+
+	req2, _ := requestWithCookies(db, "DELETE", ts.URL+"/accounts/"+strconv.Itoa(accountID), cookies, "")
+	resp2, _ := noRedirectClient().Do(req2)
+	resp2.Body.Close()
+
+	delRow := latestAuditFor(t, db, "account.delete")
+	if delRow.TargetLabel != "1-9902" {
+		t.Errorf("account.delete target_label = %q, want 1-9902", delRow.TargetLabel)
+	}
+	if !strings.Contains(delRow.Metadata, `"before"`) {
+		t.Errorf("account.delete should include before snapshot, got %q", delRow.Metadata)
+	}
+}
+
+func TestAudit_AccountUpdate_DiffsChangedFields(t *testing.T) {
+	ts, db := testServer(t)
+	cookies := loginAsAdmin(t, ts)
+
+	createForm := url.Values{
+		"code":           {"1-9903"},
+		"name":           {"Before Name"},
+		"account_type":   {"asset"},
+		"normal_balance": {"debit"},
+		"is_active":      {"on"},
+	}
+	req, _ := requestWithCookies(db, "POST", ts.URL+"/accounts", cookies, createForm.Encode())
+	resp, _ := noRedirectClient().Do(req)
+	resp.Body.Close()
+
+	var accountID int
+	db.QueryRow("SELECT id FROM accounts WHERE code = '1-9903'").Scan(&accountID)
+
+	// Rename only.
+	updateForm := url.Values{
+		"code":           {"1-9903"},
+		"name":           {"After Name"},
+		"account_type":   {"asset"},
+		"normal_balance": {"debit"},
+		"is_active":      {"on"},
+	}
+	req2, _ := requestWithCookies(db, "POST", ts.URL+"/accounts/"+strconv.Itoa(accountID), cookies, updateForm.Encode())
+	resp2, _ := noRedirectClient().Do(req2)
+	resp2.Body.Close()
+
+	row := latestAuditFor(t, db, "account.update")
+	if !strings.Contains(row.Metadata, "Before Name") || !strings.Contains(row.Metadata, "After Name") {
+		t.Errorf("account.update should contain before/after name, got %q", row.Metadata)
+	}
+	if strings.Contains(row.Metadata, "account_type") {
+		t.Errorf("account.update should not include unchanged account_type, got %q", row.Metadata)
+	}
+}
+
+// --- Contact (master data) --------------------------------------------------
+
+func TestAudit_ContactCreateAndDelete(t *testing.T) {
+	ts, db := testServer(t)
+	cookies := loginAsAdmin(t, ts)
+
+	createForm := url.Values{
+		"name":         {"Audit Contact"},
+		"contact_type": {"customer"},
+		"email":        {"audit@example.com"},
+		"is_active":    {"on"},
+	}
+	req, _ := requestWithCookies(db, "POST", ts.URL+"/contacts", cookies, createForm.Encode())
+	resp, _ := noRedirectClient().Do(req)
+	resp.Body.Close()
+
+	createRow := latestAuditFor(t, db, "contact.create")
+	if createRow.TargetLabel != "Audit Contact" {
+		t.Errorf("contact.create target_label = %q", createRow.TargetLabel)
+	}
+	if !strings.Contains(createRow.Metadata, "audit@example.com") {
+		t.Errorf("contact.create metadata should contain email, got %q", createRow.Metadata)
+	}
+
+	var contactID int
+	db.QueryRow("SELECT id FROM contacts WHERE name = 'Audit Contact'").Scan(&contactID)
+
+	req2, _ := requestWithCookies(db, "DELETE", ts.URL+"/contacts/"+strconv.Itoa(contactID), cookies, "")
+	resp2, _ := noRedirectClient().Do(req2)
+	resp2.Body.Close()
+
+	delRow := latestAuditFor(t, db, "contact.delete")
+	if delRow.TargetLabel != "Audit Contact" {
+		t.Errorf("contact.delete target_label = %q", delRow.TargetLabel)
+	}
+}
+
+func TestAudit_ContactUpdate_DiffsChangedFields(t *testing.T) {
+	ts, db := testServer(t)
+	cookies := loginAsAdmin(t, ts)
+
+	createForm := url.Values{
+		"name":         {"Old Contact"},
+		"contact_type": {"customer"},
+		"email":        {"old@example.com"},
+		"is_active":    {"on"},
+	}
+	req, _ := requestWithCookies(db, "POST", ts.URL+"/contacts", cookies, createForm.Encode())
+	resp, _ := noRedirectClient().Do(req)
+	resp.Body.Close()
+
+	var contactID int
+	db.QueryRow("SELECT id FROM contacts WHERE name = 'Old Contact'").Scan(&contactID)
+
+	updateForm := url.Values{
+		"name":         {"New Contact"},
+		"contact_type": {"customer"},
+		"email":        {"new@example.com"},
+		"is_active":    {"on"},
+	}
+	req2, _ := requestWithCookies(db, "POST", ts.URL+"/contacts/"+strconv.Itoa(contactID), cookies, updateForm.Encode())
+	resp2, _ := noRedirectClient().Do(req2)
+	resp2.Body.Close()
+
+	row := latestAuditFor(t, db, "contact.update")
+	// target_label comes from the pre-update snapshot, so the rename is still
+	// traceable even after the new name takes effect.
+	if row.TargetLabel != "Old Contact" {
+		t.Errorf("contact.update target_label = %q, want 'Old Contact'", row.TargetLabel)
+	}
+	if !strings.Contains(row.Metadata, "Old Contact") || !strings.Contains(row.Metadata, "New Contact") {
+		t.Errorf("contact.update metadata should contain old+new name, got %q", row.Metadata)
+	}
+	if strings.Contains(row.Metadata, "contact_type") {
+		t.Errorf("contact.update should not include unchanged contact_type, got %q", row.Metadata)
+	}
+}

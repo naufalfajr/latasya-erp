@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/model"
 )
 
@@ -90,6 +91,26 @@ func (h *Handler) CreateAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Recover the generated ID via the session's last insert rowid — safe
+	// here because SetMaxOpenConns(1) guarantees a single connection.
+	var createdID int64
+	h.DB.QueryRow("SELECT last_insert_rowid()").Scan(&createdID)
+	audit.Log(r.Context(), h.DB, audit.Event{
+		Action:      "account.create",
+		TargetType:  "account",
+		TargetID:    createdID,
+		TargetLabel: a.Code,
+		Metadata: map[string]any{
+			"after": map[string]any{
+				"code":           a.Code,
+				"name":           a.Name,
+				"account_type":   a.AccountType,
+				"normal_balance": a.NormalBalance,
+				"is_active":      a.IsActive,
+			},
+		},
+	})
+
 	h.setFlash(w, "Account created successfully")
 	http.Redirect(w, r, "/accounts", http.StatusSeeOther)
 }
@@ -157,6 +178,34 @@ func (h *Handler) UpdateAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	oldFields := map[string]any{
+		"code":           existing.Code,
+		"name":           existing.Name,
+		"account_type":   existing.AccountType,
+		"normal_balance": existing.NormalBalance,
+		"description":    existing.Description,
+		"is_active":      existing.IsActive,
+	}
+	newFields := map[string]any{
+		"code":           a.Code,
+		"name":           a.Name,
+		"account_type":   a.AccountType,
+		"normal_balance": a.NormalBalance,
+		"description":    a.Description,
+		"is_active":      a.IsActive,
+	}
+	metadata := audit.Diff(oldFields, newFields,
+		[]string{"code", "name", "account_type", "normal_balance", "description", "is_active"})
+	if metadata != nil {
+		audit.Log(r.Context(), h.DB, audit.Event{
+			Action:      "account.update",
+			TargetType:  "account",
+			TargetID:    int64(id),
+			TargetLabel: existing.Code,
+			Metadata:    metadata,
+		})
+	}
+
 	h.setFlash(w, "Account updated successfully")
 	http.Redirect(w, r, "/accounts", http.StatusSeeOther)
 }
@@ -183,6 +232,21 @@ func (h *Handler) DeleteAccount(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
+
+	audit.Log(r.Context(), h.DB, audit.Event{
+		Action:      "account.delete",
+		TargetType:  "account",
+		TargetID:    int64(id),
+		TargetLabel: account.Code,
+		Metadata: map[string]any{
+			"before": map[string]any{
+				"code":           account.Code,
+				"name":           account.Name,
+				"account_type":   account.AccountType,
+				"normal_balance": account.NormalBalance,
+			},
+		},
+	})
 
 	// For HTMX requests, return empty (row removed)
 	if r.Header.Get("HX-Request") == "true" {
