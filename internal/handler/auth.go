@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 
+	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/auth"
 	"github.com/naufal/latasya-erp/internal/model"
 )
@@ -31,6 +32,12 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 
 	user, err := model.GetUserByUsername(h.DB, username)
 	if err != nil {
+		audit.Log(r.Context(), h.DB, audit.Event{
+			Action:        "auth.login_failed",
+			ActorUsername: username,
+			Result:        audit.ResultFail,
+			Metadata:      map[string]any{"reason": "unknown_user"},
+		})
 		h.render(w, r, "templates/auth/login.html", "Login", map[string]string{
 			"Error":    "Invalid username or password",
 			"Username": username,
@@ -38,6 +45,13 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !auth.CheckPassword(user.Password, password) {
+		audit.Log(r.Context(), h.DB, audit.Event{
+			Action:        "auth.login_failed",
+			ActorID:       int64(user.ID),
+			ActorUsername: username,
+			Result:        audit.ResultFail,
+			Metadata:      map[string]any{"reason": "bad_password"},
+		})
 		h.render(w, r, "templates/auth/login.html", "Login", map[string]string{
 			"Error":    "Invalid username or password",
 			"Username": username,
@@ -46,6 +60,13 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !user.IsActive {
+		audit.Log(r.Context(), h.DB, audit.Event{
+			Action:        "auth.login_failed",
+			ActorID:       int64(user.ID),
+			ActorUsername: username,
+			Result:        audit.ResultFail,
+			Metadata:      map[string]any{"reason": "inactive"},
+		})
 		h.render(w, r, "templates/auth/login.html", "Login", map[string]string{
 			"Error":    "Account is disabled",
 			"Username": username,
@@ -78,6 +99,15 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		MaxAge:   48 * 60 * 60,
 	})
 
+	audit.Log(r.Context(), h.DB, audit.Event{
+		Action:        "auth.login",
+		ActorID:       int64(user.ID),
+		ActorUsername: user.Username,
+		TargetType:    "user",
+		TargetID:      int64(user.ID),
+		TargetLabel:   user.Username,
+	})
+
 	if user.MustChangePassword {
 		http.Redirect(w, r, "/password/change", http.StatusSeeOther)
 		return
@@ -87,6 +117,20 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 	if cookie, err := r.Cookie("session_id"); err == nil {
+		// Resolve the actor before deleting the session so the audit row has
+		// username attribution. Silent if the session was already invalid.
+		if userID, err := auth.GetSessionUserID(h.DB, cookie.Value); err == nil {
+			if user, err := model.GetUserByID(h.DB, userID); err == nil {
+				audit.Log(r.Context(), h.DB, audit.Event{
+					Action:        "auth.logout",
+					ActorID:       int64(user.ID),
+					ActorUsername: user.Username,
+					TargetType:    "user",
+					TargetID:      int64(user.ID),
+					TargetLabel:   user.Username,
+				})
+			}
+		}
 		auth.DeleteSession(h.DB, cookie.Value)
 	}
 

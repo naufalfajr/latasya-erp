@@ -3,8 +3,10 @@ package handler
 import (
 	"net/http"
 	"regexp"
+	"sort"
 	"strings"
 
+	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/model"
 )
 
@@ -60,6 +62,19 @@ func (h *Handler) CreateRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	audit.Log(r.Context(), h.DB, audit.Event{
+		Action:      "role.create",
+		TargetType:  "role",
+		TargetLabel: role.Name,
+		Metadata: map[string]any{
+			"after": map[string]any{
+				"name":         role.Name,
+				"description":  role.Description,
+				"capabilities": role.Capabilities,
+			},
+		},
+	})
+
 	h.setFlash(w, "Role created successfully")
 	http.Redirect(w, r, "/roles", http.StatusSeeOther)
 }
@@ -113,6 +128,25 @@ func (h *Handler) UpdateRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Sort capabilities so order-only drift doesn't show up as a change.
+	oldCaps := append([]string(nil), existing.Capabilities...)
+	newCaps := append([]string(nil), role.Capabilities...)
+	sort.Strings(oldCaps)
+	sort.Strings(newCaps)
+	metadata := audit.Diff(
+		map[string]any{"description": existing.Description, "capabilities": oldCaps},
+		map[string]any{"description": role.Description, "capabilities": newCaps},
+		[]string{"description", "capabilities"},
+	)
+	if metadata != nil {
+		audit.Log(r.Context(), h.DB, audit.Event{
+			Action:      "role.update",
+			TargetType:  "role",
+			TargetLabel: role.Name,
+			Metadata:    metadata,
+		})
+	}
+
 	h.setFlash(w, "Role updated successfully")
 	http.Redirect(w, r, "/roles", http.StatusSeeOther)
 }
@@ -145,6 +179,19 @@ func (h *Handler) DeleteRole(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
+
+	audit.Log(r.Context(), h.DB, audit.Event{
+		Action:      "role.delete",
+		TargetType:  "role",
+		TargetLabel: role.Name,
+		Metadata: map[string]any{
+			"before": map[string]any{
+				"name":         role.Name,
+				"description":  role.Description,
+				"capabilities": role.Capabilities,
+			},
+		},
+	})
 
 	if r.Header.Get("HX-Request") == "true" {
 		w.WriteHeader(http.StatusOK)

@@ -33,6 +33,9 @@ type Event struct {
 	// ActorUsername overrides the context-derived actor. Used for auth.login
 	// events where the caller is pre-authentication and no user is in context.
 	ActorUsername string
+	// ActorID overrides the context-derived actor ID. Same rationale as
+	// ActorUsername. Ignored if zero.
+	ActorID int64
 }
 
 // Log records an event. Pulls actor from the context and request_id + IP from
@@ -63,6 +66,10 @@ func Log(ctx context.Context, db *sql.DB, e Event) {
 	}
 	if e.ActorUsername != "" {
 		actorUsername = &e.ActorUsername
+	}
+	if e.ActorID != 0 {
+		id := e.ActorID
+		actorID = &id
 	}
 
 	var metadataJSON *string

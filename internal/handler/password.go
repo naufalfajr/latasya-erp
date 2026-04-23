@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 
+	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/auth"
 	"github.com/naufal/latasya-erp/internal/model"
 )
@@ -83,6 +84,14 @@ func (h *Handler) PasswordChange(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
+
+	audit.Log(r.Context(), h.DB, audit.Event{
+		Action:      "auth.password_change",
+		TargetType:  "user",
+		TargetID:    int64(user.ID),
+		TargetLabel: user.Username,
+		Metadata:    map[string]any{"forced": user.MustChangePassword},
+	})
 
 	h.setFlash(w, "Password updated successfully")
 	http.Redirect(w, r, "/", http.StatusSeeOther)

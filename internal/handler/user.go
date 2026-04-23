@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/auth"
 	"github.com/naufal/latasya-erp/internal/model"
 )
@@ -73,6 +74,27 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Re-query to pick up the auto-generated ID for the audit row.
+	created, _ := model.GetUserByUsername(h.DB, u.Username)
+	var createdID int64
+	if created != nil {
+		createdID = int64(created.ID)
+	}
+	audit.Log(r.Context(), h.DB, audit.Event{
+		Action:      "user.create",
+		TargetType:  "user",
+		TargetID:    createdID,
+		TargetLabel: u.Username,
+		Metadata: map[string]any{
+			"after": map[string]any{
+				"username":  u.Username,
+				"full_name": u.FullName,
+				"role":      u.Role,
+				"is_active": u.IsActive,
+			},
+		},
+	})
+
 	h.setFlash(w, "User created successfully")
 	http.Redirect(w, r, "/users", http.StatusSeeOther)
 }
@@ -108,6 +130,14 @@ func (h *Handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Load existing user up-front — needed both for the error re-render path
+	// (to preserve the immutable username) and for the audit before/after diff.
+	existing, err := model.GetUserByID(h.DB, id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
 	u := &model.User{
 		ID:       id,
 		FullName: r.FormValue("full_name"),
@@ -136,10 +166,7 @@ func (h *Handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(errors) > 0 {
-		existing, _ := model.GetUserByID(h.DB, id)
-		if existing != nil {
-			u.Username = existing.Username
-		}
+		u.Username = existing.Username
 		roles, _ := model.ListRoles(h.DB)
 		h.render(w, r, "templates/users/form.html", "Edit User", userFormData{
 			User: u, Roles: roles, Errors: errors, IsEdit: true,
@@ -172,6 +199,33 @@ func (h *Handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	oldFields := map[string]any{
+		"full_name": existing.FullName,
+		"role":      existing.Role,
+		"is_active": existing.IsActive,
+	}
+	newFields := map[string]any{
+		"full_name": u.FullName,
+		"role":      u.Role,
+		"is_active": u.IsActive,
+	}
+	metadata := audit.Diff(oldFields, newFields, []string{"full_name", "role", "is_active"})
+	if newPassword != "" {
+		if metadata == nil {
+			metadata = map[string]any{}
+		}
+		metadata["password_reset"] = true
+	}
+	if metadata != nil {
+		audit.Log(r.Context(), h.DB, audit.Event{
+			Action:      "user.update",
+			TargetType:  "user",
+			TargetID:    int64(id),
+			TargetLabel: existing.Username,
+			Metadata:    metadata,
+		})
+	}
+
 	h.setFlash(w, "User updated successfully")
 	http.Redirect(w, r, "/users", http.StatusSeeOther)
 }
@@ -197,11 +251,23 @@ func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	wasActive := existing.IsActive
 	existing.IsActive = false
 	if err := model.UpdateUser(h.DB, existing); err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
+
+	audit.Log(r.Context(), h.DB, audit.Event{
+		Action:      "user.delete",
+		TargetType:  "user",
+		TargetID:    int64(existing.ID),
+		TargetLabel: existing.Username,
+		Metadata: map[string]any{
+			"before": map[string]any{"is_active": wasActive},
+			"after":  map[string]any{"is_active": false},
+		},
+	})
 
 	if r.Header.Get("HX-Request") == "true" {
 		w.WriteHeader(http.StatusOK)
