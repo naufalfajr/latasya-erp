@@ -12,6 +12,7 @@ import (
 	"time"
 
 	latasyaerp "github.com/naufal/latasya-erp"
+	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/auth"
 	"github.com/naufal/latasya-erp/internal/database"
 	"github.com/naufal/latasya-erp/internal/handler"
@@ -185,11 +186,16 @@ func main() {
 	protected.HandleFunc("GET /password/change", h.PasswordChangePage)
 	protected.HandleFunc("POST /password/change", h.PasswordChange)
 
+	// Audit log (admin-only via audit.view capability)
+	protected.HandleFunc("GET /audit", auth.CapabilityOnly(model.CapAuditView, h.AuditList))
+
 	mux.Handle("/", auth.RequireAuth(db, auth.CSRFProtect(handler.EnforcePasswordChange(protected))))
 
+	// audit.RequestContext wraps everything so pre-auth events (login attempts)
+	// still get a request_id and client IP attached.
 	srv := &http.Server{
 		Addr:         ":" + port,
-		Handler:      mux,
+		Handler:      audit.RequestContext(mux),
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  60 * time.Second,

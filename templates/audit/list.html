@@ -1,0 +1,120 @@
+{{template "base" .}}
+{{define "content"}}
+{{$d := .Data}}
+
+<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+    <div>
+        <h1 class="text-2xl font-bold">Audit Log</h1>
+        <p class="text-sm opacity-60">{{$d.Total}} event{{if ne $d.Total 1}}s{{end}} total</p>
+    </div>
+</div>
+
+<form method="GET" action="/audit" class="card bg-base-100 shadow-sm mb-4">
+    <div class="card-body p-4">
+        <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+            <div>
+                <label class="label label-text text-xs">Actor (exact username)</label>
+                <input type="text" name="actor" value="{{$d.Filter.Actor}}" class="input input-bordered input-sm w-full" placeholder="e.g. admin">
+            </div>
+            <div>
+                <label class="label label-text text-xs">Action prefix</label>
+                <input type="text" name="action" value="{{$d.Filter.Action}}" class="input input-bordered input-sm w-full" placeholder="e.g. invoice. or auth.login">
+            </div>
+            <div>
+                <label class="label label-text text-xs">From</label>
+                <input type="date" name="from" value="{{$d.Filter.From}}" class="input input-bordered input-sm w-full">
+            </div>
+            <div>
+                <label class="label label-text text-xs">To</label>
+                <input type="date" name="to" value="{{$d.Filter.To}}" class="input input-bordered input-sm w-full">
+            </div>
+        </div>
+        <div class="flex gap-2 mt-3">
+            <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+            <a href="/audit" class="btn btn-ghost btn-sm">Reset</a>
+        </div>
+    </div>
+</form>
+
+<div class="overflow-x-auto">
+    <table class="table table-sm table-zebra">
+        <thead>
+            <tr>
+                <th>Time (UTC)</th>
+                <th>Actor</th>
+                <th>Action</th>
+                <th>Target</th>
+                <th>Result</th>
+                <th>IP</th>
+                <th>Details</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range $d.Entries}}
+            <tr>
+                <td class="font-mono text-xs whitespace-nowrap">{{.OccurredAt.Format "2006-01-02 15:04:05"}}</td>
+                <td class="text-sm">
+                    {{if .ActorUsername}}{{.ActorUsername}}{{else}}<span class="opacity-50">—</span>{{end}}
+                </td>
+                <td><span class="badge badge-ghost badge-sm font-mono">{{.Action}}</span></td>
+                <td class="text-sm">
+                    {{if .TargetType}}
+                        <span class="opacity-60">{{.TargetType}}</span>
+                        {{if .TargetLabel}}<span class="font-semibold ml-1">{{.TargetLabel}}</span>{{end}}
+                        {{if .TargetID.Valid}}<span class="opacity-40 text-xs ml-1">#{{.TargetID.Int64}}</span>{{end}}
+                    {{else}}
+                        <span class="opacity-50">—</span>
+                    {{end}}
+                </td>
+                <td>
+                    {{if eq .Result "ok"}}
+                        <span class="badge badge-success badge-sm">ok</span>
+                    {{else}}
+                        <span class="badge badge-error badge-sm" title="{{.ErrorMessage}}">fail</span>
+                    {{end}}
+                </td>
+                <td class="font-mono text-xs">{{if .IP}}{{.IP}}{{else}}<span class="opacity-40">—</span>{{end}}</td>
+                <td>
+                    {{if .Metadata}}
+                    <details>
+                        <summary class="cursor-pointer text-xs opacity-70">view</summary>
+                        <pre class="text-xs bg-base-200 p-2 mt-1 rounded max-w-md overflow-x-auto">{{.Metadata}}</pre>
+                        {{if .RequestID}}<div class="text-xs opacity-40 mt-1 font-mono">req: {{.RequestID}}</div>{{end}}
+                        {{if .ErrorMessage}}<div class="text-xs text-error mt-1">error: {{.ErrorMessage}}</div>{{end}}
+                    </details>
+                    {{else if or .RequestID .ErrorMessage}}
+                    <details>
+                        <summary class="cursor-pointer text-xs opacity-70">view</summary>
+                        {{if .RequestID}}<div class="text-xs opacity-40 mt-1 font-mono">req: {{.RequestID}}</div>{{end}}
+                        {{if .ErrorMessage}}<div class="text-xs text-error mt-1">error: {{.ErrorMessage}}</div>{{end}}
+                    </details>
+                    {{end}}
+                </td>
+            </tr>
+            {{else}}
+            <tr><td colspan="7" class="text-center py-8 opacity-60">No audit events match these filters.</td></tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+
+{{if gt $d.TotalPages 1}}
+<div class="flex items-center justify-between mt-4">
+    <div class="text-sm opacity-60">
+        Page {{$d.Page}} of {{$d.TotalPages}}
+    </div>
+    <div class="join">
+        {{if gt $d.Page 1}}
+        <a class="join-item btn btn-sm" href="?{{if $d.Filter.Actor}}actor={{$d.Filter.Actor}}&{{end}}{{if $d.Filter.Action}}action={{$d.Filter.Action}}&{{end}}{{if $d.Filter.From}}from={{$d.Filter.From}}&{{end}}{{if $d.Filter.To}}to={{$d.Filter.To}}&{{end}}page={{sub $d.Page 1}}">‹ Prev</a>
+        {{else}}
+        <button class="join-item btn btn-sm" disabled>‹ Prev</button>
+        {{end}}
+        {{if lt $d.Page $d.TotalPages}}
+        <a class="join-item btn btn-sm" href="?{{if $d.Filter.Actor}}actor={{$d.Filter.Actor}}&{{end}}{{if $d.Filter.Action}}action={{$d.Filter.Action}}&{{end}}{{if $d.Filter.From}}from={{$d.Filter.From}}&{{end}}{{if $d.Filter.To}}to={{$d.Filter.To}}&{{end}}page={{add $d.Page 1}}">Next ›</a>
+        {{else}}
+        <button class="join-item btn btn-sm" disabled>Next ›</button>
+        {{end}}
+    </div>
+</div>
+{{end}}
+{{end}}

@@ -19,6 +19,7 @@ const (
 	CapInvoicesManage = "invoices.manage"
 	CapBillsManage    = "bills.manage"
 	CapReportsView    = "reports.view"
+	CapAuditView      = "audit.view"
 )
 
 // AllCapabilities lists every capability the system knows about. Used to
@@ -34,6 +35,7 @@ var AllCapabilities = []string{
 	CapInvoicesManage,
 	CapBillsManage,
 	CapReportsView,
+	CapAuditView,
 }
 
 // Account types

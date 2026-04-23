@@ -111,6 +111,8 @@ func testServer(t *testing.T) (*httptest.Server, *sql.DB) {
 	protected.HandleFunc("GET /password/change", h.PasswordChangePage)
 	protected.HandleFunc("POST /password/change", h.PasswordChange)
 
+	protected.HandleFunc("GET /audit", auth.CapabilityOnly("audit.view", h.AuditList))
+
 	mux.Handle("/", auth.RequireAuth(db, auth.CSRFProtect(handler.EnforcePasswordChange(protected))))
 
 	// Replace the seeded admin/admin with a non-default password and clear the
