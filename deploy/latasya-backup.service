@@ -1,0 +1,43 @@
+[Unit]
+Description=Latasya ERP SQLite backup (online snapshot via VACUUM INTO)
+
+[Service]
+Type=oneshot
+User=latasya
+Group=latasya
+ExecStart=/usr/local/bin/latasya-backup.sh
+
+# Backup writes here; live DB dir must be writable too because SQLite WAL
+# mode requires write access to the -shm file even for read-only queries.
+ReadWritePaths=/var/backups/latasya /var/lib/latasya
+
+# Filesystem & process hardening (mirrors latasya-erp.service).
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectHostname=true
+ProtectClock=true
+ProtectProc=invisible
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+
+# Backup is fully local — no network needed.
+PrivateNetwork=true
+RestrictAddressFamilies=AF_UNIX
+
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+
+UMask=0077

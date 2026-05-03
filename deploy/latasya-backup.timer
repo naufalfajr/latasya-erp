@@ -1,0 +1,13 @@
+[Unit]
+Description=Twice-monthly backup of Latasya ERP database
+
+[Timer]
+# 19:00 UTC on the 1st and 15th of every month.
+OnCalendar=*-*-01,15 19:00:00 UTC
+# Run a missed firing as soon as the host is back (covers reboots / downtime
+# spanning the schedule).
+Persistent=true
+Unit=latasya-backup.service
+
+[Install]
+WantedBy=timers.target
