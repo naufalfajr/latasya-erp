@@ -127,10 +127,12 @@ func (h *Handler) ViewInvoice(w http.ResponseWriter, r *http.Request) {
 
 	active := true
 	assetAccounts, _ := model.ListAccounts(h.DB, model.AccountFilter{Type: "asset", IsActive: &active})
+	creditNotes, _ := model.ListCreditNotesForInvoice(h.DB, id)
 
 	h.render(w, r, "templates/invoices/view.html", "Invoice "+inv.InvoiceNumber, map[string]any{
 		"Invoice":       inv,
 		"AssetAccounts": assetAccounts,
+		"CreditNotes":   creditNotes,
 	})
 }
 

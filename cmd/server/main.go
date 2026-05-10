@@ -137,6 +137,17 @@ func main() {
 	protected.HandleFunc("POST /invoices/{id}/payment", auth.CapabilityOnly(model.CapInvoicesManage, h.InvoicePayment))
 	protected.HandleFunc("GET /invoices/{id}/print", h.PrintInvoice)
 
+	// Credit Notes (piggyback on invoices.manage capability)
+	protected.HandleFunc("GET /credit-notes", h.ListCreditNotes)
+	protected.HandleFunc("GET /credit-notes/new", h.NewCreditNote)
+	protected.HandleFunc("POST /credit-notes", auth.CapabilityOnly(model.CapInvoicesManage, h.CreateCreditNote))
+	protected.HandleFunc("GET /credit-notes/{id}", h.ViewCreditNote)
+	protected.HandleFunc("GET /credit-notes/{id}/edit", h.EditCreditNote)
+	protected.HandleFunc("POST /credit-notes/{id}", auth.CapabilityOnly(model.CapInvoicesManage, h.UpdateCreditNote))
+	protected.HandleFunc("DELETE /credit-notes/{id}", auth.CapabilityOnly(model.CapInvoicesManage, h.DeleteCreditNote))
+	protected.HandleFunc("POST /credit-notes/{id}/issue", auth.CapabilityOnly(model.CapInvoicesManage, h.IssueCreditNote))
+	protected.HandleFunc("POST /credit-notes/{id}/void", auth.CapabilityOnly(model.CapInvoicesManage, h.VoidCreditNote))
+
 	// Bills
 	protected.HandleFunc("GET /bills", h.ListBills)
 	protected.HandleFunc("GET /bills/new", h.NewBill)
@@ -181,6 +192,7 @@ func main() {
 	protected.HandleFunc("GET /htmx/journal-line", h.JournalLinePartial)
 	protected.HandleFunc("GET /htmx/invoice-line", h.InvoiceLinePartial)
 	protected.HandleFunc("GET /htmx/bill-line", h.BillLinePartial)
+	protected.HandleFunc("GET /htmx/credit-note-line", h.CreditNoteLinePartial)
 
 	// Password change (self-service + forced on first login)
 	protected.HandleFunc("GET /password/change", h.PasswordChangePage)
