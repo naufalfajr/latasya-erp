@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/naufal/latasya-erp/internal/audit"
 	v1 "github.com/naufal/latasya-erp/internal/api/v1"
+	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/auth"
 	"github.com/naufal/latasya-erp/internal/model"
 )

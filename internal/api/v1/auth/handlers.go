@@ -224,10 +224,6 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 // Me returns the authenticated user's identity plus the auth method used.
 func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 	user := auth.UserFromContext(r.Context())
-	if user == nil {
-		v1.WriteError(w, r, http.StatusUnauthorized, v1.CodeUnauthorized, "authentication required", nil)
-		return
-	}
 
 	authMethod := "cookie"
 	if v1.IsBearerAuth(r.Context()) {
@@ -279,10 +275,6 @@ const minPasswordLength = 8
 // must_change_password since possession of a token implies explicit agency.
 func (h *Handler) PasswordChange(w http.ResponseWriter, r *http.Request) {
 	user := auth.UserFromContext(r.Context())
-	if user == nil {
-		v1.WriteError(w, r, http.StatusUnauthorized, v1.CodeUnauthorized, "authentication required", nil)
-		return
-	}
 
 	var req passwordChangeRequest
 	if err := v1.DecodeJSON(w, r, &req); err != nil {
@@ -347,4 +339,3 @@ func authMethodFromCtx(r *http.Request) string {
 	}
 	return "cookie"
 }
-

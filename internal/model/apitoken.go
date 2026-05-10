@@ -19,8 +19,8 @@ type APIToken struct {
 	ID          int
 	UserID      int
 	Name        string
-	TokenPrefix string     // first 8 chars of plaintext (safe to display)
-	Scopes      []string   // subset of user's capabilities at creation time
+	TokenPrefix string   // first 8 chars of plaintext (safe to display)
+	Scopes      []string // subset of user's capabilities at creation time
 	ExpiresAt   *time.Time
 	LastUsedAt  *time.Time
 	RevokedAt   *time.Time

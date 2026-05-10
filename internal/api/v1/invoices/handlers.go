@@ -208,10 +208,6 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user := auth.UserFromContext(r.Context())
-	if user == nil {
-		v1.WriteError(w, r, http.StatusUnauthorized, v1.CodeUnauthorized, "authentication required", nil)
-		return
-	}
 
 	var inp invoiceInput
 	if err := v1.DecodeJSON(w, r, &inp); err != nil {
@@ -392,10 +388,6 @@ func (h *Handler) Send(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user := auth.UserFromContext(r.Context())
-	if user == nil {
-		v1.WriteError(w, r, http.StatusUnauthorized, v1.CodeUnauthorized, "authentication required", nil)
-		return
-	}
 
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
@@ -450,10 +442,6 @@ func (h *Handler) Payment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user := auth.UserFromContext(r.Context())
-	if user == nil {
-		v1.WriteError(w, r, http.StatusUnauthorized, v1.CodeUnauthorized, "authentication required", nil)
-		return
-	}
 
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {

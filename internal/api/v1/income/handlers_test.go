@@ -313,7 +313,9 @@ func TestCreateIncome(t *testing.T) {
 			t.Fatalf("create: status %d", resp.StatusCode)
 		}
 		var env struct {
-			Data struct{ ID int `json:"id"` } `json:"data"`
+			Data struct {
+				ID int `json:"id"`
+			} `json:"data"`
 		}
 		json.NewDecoder(resp.Body).Decode(&env) //nolint:errcheck
 
@@ -395,7 +397,9 @@ func TestCreateIncome_Idempotency(t *testing.T) {
 		t.Fatalf("first request: status %d, want 201", resp1.StatusCode)
 	}
 	var env1 struct {
-		Data struct{ ID int `json:"id"` } `json:"data"`
+		Data struct {
+			ID int `json:"id"`
+		} `json:"data"`
 	}
 	if err := json.NewDecoder(resp1.Body).Decode(&env1); err != nil {
 		t.Fatalf("decode first: %v", err)
@@ -407,7 +411,9 @@ func TestCreateIncome_Idempotency(t *testing.T) {
 		t.Fatalf("second request: status %d, want 201", resp2.StatusCode)
 	}
 	var env2 struct {
-		Data struct{ ID int `json:"id"` } `json:"data"`
+		Data struct {
+			ID int `json:"id"`
+		} `json:"data"`
 	}
 	if err := json.NewDecoder(resp2.Body).Decode(&env2); err != nil {
 		t.Fatalf("decode second: %v", err)
@@ -444,7 +450,9 @@ func TestDeleteIncome(t *testing.T) {
 			t.Fatalf("create: status %d", resp.StatusCode)
 		}
 		var env struct {
-			Data struct{ ID int `json:"id"` } `json:"data"`
+			Data struct {
+				ID int `json:"id"`
+			} `json:"data"`
 		}
 		json.NewDecoder(resp.Body).Decode(&env) //nolint:errcheck
 		return env.Data.ID

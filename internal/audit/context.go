@@ -14,7 +14,25 @@ type contextKey string
 const (
 	requestIDKey contextKey = "audit.request_id"
 	clientIPKey  contextKey = "audit.client_ip"
+	tokenIDKey   contextKey = "audit.token_id"
 )
+
+// WithTokenID stores the API token ID on the context so audit.Log can record
+// which token authorised a Bearer-authenticated mutation. Set by the v1
+// BearerOrCookie middleware in parallel with its own private token-ID key,
+// to avoid an audit→v1 import cycle.
+func WithTokenID(ctx context.Context, id int) context.Context {
+	return context.WithValue(ctx, tokenIDKey, id)
+}
+
+// TokenIDFromContext returns the token ID stored by WithTokenID, or nil if
+// the request was cookie-authenticated or anonymous.
+func TokenIDFromContext(ctx context.Context) *int {
+	if v, ok := ctx.Value(tokenIDKey).(int); ok {
+		return &v
+	}
+	return nil
+}
 
 // RequestContext attaches a random request_id and the best-effort client IP
 // to the context. Audit rows correlate to the request that produced them via

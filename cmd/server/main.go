@@ -12,17 +12,11 @@ import (
 	"time"
 
 	latasyaerp "github.com/naufal/latasya-erp"
-	"github.com/naufal/latasya-erp/internal/audit"
-	"github.com/naufal/latasya-erp/internal/auth"
-	"github.com/naufal/latasya-erp/internal/database"
-	"github.com/naufal/latasya-erp/internal/handler"
-	"github.com/naufal/latasya-erp/internal/model"
-	"github.com/naufal/latasya-erp/internal/tmpl"
 	v1 "github.com/naufal/latasya-erp/internal/api/v1"
 	v1accounts "github.com/naufal/latasya-erp/internal/api/v1/accounts"
 	v1apitokens "github.com/naufal/latasya-erp/internal/api/v1/apitokens"
-	v1auth "github.com/naufal/latasya-erp/internal/api/v1/auth"
 	v1audit "github.com/naufal/latasya-erp/internal/api/v1/audit"
+	v1auth "github.com/naufal/latasya-erp/internal/api/v1/auth"
 	v1bills "github.com/naufal/latasya-erp/internal/api/v1/bills"
 	v1contacts "github.com/naufal/latasya-erp/internal/api/v1/contacts"
 	v1creditnotes "github.com/naufal/latasya-erp/internal/api/v1/credit_notes"
@@ -34,6 +28,12 @@ import (
 	v1reports "github.com/naufal/latasya-erp/internal/api/v1/reports"
 	v1roles "github.com/naufal/latasya-erp/internal/api/v1/roles"
 	v1users "github.com/naufal/latasya-erp/internal/api/v1/users"
+	"github.com/naufal/latasya-erp/internal/audit"
+	"github.com/naufal/latasya-erp/internal/auth"
+	"github.com/naufal/latasya-erp/internal/database"
+	"github.com/naufal/latasya-erp/internal/handler"
+	"github.com/naufal/latasya-erp/internal/model"
+	"github.com/naufal/latasya-erp/internal/tmpl"
 )
 
 // version identifies the build. Overridden at link time via
@@ -214,7 +214,7 @@ func main() {
 
 	// Auth routes (no auth required)
 	mux.HandleFunc("GET /login", h.LoginPage)
-	mux.HandleFunc("POST /login", h.Login)
+	mux.Handle("POST /login", v1.LoginRateLimiter()(http.HandlerFunc(h.Login)))
 	mux.HandleFunc("POST /logout", h.Logout)
 
 	// Protected routes (any authenticated user)

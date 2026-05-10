@@ -256,9 +256,9 @@ func TestSelfProtection(t *testing.T) {
 	t.Run("cannot deactivate self via PUT returns 409", func(t *testing.T) {
 		isActive := false
 		body := map[string]any{
-			"full_name":  "Admin",
-			"role":       "admin",
-			"is_active":  isActive,
+			"full_name": "Admin",
+			"role":      "admin",
+			"is_active": isActive,
 		}
 		resp := doReq(t, ts, http.MethodPut, fmt.Sprintf("/api/v1/users/%d", adminID), tok, body)
 		defer resp.Body.Close()

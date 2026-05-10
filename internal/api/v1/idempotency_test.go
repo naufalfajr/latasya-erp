@@ -10,9 +10,9 @@ import (
 	"sync/atomic"
 	"testing"
 
+	v1 "github.com/naufal/latasya-erp/internal/api/v1"
 	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/auth"
-	v1 "github.com/naufal/latasya-erp/internal/api/v1"
 	"github.com/naufal/latasya-erp/internal/testutil"
 )
 

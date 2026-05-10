@@ -8,17 +8,17 @@ import (
 
 // Error code constants — all snake_case strings
 const (
-	CodeInvalidRequest        = "invalid_request"
-	CodeValidationFailed      = "validation_failed"
-	CodeUnauthorized          = "unauthorized"
-	CodeForbidden             = "forbidden"
-	CodeNotFound              = "not_found"
-	CodeConflict              = "conflict"
-	CodeRateLimited           = "rate_limited"
-	CodeInvalidToken          = "invalid_token"
+	CodeInvalidRequest         = "invalid_request"
+	CodeValidationFailed       = "validation_failed"
+	CodeUnauthorized           = "unauthorized"
+	CodeForbidden              = "forbidden"
+	CodeNotFound               = "not_found"
+	CodeConflict               = "conflict"
+	CodeRateLimited            = "rate_limited"
+	CodeInvalidToken           = "invalid_token"
 	CodePasswordChangeRequired = "password_change_required"
-	CodeIdempotencyConflict   = "idempotency_conflict"
-	CodeInternal              = "internal_error"
+	CodeIdempotencyConflict    = "idempotency_conflict"
+	CodeInternal               = "internal_error"
 )
 
 // ErrorEnvelope is the standard JSON error response shape.

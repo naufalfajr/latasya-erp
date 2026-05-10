@@ -194,10 +194,10 @@ func TestGetInvoice(t *testing.T) {
 		}
 		var env struct {
 			Data struct {
-				ID        int             `json:"id"`
-				Status    string          `json:"status"`
-				Total     string          `json:"total"`
-				AmountDue string          `json:"amount_due"`
+				ID        int               `json:"id"`
+				Status    string            `json:"status"`
+				Total     string            `json:"total"`
+				AmountDue string            `json:"amount_due"`
 				Lines     []json.RawMessage `json:"lines"`
 			} `json:"data"`
 		}

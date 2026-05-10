@@ -72,12 +72,12 @@ func TestParsePage_Valid(t *testing.T) {
 
 func TestBuildMeta(t *testing.T) {
 	tests := []struct {
-		name          string
-		page          Page
-		total         int
-		wantPage      int
-		wantPerPage   int
-		wantTotal     int
+		name           string
+		page           Page
+		total          int
+		wantPage       int
+		wantPerPage    int
+		wantTotal      int
 		wantTotalPages int
 	}{
 		{"total=0", Page{1, 50}, 0, 1, 50, 0, 0},

@@ -72,7 +72,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 			v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "user not found", nil)
 			return
 		}
-		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "user not found", nil)
+		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "internal server error", nil)
 		return
 	}
 
@@ -100,8 +100,8 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	if inp.Password == "" {
 		fields["password"] = "required"
-	} else if len(inp.Password) < 4 {
-		fields["password"] = "minimum 4 characters"
+	} else if len(inp.Password) < 8 {
+		fields["password"] = "minimum 8 characters"
 	}
 	if inp.Role == "" {
 		fields["role"] = "required"
@@ -184,7 +184,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 			v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "user not found", nil)
 			return
 		}
-		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "user not found", nil)
+		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "internal server error", nil)
 		return
 	}
 
@@ -203,8 +203,8 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	} else if _, err := model.GetRoleByName(h.DB, inp.Role); err != nil {
 		fields["role"] = "invalid role"
 	}
-	if inp.Password != "" && len(inp.Password) < 4 {
-		fields["password"] = "minimum 4 characters"
+	if inp.Password != "" && len(inp.Password) < 8 {
+		fields["password"] = "minimum 8 characters"
 	}
 	if len(fields) > 0 {
 		v1.WriteError(w, r, http.StatusUnprocessableEntity, v1.CodeValidationFailed, "validation failed", fields)
@@ -296,7 +296,7 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 			v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "user not found", nil)
 			return
 		}
-		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "user not found", nil)
+		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "internal server error", nil)
 		return
 	}
 

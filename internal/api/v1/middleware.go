@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/auth"
 	"github.com/naufal/latasya-erp/internal/model"
 )
@@ -72,6 +73,7 @@ func BearerOrCookie(db *sql.DB) func(http.Handler) http.Handler {
 				ctx := auth.WithUser(r.Context(), user)
 				ctx = auth.MarkBearerAuth(ctx)
 				ctx = context.WithValue(ctx, tokenIDKey, token.ID)
+				ctx = audit.WithTokenID(ctx, token.ID)
 				ctx = context.WithValue(ctx, effectiveCapsKey, effectiveCaps)
 
 				next.ServeHTTP(w, r.WithContext(ctx))
@@ -137,10 +139,16 @@ func EffectiveCapabilitiesFromContext(ctx context.Context) []string {
 }
 
 // HasEffectiveCapability checks whether the request carries a specific
-// capability. Admin users always pass.
+// capability. For cookie-auth admin users, all capabilities are granted.
+// For Bearer-auth requests (including admin-owned tokens), the effective
+// capability set (token scopes ∩ user capabilities) is always checked —
+// this enforces scope intersection at request time and prevents zombie
+// privilege escalation even for admin-owned tokens with limited scopes.
 func HasEffectiveCapability(ctx context.Context, cap string) bool {
-	if u := auth.UserFromContext(ctx); u != nil && u.Role == model.RoleAdmin {
-		return true
+	if !IsBearerAuth(ctx) {
+		if u := auth.UserFromContext(ctx); u != nil && u.Role == model.RoleAdmin {
+			return true
+		}
 	}
 	for _, c := range EffectiveCapabilitiesFromContext(ctx) {
 		if c == cap {

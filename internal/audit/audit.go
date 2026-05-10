@@ -93,14 +93,19 @@ func Log(ctx context.Context, db *sql.DB, e Event) {
 		targetID = &id
 	}
 
+	var actorTokenID *int
+	if t := TokenIDFromContext(ctx); t != nil {
+		actorTokenID = t
+	}
+
 	_, err := db.ExecContext(ctx, `
 		INSERT INTO audit_log (
-			request_id, actor_id, actor_username,
+			request_id, actor_id, actor_username, actor_token_id,
 			action, target_type, target_id, target_label,
 			result, error_message, ip, metadata
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
-		requestID, actorID, actorUsername,
+		requestID, actorID, actorUsername, actorTokenID,
 		e.Action, targetType, targetID, targetLabel,
 		result, errMsg, ip, metadataJSON,
 	)
