@@ -1,0 +1,107 @@
+{{template "base" .}}
+{{define "content"}}
+{{$data := .Data}}
+<div class="flex flex-col gap-4">
+    <div class="flex justify-between items-center">
+        <h1 class="text-2xl font-bold">API Tokens</h1>
+        <a href="/settings/api-tokens/new" class="btn btn-primary btn-sm"
+           hx-get="/settings/api-tokens/new"
+           hx-target="#modal-container"
+           hx-swap="innerHTML">
+            Create new token
+        </a>
+    </div>
+
+    <p class="text-sm opacity-60">Manage your API tokens for bots, scripts, and integrations.</p>
+
+    {{if .Flashes}}
+    {{range .Flashes}}
+    <div class="alert alert-info">{{.}}</div>
+    {{end}}
+    {{end}}
+
+    {{if $data.Error}}
+    <div class="alert alert-error">{{$data.Error}}</div>
+    {{end}}
+
+    {{$tokens := $data.Tokens}}
+    {{if $tokens}}
+    <div class="overflow-x-auto">
+        <table class="table table-zebra">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Prefix</th>
+                    <th>Scopes</th>
+                    <th>Created</th>
+                    <th>Last Used</th>
+                    <th>Expires</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range $tokens}}
+                <tr>
+                    <td>{{.Name}}</td>
+                    <td><code class="text-xs">{{.Prefix}}</code></td>
+                    <td>
+                        <div class="flex flex-wrap gap-1">
+                            {{range .Scopes}}
+                            <span class="badge badge-info badge-sm">{{.}}</span>
+                            {{end}}
+                        </div>
+                    </td>
+                    <td>{{.CreatedAt.Format "Jan 2, 2006"}}</td>
+                    <td>
+                        {{if .LastUsedAt}}
+                        {{.LastUsedAt.Format "Jan 2, 2006 15:04"}}
+                        {{else}}
+                        <span class="opacity-50">Never</span>
+                        {{end}}
+                    </td>
+                    <td>
+                        {{if .ExpiresAt}}
+                        {{.ExpiresAt.Format "Jan 2, 2006"}}
+                        {{else}}
+                        <span class="opacity-50">Never</span>
+                        {{end}}
+                    </td>
+                    <td>
+                        {{if not .RevokedAt}}
+                        <button class="btn btn-error btn-xs"
+                               hx-post="/settings/api-tokens/{{.ID}}/revoke"
+                               hx-confirm="Revoke this token? This cannot be undone."
+                               hx-swap="outerHTML"
+                               hx-target="closest tr">
+                            Revoke
+                        </button>
+                        {{else}}
+                        <span class="badge badge-error badge-sm">Revoked</span>
+                        {{end}}
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+    {{else}}
+    <div class="card bg-base-200">
+        <div class="card-body items-center text-center">
+            <p class="opacity-60">No API tokens yet.</p>
+            <p class="text-sm opacity-50">Create a token to use with bots, scripts, or MCP integrations.</p>
+        </div>
+    </div>
+    {{end}}
+
+    <div class="div">Token Usage</div>
+    <div class="card bg-base-200">
+        <div class="card-body">
+            <p class="text-sm">Use this token in the <code>Authorization</code> header:</p>
+            <pre class="bg-base-300 p-2 rounded text-xs overflow-x-auto"><code>Authorization: Bearer lat_yourtokenhere</code></pre>
+            <p class="text-sm opacity-60 mt-2">Tokens inherit your current capabilities. If your role changes, the token's effective scopes update automatically.</p>
+        </div>
+    </div>
+</div>
+
+<div id="modal-container"></div>
+{{end}}

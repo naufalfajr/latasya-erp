@@ -20,12 +20,17 @@ import (
 	"github.com/naufal/latasya-erp/internal/tmpl"
 	v1 "github.com/naufal/latasya-erp/internal/api/v1"
 	v1accounts "github.com/naufal/latasya-erp/internal/api/v1/accounts"
+	v1apitokens "github.com/naufal/latasya-erp/internal/api/v1/apitokens"
 	v1auth "github.com/naufal/latasya-erp/internal/api/v1/auth"
 	v1audit "github.com/naufal/latasya-erp/internal/api/v1/audit"
 	v1bills "github.com/naufal/latasya-erp/internal/api/v1/bills"
 	v1contacts "github.com/naufal/latasya-erp/internal/api/v1/contacts"
 	v1creditnotes "github.com/naufal/latasya-erp/internal/api/v1/credit_notes"
 	v1dashboard "github.com/naufal/latasya-erp/internal/api/v1/dashboard"
+	v1expenses "github.com/naufal/latasya-erp/internal/api/v1/expenses"
+	v1income "github.com/naufal/latasya-erp/internal/api/v1/income"
+	v1invoices "github.com/naufal/latasya-erp/internal/api/v1/invoices"
+	v1journals "github.com/naufal/latasya-erp/internal/api/v1/journals"
 	v1reports "github.com/naufal/latasya-erp/internal/api/v1/reports"
 	v1roles "github.com/naufal/latasya-erp/internal/api/v1/roles"
 	v1users "github.com/naufal/latasya-erp/internal/api/v1/users"
@@ -122,6 +127,41 @@ func main() {
 	apiMux.HandleFunc("DELETE /api/v1/contacts/{id}", contacts.Delete)
 
 	idem := v1.Idempotency(db)
+
+	incomeAPI := &v1income.Handler{DB: db}
+	apiMux.HandleFunc("GET /api/v1/income", incomeAPI.List)
+	apiMux.HandleFunc("GET /api/v1/income/{id}", incomeAPI.Get)
+	apiMux.Handle("POST /api/v1/income", idem(http.HandlerFunc(incomeAPI.Create)))
+	apiMux.Handle("PUT /api/v1/income/{id}", idem(http.HandlerFunc(incomeAPI.Update)))
+	apiMux.HandleFunc("DELETE /api/v1/income/{id}", incomeAPI.Delete)
+
+	expensesAPI := &v1expenses.Handler{DB: db}
+	apiMux.HandleFunc("GET /api/v1/expenses", expensesAPI.List)
+	apiMux.HandleFunc("GET /api/v1/expenses/{id}", expensesAPI.Get)
+	apiMux.Handle("POST /api/v1/expenses", idem(http.HandlerFunc(expensesAPI.Create)))
+	apiMux.Handle("PUT /api/v1/expenses/{id}", idem(http.HandlerFunc(expensesAPI.Update)))
+	apiMux.HandleFunc("DELETE /api/v1/expenses/{id}", expensesAPI.Delete)
+
+	journalsAPI := &v1journals.Handler{DB: db}
+	apiMux.HandleFunc("GET /api/v1/journals", journalsAPI.List)
+	apiMux.HandleFunc("GET /api/v1/journals/{id}", journalsAPI.Get)
+	apiMux.Handle("POST /api/v1/journals", idem(http.HandlerFunc(journalsAPI.Create)))
+	apiMux.Handle("PUT /api/v1/journals/{id}", idem(http.HandlerFunc(journalsAPI.Update)))
+	apiMux.HandleFunc("DELETE /api/v1/journals/{id}", journalsAPI.Delete)
+
+	invoicesAPI := &v1invoices.Handler{DB: db}
+	apiMux.HandleFunc("GET /api/v1/invoices", invoicesAPI.List)
+	apiMux.HandleFunc("GET /api/v1/invoices/{id}", invoicesAPI.Get)
+	apiMux.Handle("POST /api/v1/invoices", idem(http.HandlerFunc(invoicesAPI.Create)))
+	apiMux.Handle("PUT /api/v1/invoices/{id}", idem(http.HandlerFunc(invoicesAPI.Update)))
+	apiMux.HandleFunc("DELETE /api/v1/invoices/{id}", invoicesAPI.Delete)
+	apiMux.Handle("POST /api/v1/invoices/{id}/send", idem(http.HandlerFunc(invoicesAPI.Send)))
+	apiMux.Handle("POST /api/v1/invoices/{id}/payment", idem(http.HandlerFunc(invoicesAPI.Payment)))
+
+	apiTokensAPI := &v1apitokens.Handler{DB: db}
+	apiMux.HandleFunc("GET /api/v1/api-tokens", apiTokensAPI.List)
+	apiMux.Handle("POST /api/v1/api-tokens", idem(http.HandlerFunc(apiTokensAPI.Create)))
+	apiMux.HandleFunc("DELETE /api/v1/api-tokens/{id}", apiTokensAPI.Revoke)
 
 	bills := &v1bills.Handler{DB: db}
 	apiMux.HandleFunc("GET /api/v1/bills", bills.List)
@@ -294,6 +334,12 @@ func main() {
 	// Password change (self-service + forced on first login)
 	protected.HandleFunc("GET /password/change", h.PasswordChangePage)
 	protected.HandleFunc("POST /password/change", h.PasswordChange)
+
+	// API Tokens management UI
+	protected.HandleFunc("GET /settings/api-tokens", h.ListAPITokens)
+	protected.HandleFunc("GET /settings/api-tokens/new", h.NewAPIToken)
+	protected.HandleFunc("POST /settings/api-tokens", h.CreateAPIToken)
+	protected.HandleFunc("POST /settings/api-tokens/{id}/revoke", h.RevokeAPIToken)
 
 	// Audit log (admin-only via audit.view capability)
 	protected.HandleFunc("GET /audit", auth.CapabilityOnly(model.CapAuditView, h.AuditList))

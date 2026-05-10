@@ -17,6 +17,13 @@ func UserFromContext(ctx context.Context) *model.User {
 	return u
 }
 
+// WithUser returns a new context carrying the given authenticated user.
+// Used by alternate auth middlewares (e.g. Bearer-token) that bypass the
+// session-cookie path.
+func WithUser(ctx context.Context, u *model.User) context.Context {
+	return context.WithValue(ctx, userContextKey, u)
+}
+
 func RequireAuth(db *sql.DB, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie("session_id")

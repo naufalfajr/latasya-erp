@@ -46,6 +46,7 @@
         </div>
     </li>
     <li><a href="/password/change" class="{{if eq .Path "/password/change"}}active{{end}}">Change Password</a></li>
+    <li><a href="/settings/api-tokens" class="{{if eq .Path "/settings/api-tokens"}}active{{end}}">API Tokens</a></li>
     <li>
         <form method="POST" action="/logout">
             <button type="submit" class="w-full text-left text-error">Logout</button>

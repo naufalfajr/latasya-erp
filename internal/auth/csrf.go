@@ -11,6 +11,21 @@ import (
 )
 
 const csrfContextKey contextKey = "csrf_token"
+const bearerAuthContextKey contextKey = "bearer_auth"
+
+// IsBearerAuth reports whether the current request was authenticated via a
+// Bearer token (as opposed to a session cookie). Used to bypass CSRF
+// protection for stateless API clients.
+func IsBearerAuth(ctx context.Context) bool {
+	v, _ := ctx.Value(bearerAuthContextKey).(bool)
+	return v
+}
+
+// MarkBearerAuth returns a new context flagged as Bearer-authenticated.
+// Called by the API v1 BearerOrCookie middleware.
+func MarkBearerAuth(ctx context.Context) context.Context {
+	return context.WithValue(ctx, bearerAuthContextKey, true)
+}
 
 // generateCSRFToken returns a cryptographically-random 64-char hex token.
 func generateCSRFToken() (string, error) {
@@ -43,6 +58,10 @@ func withCSRF(ctx context.Context, token string) context.Context {
 func CSRFProtect(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if isSafeMethod(r.Method) {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if IsBearerAuth(r.Context()) {
 			next.ServeHTTP(w, r)
 			return
 		}

@@ -1124,6 +1124,59 @@ components:
           items:
             $ref: '#/components/schemas/RecentTransaction'
 
+    APIToken:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        prefix:
+          type: string
+          description: First 8 chars of token (safe to display)
+        scopes:
+          type: array
+          items:
+            type: string
+        expires_at:
+          allOf:
+            - $ref: '#/components/schemas/Instant'
+          nullable: true
+        last_used_at:
+          allOf:
+            - $ref: '#/components/schemas/Instant'
+          nullable: true
+        revoked_at:
+          allOf:
+            - $ref: '#/components/schemas/Instant'
+          nullable: true
+        created_at:
+          $ref: '#/components/schemas/Instant'
+    APITokenCreated:
+      allOf:
+        - $ref: '#/components/schemas/APIToken'
+        - type: object
+          properties:
+            plaintext:
+              type: string
+              description: Full token value. Shown ONCE only. Store securely.
+    APITokenInput:
+      type: object
+      required: [name, scopes]
+      properties:
+        name:
+          type: string
+        scopes:
+          type: array
+          items:
+            type: string
+          description: Must be a subset of the requesting user's capabilities.
+        expires_at:
+          allOf:
+            - $ref: '#/components/schemas/Instant'
+          nullable: true
+          description: Optional expiry. Null means no expiry.
+
   responses:
     Unauthorized:
       description: Authentication required.
@@ -3025,3 +3078,70 @@ paths:
                     $ref: '#/components/schemas/DashboardData'
         '401':
           $ref: '#/components/responses/Unauthorized'
+
+  /api-tokens:
+    get:
+      operationId: listAPITokens
+      summary: List current user's API tokens
+      responses:
+        '200':
+          description: List of API tokens (never includes plaintext)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/APIToken'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      operationId: createAPIToken
+      summary: Create a new API token (cookie auth only)
+      description: |
+        Creates a scoped Bearer token for bot/MCP/Telegram integrations.
+        The plaintext token is returned ONCE in this response only.
+        Bearer-authenticated requests are rejected (tokens cannot create tokens).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/APITokenInput'
+      responses:
+        '201':
+          description: Token created (plaintext shown once)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/APITokenCreated'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+  /api-tokens/{id}:
+    delete:
+      operationId: revokeAPIToken
+      summary: Revoke an API token (cookie auth only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Token revoked
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'

@@ -558,8 +558,14 @@ func TestCapabilityChange_TakesEffectOnNextRequest(t *testing.T) {
 
 	// Bookkeeper should now lose access to invoices.manage.
 	form := "contact_id=1&invoice_date=2026-04-04&due_date=2026-04-30"
-	req2, _ := requestWithCookies(db, "POST", ts.URL+"/invoices", bkCookies, form)
-	resp2, _ := noRedirect.Do(req2)
+	req2, err := requestWithCookies(db, "POST", ts.URL+"/invoices", bkCookies, form)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp2, err := noRedirect.Do(req2)
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer resp2.Body.Close()
 
 	if resp2.StatusCode != http.StatusForbidden {

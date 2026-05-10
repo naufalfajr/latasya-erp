@@ -2,37 +2,68 @@ package model
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"strconv"
 )
 
 type JournalEntry struct {
-	ID          int
-	EntryDate   string
-	Reference   string
-	Description string
-	SourceType  string
-	SourceID    *int
-	IsPosted    bool
-	CreatedBy   int
-	CreatedAt   string
-	UpdatedAt   string
+	ID          int    `json:"id"`
+	EntryDate   string `json:"entry_date"`
+	Reference   string `json:"reference"`
+	Description string `json:"description"`
+	SourceType  string `json:"source_type"`
+	SourceID    *int   `json:"source_id"`
+	IsPosted    bool   `json:"is_posted"`
+	CreatedBy   int    `json:"created_by"`
+	CreatedAt   string `json:"created_at"`
+	UpdatedAt   string `json:"updated_at"`
 	// Joined fields
-	Lines         []JournalLine
-	CreatedByName string
-	TotalDebit    int
-	TotalCredit   int
+	Lines         []JournalLine `json:"lines"`
+	CreatedByName string        `json:"created_by_name,omitempty"`
+	TotalDebit    int           `json:"-"`
+	TotalCredit   int           `json:"-"`
+}
+
+// MarshalJSON serializes IDR-valued totals as strings to match the API
+// contract (currency is always a string of integer IDR).
+func (j JournalEntry) MarshalJSON() ([]byte, error) {
+	type alias JournalEntry
+	return json.Marshal(struct {
+		alias
+		TotalDebit  string `json:"total_debit"`
+		TotalCredit string `json:"total_credit"`
+	}{
+		alias:       alias(j),
+		TotalDebit:  strconv.Itoa(j.TotalDebit),
+		TotalCredit: strconv.Itoa(j.TotalCredit),
+	})
 }
 
 type JournalLine struct {
-	ID        int
-	EntryID   int
-	AccountID int
-	Debit     int
-	Credit    int
-	Memo      string
+	ID        int    `json:"id"`
+	EntryID   int    `json:"entry_id"`
+	AccountID int    `json:"account_id"`
+	Debit     int    `json:"-"`
+	Credit    int    `json:"-"`
+	Memo      string `json:"memo"`
 	// Joined fields
-	AccountCode string
-	AccountName string
+	AccountCode string `json:"account_code,omitempty"`
+	AccountName string `json:"account_name,omitempty"`
+}
+
+// MarshalJSON serializes Debit/Credit as integer-string IDR amounts.
+func (l JournalLine) MarshalJSON() ([]byte, error) {
+	type alias JournalLine
+	return json.Marshal(struct {
+		alias
+		Debit  string `json:"debit"`
+		Credit string `json:"credit"`
+	}{
+		alias:  alias(l),
+		Debit:  strconv.Itoa(l.Debit),
+		Credit: strconv.Itoa(l.Credit),
+	})
 }
 
 type JournalFilter struct {
