@@ -7,12 +7,12 @@ import (
 )
 
 type Role struct {
-	Name         string
-	Description  string
-	IsSystem     bool
-	Capabilities []string
-	CreatedAt    string
-	UpdatedAt    string
+	Name         string   `json:"name"`
+	Description  string   `json:"description"`
+	IsSystem     bool     `json:"is_system"`
+	Capabilities []string `json:"capabilities"`
+	CreatedAt    string   `json:"created_at"`
+	UpdatedAt    string   `json:"updated_at"`
 }
 
 // HasCapability reports whether the role grants the given capability. The
