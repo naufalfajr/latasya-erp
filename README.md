@@ -30,6 +30,90 @@ Built with Go stdlib, HTMX, Tailwind CSS + DaisyUI, and SQLite. Deploys as a sin
 
 No Node.js, no npm, no JS framework. Single binary with embedded templates and static files.
 
+## API
+
+Latasya ERP exposes a JSON API at `/api/v1/*` alongside the HTML UI. Bots, scripts, MCP servers, and Telegram integrations authenticate via scoped Bearer tokens managed at `/settings/api-tokens`.
+
+### Quick Start
+
+**1. Login and get a session:**
+```bash
+curl -s -c /tmp/cookies.txt -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin"}' \
+  http://localhost:8080/api/v1/auth/login
+```
+
+**2. Create an API token (cookie auth required):**
+```bash
+CSRF=$(curl -s -b /tmp/cookies.txt http://localhost:8080/api/v1/auth/csrf | jq -r .csrf_token)
+TOKEN=$(curl -s -b /tmp/cookies.txt \
+  -H "X-CSRF-Token: $CSRF" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"My Bot","scopes":["reports.view","invoices.manage"]}' \
+  http://localhost:8080/api/v1/api-tokens | jq -r .data.plaintext)
+```
+
+**3. Use the Bearer token:**
+```bash
+# List accounts
+curl -s -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8080/api/v1/accounts | jq .meta.total
+
+# Create an invoice (with idempotency)
+curl -s -X POST \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -d '{"contact_id":1,"invoice_date":"2026-05-10","due_date":"2026-06-10","tax_amount":"0","notes":"","lines":[{"description":"Service","quantity":"1.00","unit_price":"500000","account_id":4001}]}' \
+  http://localhost:8080/api/v1/invoices | jq .data.invoice_number
+```
+
+**4. Revoke the token:**
+```bash
+TOKEN_ID=$(curl -s -b /tmp/cookies.txt http://localhost:8080/api/v1/api-tokens | jq '.data[] | select(.name=="My Bot") | .id')
+curl -s -X DELETE \
+  -b /tmp/cookies.txt \
+  -H "X-CSRF-Token: $CSRF" \
+  http://localhost:8080/api/v1/api-tokens/$TOKEN_ID
+```
+
+### Authentication
+
+| Method | Use Case | How |
+|--------|----------|-----|
+| Session cookie | Browser / SPA | Login via `/api/v1/auth/login`, cookie set automatically |
+| Bearer token | Bots, MCP, Telegram, scripts | Create at `/settings/api-tokens`, use `Authorization: Bearer lat_...` |
+
+Bearer tokens are scoped (subset of your capabilities) and revocable. They skip CSRF validation.
+
+### Pagination
+
+All list endpoints return:
+```json
+{"data": [...], "meta": {"page": 1, "per_page": 50, "total": 100, "total_pages": 2}}
+```
+Query params: `?page=1&per_page=50` (default 50, max 200).
+
+### Errors
+
+All errors return:
+```json
+{"error": "message", "code": "snake_case_code", "request_id": "...", "fields": {...}}
+```
+
+### Idempotency
+
+Financial mutations (invoices, bills, journals, credit-notes) support `Idempotency-Key` header. Replaying the same key within 24h returns the original response without re-executing.
+
+### OpenAPI Spec
+
+```bash
+curl http://localhost:8080/api/v1/openapi.yaml
+```
+
+See `MIGRATION_NOTES.md` for the full migration strategy and sunset criteria.
+
 ## Quick Start
 
 ### Prerequisites
