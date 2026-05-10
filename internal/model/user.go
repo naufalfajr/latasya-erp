@@ -6,20 +6,20 @@ import (
 )
 
 type User struct {
-	ID                 int
-	Username           string
-	Password           string
-	FullName           string
-	Role               string
-	IsActive           bool
-	MustChangePassword bool
-	CreatedAt          string
-	UpdatedAt          string
+	ID                 int      `json:"id"`
+	Username           string   `json:"username"`
+	Password           string   `json:"-"` // never expose password hash
+	FullName           string   `json:"full_name"`
+	Role               string   `json:"role"`
+	IsActive           bool     `json:"is_active"`
+	MustChangePassword bool     `json:"must_change_password"`
+	CreatedAt          string   `json:"created_at"`
+	UpdatedAt          string   `json:"updated_at"`
 
 	// Capabilities is populated by the auth middleware on each request from
 	// the user's role. Admin users get a nil/empty slice since HasCapability
 	// short-circuits on the role name.
-	Capabilities []string
+	Capabilities []string `json:"capabilities,omitempty"`
 }
 
 func (u *User) IsAdmin() bool {
