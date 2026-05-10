@@ -6,35 +6,35 @@ import (
 )
 
 type Bill struct {
-	ID          int
-	BillNumber  string
-	ContactID   int
-	BillDate    string
-	DueDate     string
-	Status      string
-	Subtotal    int
-	TaxAmount   int
-	Total       int
-	AmountPaid  int
-	Notes       string
-	JournalID   *int
-	CreatedBy   int
-	CreatedAt   string
-	UpdatedAt   string
-	ContactName string
-	Lines       []BillLine
+	ID          int        `json:"id"`
+	BillNumber  string     `json:"bill_number"`
+	ContactID   int        `json:"contact_id"`
+	BillDate    string     `json:"bill_date"`
+	DueDate     string     `json:"due_date"`
+	Status      string     `json:"status"`
+	Subtotal    int        `json:"subtotal"`
+	TaxAmount   int        `json:"tax_amount"`
+	Total       int        `json:"total"`
+	AmountPaid  int        `json:"amount_paid"`
+	Notes       string     `json:"notes"`
+	JournalID   *int       `json:"journal_id,omitempty"`
+	CreatedBy   int        `json:"created_by"`
+	CreatedAt   string     `json:"created_at"`
+	UpdatedAt   string     `json:"updated_at"`
+	ContactName string     `json:"contact_name,omitempty"`
+	Lines       []BillLine `json:"lines,omitempty"`
 }
 
 type BillLine struct {
-	ID          int
-	BillID      int
-	Description string
-	Quantity    int
-	UnitPrice   int
-	Amount      int
-	AccountID   int
-	AccountCode string
-	AccountName string
+	ID          int    `json:"id"`
+	BillID      int    `json:"bill_id"`
+	Description string `json:"description"`
+	Quantity    int    `json:"quantity"`
+	UnitPrice   int    `json:"unit_price"`
+	Amount      int    `json:"amount"`
+	AccountID   int    `json:"account_id"`
+	AccountCode string `json:"account_code,omitempty"`
+	AccountName string `json:"account_name,omitempty"`
 }
 
 type BillFilter struct {
