@@ -273,6 +273,93 @@ components:
         updated_at:
           $ref: '#/components/schemas/Instant'
 
+    JournalLine:
+      type: object
+      required: [account_id, debit, credit]
+      properties:
+        id:
+          type: integer
+        entry_id:
+          type: integer
+        account_id:
+          type: integer
+        debit:
+          $ref: '#/components/schemas/IDR'
+        credit:
+          $ref: '#/components/schemas/IDR'
+        memo:
+          type: string
+        account_code:
+          type: string
+        account_name:
+          type: string
+
+    JournalEntry:
+      type: object
+      required: [id, entry_date, reference, description, lines]
+      properties:
+        id:
+          type: integer
+        entry_date:
+          $ref: '#/components/schemas/BusinessDate'
+        reference:
+          type: string
+          example: "JE-202605-0001"
+        description:
+          type: string
+        source_type:
+          type: string
+          enum: ["", manual, income, expense, invoice, bill, credit_note]
+        source_id:
+          type: integer
+          nullable: true
+        is_posted:
+          type: boolean
+        created_by:
+          type: integer
+        created_by_name:
+          type: string
+        total_debit:
+          $ref: '#/components/schemas/IDR'
+        total_credit:
+          $ref: '#/components/schemas/IDR'
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/JournalLine'
+        created_at:
+          $ref: '#/components/schemas/Instant'
+        updated_at:
+          $ref: '#/components/schemas/Instant'
+
+    JournalLineInput:
+      type: object
+      required: [account_id, debit, credit]
+      properties:
+        account_id:
+          type: integer
+        debit:
+          $ref: '#/components/schemas/IDR'
+        credit:
+          $ref: '#/components/schemas/IDR'
+        memo:
+          type: string
+
+    JournalInput:
+      type: object
+      required: [entry_date, description, lines]
+      properties:
+        entry_date:
+          $ref: '#/components/schemas/BusinessDate'
+        description:
+          type: string
+        lines:
+          type: array
+          minItems: 2
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/JournalLineInput'
+
     ContactInput:
       type: object
       required: [name, contact_type]
@@ -293,6 +380,423 @@ components:
         is_active:
           type: boolean
           default: true
+
+    InvoiceLine:
+      type: object
+      properties:
+        id:
+          type: integer
+        invoice_id:
+          type: integer
+        description:
+          type: string
+        quantity:
+          $ref: '#/components/schemas/Quantity'
+        unit_price:
+          $ref: '#/components/schemas/IDR'
+        amount:
+          $ref: '#/components/schemas/IDR'
+        account_id:
+          type: integer
+        account_code:
+          type: string
+        account_name:
+          type: string
+
+    InvoiceLineInput:
+      type: object
+      required: [description, quantity, unit_price, account_id]
+      properties:
+        description:
+          type: string
+        quantity:
+          $ref: '#/components/schemas/Quantity'
+        unit_price:
+          $ref: '#/components/schemas/IDR'
+        account_id:
+          type: integer
+
+    Invoice:
+      type: object
+      properties:
+        id:
+          type: integer
+        invoice_number:
+          type: string
+        contact_id:
+          type: integer
+        contact_name:
+          type: string
+        invoice_date:
+          $ref: '#/components/schemas/BusinessDate'
+        due_date:
+          $ref: '#/components/schemas/BusinessDate'
+        status:
+          type: string
+          enum: [draft, sent, partial, paid, overdue, cancelled]
+        subtotal:
+          $ref: '#/components/schemas/IDR'
+        tax_amount:
+          $ref: '#/components/schemas/IDR'
+        total:
+          $ref: '#/components/schemas/IDR'
+        amount_paid:
+          $ref: '#/components/schemas/IDR'
+        amount_credited:
+          $ref: '#/components/schemas/IDR'
+        amount_due:
+          $ref: '#/components/schemas/IDR'
+        notes:
+          type: string
+        journal_id:
+          type: integer
+          nullable: true
+        created_by:
+          type: integer
+        created_at:
+          $ref: '#/components/schemas/Instant'
+        updated_at:
+          $ref: '#/components/schemas/Instant'
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/InvoiceLine'
+
+    InvoiceInput:
+      type: object
+      required: [contact_id, invoice_date, due_date, lines]
+      properties:
+        contact_id:
+          type: integer
+        invoice_date:
+          $ref: '#/components/schemas/BusinessDate'
+        due_date:
+          $ref: '#/components/schemas/BusinessDate'
+        tax_amount:
+          $ref: '#/components/schemas/IDR'
+        notes:
+          type: string
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/InvoiceLineInput'
+
+    InvoicePaymentInput:
+      type: object
+      required: [amount, payment_date, payment_account]
+      properties:
+        amount:
+          $ref: '#/components/schemas/IDR'
+        payment_date:
+          $ref: '#/components/schemas/BusinessDate'
+        payment_account:
+          type: integer
+          description: Asset account ID receiving the payment.
+
+    BillLine:
+      type: object
+      properties:
+        id:
+          type: integer
+        bill_id:
+          type: integer
+        description:
+          type: string
+        quantity:
+          $ref: '#/components/schemas/Quantity'
+        unit_price:
+          $ref: '#/components/schemas/IDR'
+        amount:
+          $ref: '#/components/schemas/IDR'
+        account_id:
+          type: integer
+        account_code:
+          type: string
+        account_name:
+          type: string
+
+    BillLineInput:
+      type: object
+      required: [description, quantity, unit_price, account_id]
+      properties:
+        description:
+          type: string
+        quantity:
+          $ref: '#/components/schemas/Quantity'
+        unit_price:
+          $ref: '#/components/schemas/IDR'
+        account_id:
+          type: integer
+
+    Bill:
+      type: object
+      properties:
+        id:
+          type: integer
+        bill_number:
+          type: string
+        contact_id:
+          type: integer
+        contact_name:
+          type: string
+        bill_date:
+          $ref: '#/components/schemas/BusinessDate'
+        due_date:
+          $ref: '#/components/schemas/BusinessDate'
+        status:
+          type: string
+          enum: [draft, received, partial, paid, cancelled]
+        subtotal:
+          $ref: '#/components/schemas/IDR'
+        tax_amount:
+          $ref: '#/components/schemas/IDR'
+        total:
+          $ref: '#/components/schemas/IDR'
+        amount_paid:
+          $ref: '#/components/schemas/IDR'
+        notes:
+          type: string
+        journal_id:
+          type: integer
+          nullable: true
+        created_by:
+          type: integer
+        created_at:
+          $ref: '#/components/schemas/Instant'
+        updated_at:
+          $ref: '#/components/schemas/Instant'
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/BillLine'
+
+    BillInput:
+      type: object
+      required: [contact_id, bill_date, due_date, lines]
+      properties:
+        contact_id:
+          type: integer
+        bill_date:
+          $ref: '#/components/schemas/BusinessDate'
+        due_date:
+          $ref: '#/components/schemas/BusinessDate'
+        tax_amount:
+          $ref: '#/components/schemas/IDR'
+        notes:
+          type: string
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/BillLineInput'
+
+    BillPaymentInput:
+      type: object
+      required: [amount, payment_date, payment_account]
+      properties:
+        amount:
+          $ref: '#/components/schemas/IDR'
+        payment_date:
+          $ref: '#/components/schemas/BusinessDate'
+        payment_account:
+          type: integer
+          description: Asset account ID funding the payment.
+
+    CreditNoteLine:
+      type: object
+      properties:
+        id:
+          type: integer
+        credit_note_id:
+          type: integer
+        description:
+          type: string
+        quantity:
+          $ref: '#/components/schemas/Quantity'
+        unit_price:
+          $ref: '#/components/schemas/IDR'
+        amount:
+          $ref: '#/components/schemas/IDR'
+        account_id:
+          type: integer
+        account_code:
+          type: string
+        account_name:
+          type: string
+
+    CreditNoteLineInput:
+      type: object
+      required: [description, quantity, unit_price, account_id]
+      properties:
+        description:
+          type: string
+        quantity:
+          $ref: '#/components/schemas/Quantity'
+        unit_price:
+          $ref: '#/components/schemas/IDR'
+        account_id:
+          type: integer
+
+    CreditNote:
+      type: object
+      properties:
+        id:
+          type: integer
+        cn_number:
+          type: string
+        contact_id:
+          type: integer
+        contact_name:
+          type: string
+        invoice_id:
+          type: integer
+          nullable: true
+        invoice_number:
+          type: string
+        cn_date:
+          $ref: '#/components/schemas/BusinessDate'
+        reason:
+          type: string
+          enum: [cancellation, return, discount, other]
+        status:
+          type: string
+          enum: [draft, issued, void]
+        subtotal:
+          $ref: '#/components/schemas/IDR'
+        tax_amount:
+          $ref: '#/components/schemas/IDR'
+        total:
+          $ref: '#/components/schemas/IDR'
+        notes:
+          type: string
+        journal_id:
+          type: integer
+          nullable: true
+        created_by:
+          type: integer
+        created_at:
+          $ref: '#/components/schemas/Instant'
+        updated_at:
+          $ref: '#/components/schemas/Instant'
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/CreditNoteLine'
+
+    CreditNoteInput:
+      type: object
+      required: [contact_id, cn_date, reason, lines]
+      properties:
+        contact_id:
+          type: integer
+        invoice_id:
+          type: integer
+          nullable: true
+          description: Optional link to the original invoice.
+        cn_date:
+          $ref: '#/components/schemas/BusinessDate'
+        reason:
+          type: string
+          enum: [cancellation, return, discount, other]
+        tax_amount:
+          $ref: '#/components/schemas/IDR'
+        notes:
+          type: string
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/CreditNoteLineInput'
+
+    AccountRef:
+      type: object
+      description: Compact account reference embedded in income/expense responses.
+      required: [id, code, name]
+      properties:
+        id:
+          type: integer
+        code:
+          type: string
+          example: "4-0001"
+        name:
+          type: string
+          example: "School Bus Contract"
+
+    IncomeEntry:
+      type: object
+      description: An income journal entry (source_type=income). Debit deposit account, credit revenue account.
+      properties:
+        id:
+          type: integer
+        reference:
+          type: string
+          example: "JE-202605-0001"
+        entry_date:
+          $ref: '#/components/schemas/BusinessDate'
+        description:
+          type: string
+        amount:
+          $ref: '#/components/schemas/IDR'
+        revenue_account:
+          $ref: '#/components/schemas/AccountRef'
+        deposit_account:
+          $ref: '#/components/schemas/AccountRef'
+        created_at:
+          $ref: '#/components/schemas/Instant'
+
+    IncomeInput:
+      type: object
+      required: [entry_date, description, amount, revenue_account, deposit_account]
+      properties:
+        entry_date:
+          $ref: '#/components/schemas/BusinessDate'
+        description:
+          type: string
+        amount:
+          $ref: '#/components/schemas/IDR'
+        revenue_account:
+          type: integer
+          description: Account ID of the revenue account (type=revenue).
+        deposit_account:
+          type: integer
+          description: Account ID of the deposit account (type=asset).
+
+    ExpenseEntry:
+      type: object
+      description: An expense journal entry (source_type=expense). Debit expense account, credit payment account.
+      properties:
+        id:
+          type: integer
+        reference:
+          type: string
+          example: "JE-202605-0002"
+        entry_date:
+          $ref: '#/components/schemas/BusinessDate'
+        description:
+          type: string
+        amount:
+          $ref: '#/components/schemas/IDR'
+        expense_account:
+          $ref: '#/components/schemas/AccountRef'
+        payment_account:
+          $ref: '#/components/schemas/AccountRef'
+        created_at:
+          $ref: '#/components/schemas/Instant'
+
+    ExpenseInput:
+      type: object
+      required: [entry_date, description, amount, expense_account, payment_account]
+      properties:
+        entry_date:
+          $ref: '#/components/schemas/BusinessDate'
+        description:
+          type: string
+        amount:
+          $ref: '#/components/schemas/IDR'
+        expense_account:
+          type: integer
+          description: Account ID of the expense account (type=expense).
+        payment_account:
+          type: integer
+          description: Account ID of the payment account (type=asset).
 
   responses:
     Unauthorized:
@@ -732,6 +1236,982 @@ paths:
       responses:
         '204':
           description: Contact deleted.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /income:
+    get:
+      operationId: listIncome
+      summary: List income entries
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PerPageParam'
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Filter entries from this date (inclusive).
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Filter entries to this date (inclusive).
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Search by reference or description.
+      responses:
+        '200':
+          description: Paginated list of income entries.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/IncomeEntry'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      operationId: createIncome
+      summary: Record a new income entry
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IncomeInput'
+      responses:
+        '201':
+          description: Income entry created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/IncomeEntry'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /income/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      operationId: getIncome
+      summary: Get a single income entry
+      responses:
+        '200':
+          description: Income entry.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/IncomeEntry'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      operationId: updateIncome
+      summary: Update an income entry
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IncomeInput'
+      responses:
+        '200':
+          description: Income entry updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/IncomeEntry'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+    delete:
+      operationId: deleteIncome
+      summary: Delete an income entry
+      responses:
+        '204':
+          description: Income entry deleted.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /expenses:
+    get:
+      operationId: listExpenses
+      summary: List expense entries
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PerPageParam'
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Filter entries from this date (inclusive).
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Filter entries to this date (inclusive).
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Search by reference or description.
+      responses:
+        '200':
+          description: Paginated list of expense entries.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ExpenseEntry'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      operationId: createExpense
+      summary: Record a new expense entry
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExpenseInput'
+      responses:
+        '201':
+          description: Expense entry created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ExpenseEntry'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /expenses/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      operationId: getExpense
+      summary: Get a single expense entry
+      responses:
+        '200':
+          description: Expense entry.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ExpenseEntry'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      operationId: updateExpense
+      summary: Update an expense entry
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExpenseInput'
+      responses:
+        '200':
+          description: Expense entry updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ExpenseEntry'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+    delete:
+      operationId: deleteExpense
+      summary: Delete an expense entry
+      responses:
+        '204':
+          description: Expense entry deleted.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /journals:
+    get:
+      operationId: listJournals
+      summary: List journal entries
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PerPageParam'
+        - name: from
+          in: query
+          schema:
+            $ref: '#/components/schemas/BusinessDate'
+        - name: to
+          in: query
+          schema:
+            $ref: '#/components/schemas/BusinessDate'
+        - name: source
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Paginated list of journal entries.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/JournalEntry'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      operationId: createJournal
+      summary: Create a journal entry
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JournalInput'
+      responses:
+        '201':
+          description: Journal entry created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/JournalEntry'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /journals/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      operationId: getJournal
+      summary: Get a journal entry with lines
+      responses:
+        '200':
+          description: Journal entry.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/JournalEntry'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      operationId: updateJournal
+      summary: Update a manual journal entry
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JournalInput'
+      responses:
+        '200':
+          description: Updated journal entry.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/JournalEntry'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+    delete:
+      operationId: deleteJournal
+      summary: Delete a manual journal entry
+      responses:
+        '204':
+          description: Deleted.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /invoices:
+    get:
+      operationId: listInvoices
+      summary: List invoices
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PerPageParam'
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [draft, sent, partial, paid, overdue, cancelled]
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Paginated list of invoices.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Invoice'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      operationId: createInvoice
+      summary: Create an invoice (status=draft)
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvoiceInput'
+      responses:
+        '201':
+          description: Invoice created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Invoice'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /invoices/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      operationId: getInvoice
+      summary: Get an invoice with lines and credit-note summary
+      responses:
+        '200':
+          description: Invoice with lines and credit notes.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    allOf:
+                      - $ref: '#/components/schemas/Invoice'
+                      - type: object
+                        properties:
+                          credit_notes:
+                            type: array
+                            items:
+                              type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      operationId: updateInvoice
+      summary: Update a draft invoice
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvoiceInput'
+      responses:
+        '200':
+          description: Updated invoice.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Invoice'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+    delete:
+      operationId: deleteInvoice
+      summary: Delete a draft invoice
+      responses:
+        '204':
+          description: Invoice deleted.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /invoices/{id}/send:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - $ref: '#/components/parameters/IdempotencyKey'
+    post:
+      operationId: sendInvoice
+      summary: Send an invoice (creates AR journal entry, status=sent)
+      responses:
+        '200':
+          description: Invoice sent.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Invoice'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /invoices/{id}/payment:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - $ref: '#/components/parameters/IdempotencyKey'
+    post:
+      operationId: recordInvoicePayment
+      summary: Record a payment against an invoice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvoicePaymentInput'
+      responses:
+        '200':
+          description: Payment recorded; invoice status updated to partial or paid.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Invoice'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /bills:
+    get:
+      operationId: listBills
+      summary: List bills
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [draft, received, partial, paid, cancelled]
+        - name: search
+          in: query
+          schema:
+            type: string
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PerPageParam'
+      responses:
+        '200':
+          description: Paginated list of bills.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Bill'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      operationId: createBill
+      summary: Create a bill
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BillInput'
+      responses:
+        '201':
+          description: Bill created (status=draft).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bill'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /bills/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      operationId: getBill
+      summary: Get a bill
+      responses:
+        '200':
+          description: Bill object.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bill'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      operationId: updateBill
+      summary: Update a draft bill
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BillInput'
+      responses:
+        '200':
+          description: Updated bill.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bill'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+    delete:
+      operationId: deleteBill
+      summary: Delete a draft bill
+      responses:
+        '204':
+          description: Bill deleted.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /bills/{id}/receive:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - $ref: '#/components/parameters/IdempotencyKey'
+    post:
+      operationId: receiveBill
+      summary: Receive a bill (creates AP journal entry, status=received)
+      responses:
+        '200':
+          description: Bill received.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bill'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /bills/{id}/payment:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - $ref: '#/components/parameters/IdempotencyKey'
+    post:
+      operationId: recordBillPayment
+      summary: Record a payment against a bill
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BillPaymentInput'
+      responses:
+        '200':
+          description: Payment recorded; bill status updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bill'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /credit-notes:
+    get:
+      operationId: listCreditNotes
+      summary: List credit notes
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [draft, issued, void]
+        - name: search
+          in: query
+          schema:
+            type: string
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PerPageParam'
+      responses:
+        '200':
+          description: Paginated list of credit notes.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CreditNote'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      operationId: createCreditNote
+      summary: Create a credit note
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreditNoteInput'
+      responses:
+        '201':
+          description: Credit note created (status=draft).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditNote'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /credit-notes/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      operationId: getCreditNote
+      summary: Get a credit note
+      responses:
+        '200':
+          description: Credit note object.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditNote'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      operationId: updateCreditNote
+      summary: Update a draft credit note
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreditNoteInput'
+      responses:
+        '200':
+          description: Updated credit note.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditNote'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+    delete:
+      operationId: deleteCreditNote
+      summary: Delete a draft credit note
+      responses:
+        '204':
+          description: Credit note deleted.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /credit-notes/{id}/issue:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - $ref: '#/components/parameters/IdempotencyKey'
+    post:
+      operationId: issueCreditNote
+      summary: Issue a credit note (posts journal entry, status=issued)
+      responses:
+        '200':
+          description: Credit note issued.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditNote'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /credit-notes/{id}/void:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - $ref: '#/components/parameters/IdempotencyKey'
+    post:
+      operationId: voidCreditNote
+      summary: Void an issued credit note (posts reversing journal, status=void)
+      responses:
+        '200':
+          description: Credit note voided.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditNote'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':

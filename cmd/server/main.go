@@ -21,7 +21,14 @@ import (
 	v1 "github.com/naufal/latasya-erp/internal/api/v1"
 	v1accounts "github.com/naufal/latasya-erp/internal/api/v1/accounts"
 	v1auth "github.com/naufal/latasya-erp/internal/api/v1/auth"
+	v1audit "github.com/naufal/latasya-erp/internal/api/v1/audit"
+	v1bills "github.com/naufal/latasya-erp/internal/api/v1/bills"
 	v1contacts "github.com/naufal/latasya-erp/internal/api/v1/contacts"
+	v1creditnotes "github.com/naufal/latasya-erp/internal/api/v1/credit_notes"
+	v1dashboard "github.com/naufal/latasya-erp/internal/api/v1/dashboard"
+	v1reports "github.com/naufal/latasya-erp/internal/api/v1/reports"
+	v1roles "github.com/naufal/latasya-erp/internal/api/v1/roles"
+	v1users "github.com/naufal/latasya-erp/internal/api/v1/users"
 )
 
 // version identifies the build. Overridden at link time via
@@ -113,6 +120,54 @@ func main() {
 	apiMux.HandleFunc("POST /api/v1/contacts", contacts.Create)
 	apiMux.HandleFunc("PUT /api/v1/contacts/{id}", contacts.Update)
 	apiMux.HandleFunc("DELETE /api/v1/contacts/{id}", contacts.Delete)
+
+	idem := v1.Idempotency(db)
+
+	bills := &v1bills.Handler{DB: db}
+	apiMux.HandleFunc("GET /api/v1/bills", bills.List)
+	apiMux.HandleFunc("GET /api/v1/bills/{id}", bills.Get)
+	apiMux.Handle("POST /api/v1/bills", idem(http.HandlerFunc(bills.Create)))
+	apiMux.Handle("PUT /api/v1/bills/{id}", idem(http.HandlerFunc(bills.Update)))
+	apiMux.HandleFunc("DELETE /api/v1/bills/{id}", bills.Delete)
+	apiMux.Handle("POST /api/v1/bills/{id}/receive", idem(http.HandlerFunc(bills.Receive)))
+	apiMux.Handle("POST /api/v1/bills/{id}/payment", idem(http.HandlerFunc(bills.Payment)))
+
+	creditNotes := &v1creditnotes.Handler{DB: db}
+	apiMux.HandleFunc("GET /api/v1/credit-notes", creditNotes.List)
+	apiMux.HandleFunc("GET /api/v1/credit-notes/{id}", creditNotes.Get)
+	apiMux.Handle("POST /api/v1/credit-notes", idem(http.HandlerFunc(creditNotes.Create)))
+	apiMux.Handle("PUT /api/v1/credit-notes/{id}", idem(http.HandlerFunc(creditNotes.Update)))
+	apiMux.HandleFunc("DELETE /api/v1/credit-notes/{id}", creditNotes.Delete)
+	apiMux.Handle("POST /api/v1/credit-notes/{id}/issue", idem(http.HandlerFunc(creditNotes.Issue)))
+	apiMux.Handle("POST /api/v1/credit-notes/{id}/void", idem(http.HandlerFunc(creditNotes.Void)))
+
+	reportsAPI := &v1reports.Handler{DB: db}
+	apiMux.HandleFunc("GET /api/v1/reports/trial-balance", reportsAPI.TrialBalance)
+	apiMux.HandleFunc("GET /api/v1/reports/profit-loss", reportsAPI.ProfitLoss)
+	apiMux.HandleFunc("GET /api/v1/reports/balance-sheet", reportsAPI.BalanceSheet)
+	apiMux.HandleFunc("GET /api/v1/reports/cash-flow", reportsAPI.CashFlow)
+	apiMux.HandleFunc("GET /api/v1/reports/general-ledger", reportsAPI.GeneralLedger)
+
+	usersAPI := &v1users.Handler{DB: db}
+	apiMux.HandleFunc("GET /api/v1/users", usersAPI.List)
+	apiMux.HandleFunc("GET /api/v1/users/{id}", usersAPI.Get)
+	apiMux.HandleFunc("POST /api/v1/users", usersAPI.Create)
+	apiMux.HandleFunc("PUT /api/v1/users/{id}", usersAPI.Update)
+	apiMux.HandleFunc("DELETE /api/v1/users/{id}", usersAPI.Delete)
+
+	rolesAPI := &v1roles.Handler{DB: db}
+	apiMux.HandleFunc("GET /api/v1/roles", rolesAPI.List)
+	apiMux.HandleFunc("GET /api/v1/roles/capabilities", rolesAPI.Capabilities)
+	apiMux.HandleFunc("GET /api/v1/roles/{name}", rolesAPI.Get)
+	apiMux.HandleFunc("POST /api/v1/roles", rolesAPI.Create)
+	apiMux.HandleFunc("PUT /api/v1/roles/{name}", rolesAPI.Update)
+	apiMux.HandleFunc("DELETE /api/v1/roles/{name}", rolesAPI.Delete)
+
+	auditAPI := &v1audit.Handler{DB: db}
+	apiMux.HandleFunc("GET /api/v1/audit", auditAPI.List)
+
+	dashboardAPI := &v1dashboard.Handler{DB: db}
+	apiMux.HandleFunc("GET /api/v1/dashboard", dashboardAPI.Get)
 
 	mux.Handle("/api/v1/", v1.BearerOrCookie(db)(apiMux))
 	mux.Handle("POST /api/v1/auth/login", v1.LoginRateLimiter()(http.HandlerFunc(authAPI.Login)))
