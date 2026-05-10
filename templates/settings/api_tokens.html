@@ -14,14 +14,8 @@
 
     <p class="text-sm opacity-60">Manage your API tokens for bots, scripts, and integrations.</p>
 
-    {{if .Flashes}}
-    {{range .Flashes}}
-    <div class="alert alert-info">{{.}}</div>
-    {{end}}
-    {{end}}
-
-    {{if $data.Error}}
-    <div class="alert alert-error">{{$data.Error}}</div>
+    {{if $data.Errors.general}}
+    <div class="alert alert-error">{{$data.Errors.general}}</div>
     {{end}}
 
     {{$tokens := $data.Tokens}}
