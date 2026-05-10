@@ -6,21 +6,22 @@ import (
 )
 
 type Invoice struct {
-	ID            int
-	InvoiceNumber string
-	ContactID     int
-	InvoiceDate   string
-	DueDate       string
-	Status        string
-	Subtotal      int
-	TaxAmount     int
-	Total         int
-	AmountPaid    int
-	Notes         string
-	JournalID     *int
-	CreatedBy     int
-	CreatedAt     string
-	UpdatedAt     string
+	ID             int
+	InvoiceNumber  string
+	ContactID      int
+	InvoiceDate    string
+	DueDate        string
+	Status         string
+	Subtotal       int
+	TaxAmount      int
+	Total          int
+	AmountPaid     int
+	AmountCredited int
+	Notes          string
+	JournalID      *int
+	CreatedBy      int
+	CreatedAt      string
+	UpdatedAt      string
 	// Joined
 	ContactName string
 	Lines       []InvoiceLine
@@ -102,13 +103,13 @@ func GetInvoice(db *sql.DB, id int) (*Invoice, error) {
 	inv := &Invoice{}
 	err := db.QueryRow(
 		`SELECT i.id, i.invoice_number, i.contact_id, i.invoice_date, i.due_date, i.status,
-			i.subtotal, i.tax_amount, i.total, i.amount_paid, COALESCE(i.notes,''),
+			i.subtotal, i.tax_amount, i.total, i.amount_paid, i.amount_credited, COALESCE(i.notes,''),
 			i.journal_id, i.created_by, i.created_at, i.updated_at, c.name
 		 FROM invoices i
 		 JOIN contacts c ON c.id = i.contact_id
 		 WHERE i.id = ?`, id,
 	).Scan(&inv.ID, &inv.InvoiceNumber, &inv.ContactID, &inv.InvoiceDate, &inv.DueDate, &inv.Status,
-		&inv.Subtotal, &inv.TaxAmount, &inv.Total, &inv.AmountPaid, &inv.Notes,
+		&inv.Subtotal, &inv.TaxAmount, &inv.Total, &inv.AmountPaid, &inv.AmountCredited, &inv.Notes,
 		&inv.JournalID, &inv.CreatedBy, &inv.CreatedAt, &inv.UpdatedAt, &inv.ContactName)
 	if err != nil {
 		return nil, fmt.Errorf("get invoice: %w", err)
@@ -152,7 +153,7 @@ func getInvoiceLines(db *sql.DB, invoiceID int) ([]InvoiceLine, error) {
 
 func ListInvoices(db *sql.DB, f InvoiceFilter) ([]Invoice, error) {
 	query := `SELECT i.id, i.invoice_number, i.contact_id, i.invoice_date, i.due_date, i.status,
-			i.subtotal, i.tax_amount, i.total, i.amount_paid, COALESCE(i.notes,''),
+			i.subtotal, i.tax_amount, i.total, i.amount_paid, i.amount_credited, COALESCE(i.notes,''),
 			i.journal_id, i.created_by, i.created_at, i.updated_at, c.name
 		 FROM invoices i
 		 JOIN contacts c ON c.id = i.contact_id
@@ -180,7 +181,7 @@ func ListInvoices(db *sql.DB, f InvoiceFilter) ([]Invoice, error) {
 	for rows.Next() {
 		var inv Invoice
 		err := rows.Scan(&inv.ID, &inv.InvoiceNumber, &inv.ContactID, &inv.InvoiceDate, &inv.DueDate, &inv.Status,
-			&inv.Subtotal, &inv.TaxAmount, &inv.Total, &inv.AmountPaid, &inv.Notes,
+			&inv.Subtotal, &inv.TaxAmount, &inv.Total, &inv.AmountPaid, &inv.AmountCredited, &inv.Notes,
 			&inv.JournalID, &inv.CreatedBy, &inv.CreatedAt, &inv.UpdatedAt, &inv.ContactName)
 		if err != nil {
 			return nil, fmt.Errorf("scan invoice: %w", err)
@@ -312,7 +313,7 @@ func RecordInvoicePayment(db *sql.DB, invoiceID int, amount int, paymentDate str
 		return fmt.Errorf("cannot record payment for %s invoice", inv.Status)
 	}
 
-	remaining := inv.Total - inv.AmountPaid
+	remaining := inv.Total - inv.AmountPaid - inv.AmountCredited
 	if amount > remaining {
 		return fmt.Errorf("payment amount (%d) exceeds remaining balance (%d)", amount, remaining)
 	}
@@ -351,7 +352,7 @@ func RecordInvoicePayment(db *sql.DB, invoiceID int, amount int, paymentDate str
 	// Update invoice
 	newAmountPaid := inv.AmountPaid + amount
 	newStatus := "partial"
-	if newAmountPaid >= inv.Total {
+	if newAmountPaid+inv.AmountCredited >= inv.Total {
 		newStatus = "paid"
 	}
 
@@ -371,5 +372,5 @@ func DeleteInvoice(db *sql.DB, id int) error {
 }
 
 func (inv *Invoice) AmountDue() int {
-	return inv.Total - inv.AmountPaid
+	return inv.Total - inv.AmountPaid - inv.AmountCredited
 }
