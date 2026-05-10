@@ -48,10 +48,17 @@ func (h *Handler) NewAPIToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.render(w, r, "templates/settings/api_tokens_new.html", "Create API Token", apiTokenFormData{
+	isHTMX := r.Header.Get("HX-Request") == "true"
+	data := apiTokenFormData{
 		AvailableScopes: user.Capabilities,
 		Errors:          make(map[string]string),
-	})
+	}
+
+	if isHTMX {
+		h.render(w, r, "templates/settings/api_tokens_new_partial.html", "Create API Token", data)
+	} else {
+		h.render(w, r, "templates/settings/api_tokens_new.html", "Create API Token", data)
+	}
 }
 
 func (h *Handler) CreateAPIToken(w http.ResponseWriter, r *http.Request) {
@@ -65,13 +72,20 @@ func (h *Handler) CreateAPIToken(w http.ResponseWriter, r *http.Request) {
 	name := r.FormValue("name")
 	Scopes := r.Form["scopes"]
 	var expiresAt *time.Time
+	isHTMX := r.Header.Get("HX-Request") == "true"
+
 	if expStr := r.FormValue("expires_at"); expStr != "" {
 		t, err := time.Parse("2006-01-02", expStr)
 		if err != nil {
-			h.render(w, r, "templates/settings/api_tokens_new.html", "Create API Token", apiTokenFormData{
+			data := apiTokenFormData{
 				AvailableScopes: user.Capabilities,
 				Errors:          map[string]string{"expires_at": "Invalid date format"},
-			})
+			}
+			if isHTMX {
+				h.render(w, r, "templates/settings/api_tokens_new_partial.html", "Create API Token", data)
+			} else {
+				h.render(w, r, "templates/settings/api_tokens_new.html", "Create API Token", data)
+			}
 			return
 		}
 		expiresAt = &t
@@ -84,10 +98,15 @@ func (h *Handler) CreateAPIToken(w http.ResponseWriter, r *http.Request) {
 	scopes := make([]string, 0, len(Scopes))
 	for _, s := range Scopes {
 		if !userCaps[s] {
-			h.render(w, r, "templates/settings/api_tokens_new.html", "Create API Token", apiTokenFormData{
+			data := apiTokenFormData{
 				AvailableScopes: user.Capabilities,
 				Errors:          map[string]string{"scopes": "You don't have permission: " + s},
-			})
+			}
+			if isHTMX {
+				h.render(w, r, "templates/settings/api_tokens_new_partial.html", "Create API Token", data)
+			} else {
+				h.render(w, r, "templates/settings/api_tokens_new.html", "Create API Token", data)
+			}
 			return
 		}
 		scopes = append(scopes, s)
@@ -95,11 +114,15 @@ func (h *Handler) CreateAPIToken(w http.ResponseWriter, r *http.Request) {
 
 	token, plaintext, err := model.CreateAPIToken(h.DB, user.ID, name, scopes, expiresAt)
 	if err != nil {
-		h.setFlash(w, "Failed to create token")
-		h.render(w, r, "templates/settings/api_tokens_new.html", "Create API Token", apiTokenFormData{
+		data := apiTokenFormData{
 			AvailableScopes: user.Capabilities,
 			Errors:          map[string]string{"general": err.Error()},
-		})
+		}
+		if isHTMX {
+			h.render(w, r, "templates/settings/api_tokens_new_partial.html", "Create API Token", data)
+		} else {
+			h.render(w, r, "templates/settings/api_tokens_new.html", "Create API Token", data)
+		}
 		return
 	}
 
@@ -114,9 +137,13 @@ func (h *Handler) CreateAPIToken(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 
-	h.render(w, r, "templates/settings/api_tokens_created.html", "Token Created", apiTokenFormData{
-		Token: plaintext,
-	})
+	data := apiTokenFormData{Token: plaintext}
+
+	if isHTMX {
+		h.render(w, r, "templates/settings/api_tokens_created_partial.html", "Token Created", data)
+	} else {
+		h.render(w, r, "templates/settings/api_tokens_created.html", "Token Created", data)
+	}
 }
 
 func (h *Handler) RevokeAPIToken(w http.ResponseWriter, r *http.Request) {
