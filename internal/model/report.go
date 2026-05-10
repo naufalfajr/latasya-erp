@@ -7,14 +7,14 @@ import (
 
 // TrialBalanceRow represents one account's totals in a trial balance.
 type TrialBalanceRow struct {
-	AccountID     int
-	AccountCode   string
-	AccountName   string
-	AccountType   string
-	NormalBalance string
-	TotalDebit    int
-	TotalCredit   int
-	Balance       int // Positive = debit balance, Negative = credit balance (for display, use absolute value + side)
+	AccountID     int    `json:"account_id"`
+	AccountCode   string `json:"account_code"`
+	AccountName   string `json:"account_name"`
+	AccountType   string `json:"account_type"`
+	NormalBalance string `json:"normal_balance"`
+	TotalDebit    int    `json:"total_debit"`
+	TotalCredit   int    `json:"total_credit"`
+	Balance       int    `json:"balance"` // Positive = debit balance, Negative = credit balance (for display, use absolute value + side)
 }
 
 // TrialBalance returns the trial balance for a date range.
@@ -71,19 +71,19 @@ func TrialBalance(db *sql.DB, dateFrom, dateTo string) ([]TrialBalanceRow, error
 
 // ProfitLossRow represents a revenue or expense account in the P&L.
 type ProfitLossRow struct {
-	AccountCode string
-	AccountName string
-	AccountType string
-	Amount      int // Positive for both revenue and expense
+	AccountCode string `json:"account_code"`
+	AccountName string `json:"account_name"`
+	AccountType string `json:"account_type"`
+	Amount      int    `json:"amount"` // Positive for both revenue and expense
 }
 
 // ProfitLossReport holds the full P&L report.
 type ProfitLossReport struct {
-	Revenue      []ProfitLossRow
-	Expenses     []ProfitLossRow
-	TotalRevenue int
-	TotalExpense int
-	NetIncome    int
+	Revenue      []ProfitLossRow `json:"revenue"`
+	Expenses     []ProfitLossRow `json:"expenses"`
+	TotalRevenue int             `json:"total_revenue"`
+	TotalExpense int             `json:"total_expense"`
+	NetIncome    int             `json:"net_income"`
 }
 
 // ProfitLoss returns the profit & loss report for a date range.
@@ -145,23 +145,23 @@ func ProfitLoss(db *sql.DB, dateFrom, dateTo string) (*ProfitLossReport, error) 
 
 // BalanceSheetSection holds accounts grouped by type.
 type BalanceSheetSection struct {
-	Accounts []BalanceSheetRow
-	Total    int
+	Accounts []BalanceSheetRow `json:"accounts"`
+	Total    int               `json:"total"`
 }
 
 type BalanceSheetRow struct {
-	AccountCode string
-	AccountName string
-	Balance     int
+	AccountCode string `json:"account_code"`
+	AccountName string `json:"account_name"`
+	Balance     int    `json:"balance"`
 }
 
 // BalanceSheetReport holds the full balance sheet.
 type BalanceSheetReport struct {
-	Assets          BalanceSheetSection
-	Liabilities     BalanceSheetSection
-	Equity          BalanceSheetSection
-	RetainedEarnings int
-	TotalLiabEquity int
+	Assets           BalanceSheetSection `json:"assets"`
+	Liabilities      BalanceSheetSection `json:"liabilities"`
+	Equity           BalanceSheetSection `json:"equity"`
+	RetainedEarnings int                 `json:"retained_earnings"`
+	TotalLiabEquity  int                 `json:"total_liab_equity"`
 }
 
 // BalanceSheet returns the balance sheet as of a specific date.
@@ -231,12 +231,12 @@ func BalanceSheet(db *sql.DB, asOfDate string) (*BalanceSheetReport, error) {
 
 // GeneralLedgerEntry represents a single transaction in the general ledger.
 type GeneralLedgerEntry struct {
-	EntryDate   string
-	Reference   string
-	Description string
-	Debit       int
-	Credit      int
-	Balance     int
+	EntryDate   string `json:"entry_date"`
+	Reference   string `json:"reference"`
+	Description string `json:"description"`
+	Debit       int    `json:"debit"`
+	Credit      int    `json:"credit"`
+	Balance     int    `json:"balance"`
 }
 
 // GeneralLedger returns all transactions for a specific account within a date range.
@@ -283,18 +283,18 @@ func GeneralLedger(db *sql.DB, accountID int, dateFrom, dateTo string) ([]Genera
 
 // CashFlowRow represents one line in the cash flow report.
 type CashFlowRow struct {
-	AccountCode string
-	AccountName string
-	Amount      int
+	AccountCode string `json:"account_code"`
+	AccountName string `json:"account_name"`
+	Amount      int    `json:"amount"`
 }
 
 // CashFlowReport holds the cash flow statement.
 type CashFlowReport struct {
-	Operating      []CashFlowRow
-	TotalOperating int
-	NetCashChange  int
-	OpeningCash    int
-	ClosingCash    int
+	Operating      []CashFlowRow `json:"operating"`
+	TotalOperating int           `json:"total_operating"`
+	NetCashChange  int           `json:"net_cash_change"`
+	OpeningCash    int           `json:"opening_cash"`
+	ClosingCash    int           `json:"closing_cash"`
 }
 
 // CashFlow returns a simplified cash flow report for a date range.

@@ -798,6 +798,332 @@ components:
           type: integer
           description: Account ID of the payment account (type=asset).
 
+    TrialBalanceRow:
+      type: object
+      properties:
+        account_id:
+          type: integer
+        account_code:
+          type: string
+        account_name:
+          type: string
+        account_type:
+          type: string
+        normal_balance:
+          type: string
+        total_debit:
+          $ref: '#/components/schemas/IDR'
+        total_credit:
+          $ref: '#/components/schemas/IDR'
+        balance:
+          $ref: '#/components/schemas/IDR'
+
+    TrialBalanceReport:
+      type: object
+      properties:
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/TrialBalanceRow'
+        total_debit:
+          $ref: '#/components/schemas/IDR'
+        total_credit:
+          $ref: '#/components/schemas/IDR'
+        from:
+          $ref: '#/components/schemas/BusinessDate'
+        to:
+          $ref: '#/components/schemas/BusinessDate'
+
+    ProfitLossRow:
+      type: object
+      properties:
+        account_code:
+          type: string
+        account_name:
+          type: string
+        account_type:
+          type: string
+        amount:
+          $ref: '#/components/schemas/IDR'
+
+    ProfitLossReport:
+      type: object
+      properties:
+        revenue:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProfitLossRow'
+        expenses:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProfitLossRow'
+        total_revenue:
+          $ref: '#/components/schemas/IDR'
+        total_expense:
+          $ref: '#/components/schemas/IDR'
+        net_income:
+          $ref: '#/components/schemas/IDR'
+        from:
+          $ref: '#/components/schemas/BusinessDate'
+        to:
+          $ref: '#/components/schemas/BusinessDate'
+
+    BalanceSheetRow:
+      type: object
+      properties:
+        account_code:
+          type: string
+        account_name:
+          type: string
+        balance:
+          $ref: '#/components/schemas/IDR'
+
+    BalanceSheetSection:
+      type: object
+      properties:
+        accounts:
+          type: array
+          items:
+            $ref: '#/components/schemas/BalanceSheetRow'
+        total:
+          $ref: '#/components/schemas/IDR'
+
+    BalanceSheetReport:
+      type: object
+      properties:
+        assets:
+          $ref: '#/components/schemas/BalanceSheetSection'
+        liabilities:
+          $ref: '#/components/schemas/BalanceSheetSection'
+        equity:
+          $ref: '#/components/schemas/BalanceSheetSection'
+        retained_earnings:
+          $ref: '#/components/schemas/IDR'
+        total_liab_equity:
+          $ref: '#/components/schemas/IDR'
+        as_of:
+          $ref: '#/components/schemas/BusinessDate'
+
+    CashFlowRow:
+      type: object
+      properties:
+        account_code:
+          type: string
+        account_name:
+          type: string
+        amount:
+          $ref: '#/components/schemas/IDR'
+
+    CashFlowReport:
+      type: object
+      properties:
+        operating:
+          type: array
+          items:
+            $ref: '#/components/schemas/CashFlowRow'
+        total_operating:
+          $ref: '#/components/schemas/IDR'
+        net_cash_change:
+          $ref: '#/components/schemas/IDR'
+        opening_cash:
+          $ref: '#/components/schemas/IDR'
+        closing_cash:
+          $ref: '#/components/schemas/IDR'
+        from:
+          $ref: '#/components/schemas/BusinessDate'
+        to:
+          $ref: '#/components/schemas/BusinessDate'
+
+    GeneralLedgerEntry:
+      type: object
+      properties:
+        entry_date:
+          $ref: '#/components/schemas/BusinessDate'
+        reference:
+          type: string
+        description:
+          type: string
+        debit:
+          $ref: '#/components/schemas/IDR'
+        credit:
+          $ref: '#/components/schemas/IDR'
+        balance:
+          $ref: '#/components/schemas/IDR'
+
+    GeneralLedgerReport:
+      type: object
+      properties:
+        account_id:
+          type: integer
+        account_code:
+          type: string
+        account_name:
+          type: string
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/GeneralLedgerEntry'
+        from:
+          $ref: '#/components/schemas/BusinessDate'
+        to:
+          $ref: '#/components/schemas/BusinessDate'
+
+    AdminUser:
+      type: object
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        full_name:
+          type: string
+        role:
+          type: string
+        is_active:
+          type: boolean
+        must_change_password:
+          type: boolean
+        created_at:
+          $ref: '#/components/schemas/Instant'
+        updated_at:
+          $ref: '#/components/schemas/Instant'
+
+    UserInput:
+      type: object
+      required: [username, full_name, role, password]
+      properties:
+        username:
+          type: string
+        full_name:
+          type: string
+        role:
+          type: string
+        is_active:
+          type: boolean
+          default: true
+        password:
+          type: string
+          minLength: 4
+
+    UserUpdateInput:
+      type: object
+      required: [full_name, role]
+      properties:
+        full_name:
+          type: string
+        role:
+          type: string
+        is_active:
+          type: boolean
+        password:
+          type: string
+          minLength: 4
+
+    RoleSchema:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        is_system:
+          type: boolean
+        capabilities:
+          type: array
+          items:
+            type: string
+        created_at:
+          $ref: '#/components/schemas/Instant'
+        updated_at:
+          $ref: '#/components/schemas/Instant'
+
+    RoleInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          pattern: '^[a-z][a-z0-9_-]*$'
+        description:
+          type: string
+        capabilities:
+          type: array
+          items:
+            type: string
+          default: []
+
+    RoleUpdateInput:
+      type: object
+      properties:
+        description:
+          type: string
+        capabilities:
+          type: array
+          items:
+            type: string
+          default: []
+
+    AuditEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+        occurred_at:
+          $ref: '#/components/schemas/Instant'
+        request_id:
+          type: string
+        actor_username:
+          type: string
+        action:
+          type: string
+        target_type:
+          type: string
+        target_label:
+          type: string
+        result:
+          type: string
+          enum: [ok, fail]
+        error_message:
+          type: string
+        ip:
+          type: string
+        metadata:
+          type: string
+
+    RecentTransaction:
+      type: object
+      properties:
+        id:
+          type: integer
+        entry_date:
+          $ref: '#/components/schemas/BusinessDate'
+        reference:
+          type: string
+        description:
+          type: string
+        amount:
+          $ref: '#/components/schemas/IDR'
+        source_type:
+          type: string
+
+    DashboardData:
+      type: object
+      properties:
+        cash_balance:
+          $ref: '#/components/schemas/IDR'
+        monthly_revenue:
+          $ref: '#/components/schemas/IDR'
+        monthly_expenses:
+          $ref: '#/components/schemas/IDR'
+        outstanding_invoices:
+          $ref: '#/components/schemas/IDR'
+        outstanding_bills:
+          $ref: '#/components/schemas/IDR'
+        recent_transactions:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecentTransaction'
+
   responses:
     Unauthorized:
       description: Authentication required.
@@ -2220,3 +2546,482 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+  /reports/trial-balance:
+    get:
+      operationId: getTrialBalance
+      summary: Trial balance for a date range
+      parameters:
+        - name: from
+          in: query
+          schema:
+            $ref: '#/components/schemas/BusinessDate'
+        - name: to
+          in: query
+          schema:
+            $ref: '#/components/schemas/BusinessDate'
+      responses:
+        '200':
+          description: Trial balance report
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/TrialBalanceReport'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /reports/profit-loss:
+    get:
+      operationId: getProfitLoss
+      summary: Profit and loss report for a date range
+      parameters:
+        - name: from
+          in: query
+          schema:
+            $ref: '#/components/schemas/BusinessDate'
+        - name: to
+          in: query
+          schema:
+            $ref: '#/components/schemas/BusinessDate'
+      responses:
+        '200':
+          description: Profit and loss report
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ProfitLossReport'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /reports/balance-sheet:
+    get:
+      operationId: getBalanceSheet
+      summary: Balance sheet as of a date
+      parameters:
+        - name: date
+          in: query
+          schema:
+            $ref: '#/components/schemas/BusinessDate'
+      responses:
+        '200':
+          description: Balance sheet report
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/BalanceSheetReport'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /reports/cash-flow:
+    get:
+      operationId: getCashFlow
+      summary: Cash flow statement for a date range
+      parameters:
+        - name: from
+          in: query
+          schema:
+            $ref: '#/components/schemas/BusinessDate'
+        - name: to
+          in: query
+          schema:
+            $ref: '#/components/schemas/BusinessDate'
+      responses:
+        '200':
+          description: Cash flow report
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/CashFlowReport'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /reports/general-ledger:
+    get:
+      operationId: getGeneralLedger
+      summary: General ledger for a specific account
+      parameters:
+        - name: account
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: from
+          in: query
+          schema:
+            $ref: '#/components/schemas/BusinessDate'
+        - name: to
+          in: query
+          schema:
+            $ref: '#/components/schemas/BusinessDate'
+      responses:
+        '200':
+          description: General ledger report
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/GeneralLedgerReport'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /users:
+    get:
+      operationId: listUsers
+      summary: List all users (admin-only)
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PerPageParam'
+      responses:
+        '200':
+          description: Paginated list of users
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AdminUser'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      operationId: createUser
+      summary: Create a user (admin-only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserInput'
+      responses:
+        '201':
+          description: User created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/AdminUser'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /users/{id}:
+    get:
+      operationId: getUser
+      summary: Get a single user (admin-only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: User
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/AdminUser'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      operationId: updateUser
+      summary: Update a user (admin-only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserUpdateInput'
+      responses:
+        '200':
+          description: User updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/AdminUser'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+    delete:
+      operationId: deleteUser
+      summary: Deactivate a user (admin-only; cannot deactivate self)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: User deactivated
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /roles:
+    get:
+      operationId: listRoles
+      summary: List all roles (admin-only)
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PerPageParam'
+      responses:
+        '200':
+          description: Paginated list of roles
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RoleSchema'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      operationId: createRole
+      summary: Create a role (admin-only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleInput'
+      responses:
+        '201':
+          description: Role created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/RoleSchema'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /roles/capabilities:
+    get:
+      operationId: listCapabilities
+      summary: List all available capability strings
+      security: []
+      responses:
+        '200':
+          description: List of capability strings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: string
+
+  /roles/{name}:
+    get:
+      operationId: getRole
+      summary: Get a single role (admin-only)
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Role
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/RoleSchema'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      operationId: updateRole
+      summary: Update a role (admin-only; cannot edit admin role)
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleUpdateInput'
+      responses:
+        '200':
+          description: Role updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/RoleSchema'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+    delete:
+      operationId: deleteRole
+      summary: Delete a role (admin-only; cannot delete admin role or roles with assigned users)
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Role deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /audit:
+    get:
+      operationId: listAuditLog
+      summary: Paginated audit log (admin-only)
+      parameters:
+        - name: actor
+          in: query
+          schema:
+            type: string
+        - name: action
+          in: query
+          schema:
+            type: string
+        - name: from
+          in: query
+          schema:
+            $ref: '#/components/schemas/BusinessDate'
+        - name: to
+          in: query
+          schema:
+            $ref: '#/components/schemas/BusinessDate'
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PerPageParam'
+      responses:
+        '200':
+          description: Paginated audit log entries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AuditEntry'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /dashboard:
+    get:
+      operationId: getDashboard
+      summary: Dashboard summary (any authenticated user)
+      responses:
+        '200':
+          description: Dashboard data with IDR currency strings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/DashboardData'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
