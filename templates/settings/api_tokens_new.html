@@ -6,8 +6,8 @@
         <h2 class="card-title text-2xl font-bold justify-center mb-2">Create API Token</h2>
         <p class="text-center text-sm opacity-60 mb-4">Create a new API token for bots or integrations.</p>
 
-        {{if $data.Error}}
-        <div class="alert alert-error mb-4"><span>{{$data.Error}}</span></div>
+        {{if $data.Errors.general}}
+        <div class="alert alert-error mb-4"><span>{{$data.Errors.general}}</span></div>
         {{end}}
 
         <form method="POST" action="/settings/api-tokens">
@@ -45,6 +45,12 @@
                 </label>
                 {{end}}
             </div>
+
+            {{if $data.Errors.expires_at}}
+            <label class="label">
+                <span class="label-text-alt text-error">{{$data.Errors.expires_at}}</span>
+            </label>
+            {{end}}
 
             <div class="form-control mb-6">
                 <label class="label" for="expires_at">
