@@ -49,11 +49,12 @@ const (
 
 // Journal entry source types
 const (
-	SourceManual  = "manual"
-	SourceIncome  = "income"
-	SourceExpense = "expense"
-	SourceInvoice = "invoice"
-	SourceBill    = "bill"
+	SourceManual     = "manual"
+	SourceIncome     = "income"
+	SourceExpense    = "expense"
+	SourceInvoice    = "invoice"
+	SourceBill       = "bill"
+	SourceCreditNote = "credit_note"
 )
 
 // Document statuses
@@ -65,6 +66,16 @@ const (
 	StatusPartial   = "partial"
 	StatusOverdue   = "overdue"
 	StatusCancelled = "cancelled"
+	StatusIssued    = "issued"
+	StatusVoid      = "void"
+)
+
+// Credit note reasons
+const (
+	CreditNoteReasonCancellation = "cancellation"
+	CreditNoteReasonReturn       = "return"
+	CreditNoteReasonDiscount     = "discount"
+	CreditNoteReasonOther        = "other"
 )
 
 // Well-known account codes

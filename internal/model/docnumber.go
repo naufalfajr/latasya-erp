@@ -11,6 +11,7 @@ var validDocNumberTargets = map[string]string{
 	"journal_entries": "reference",
 	"invoices":        "invoice_number",
 	"bills":           "bill_number",
+	"credit_notes":    "cn_number",
 }
 
 // GenerateDocNumber generates a sequential document number like PREFIX-YYYYMM-0001.
