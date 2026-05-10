@@ -19,6 +19,9 @@ import (
 	"github.com/naufal/latasya-erp/internal/model"
 	"github.com/naufal/latasya-erp/internal/tmpl"
 	v1 "github.com/naufal/latasya-erp/internal/api/v1"
+	v1accounts "github.com/naufal/latasya-erp/internal/api/v1/accounts"
+	v1auth "github.com/naufal/latasya-erp/internal/api/v1/auth"
+	v1contacts "github.com/naufal/latasya-erp/internal/api/v1/contacts"
 )
 
 // version identifies the build. Overridden at link time via
@@ -45,6 +48,13 @@ func main() {
 	}
 
 	go auth.CleanExpiredSessions(db)
+	go func() {
+		ticker := time.NewTicker(time.Hour)
+		defer ticker.Stop()
+		for range ticker.C {
+			model.CleanExpiredIdempotencyKeys(db)
+		}
+	}()
 
 	h := &handler.Handler{
 		DB:         db,
@@ -76,7 +86,36 @@ func main() {
 		fmt.Fprintf(w, "ok version=%s migrations=%d\n", version, migrations)
 	})
 
-	mux.HandleFunc("GET /api/v1/openapi.yaml", v1.ServeOpenAPI)
+	// API v1 mux: BearerOrCookie auth, no CSRF on Bearer path.
+	// Wave 2 tasks register domain endpoints on apiMux.
+	apiMux := http.NewServeMux()
+	apiMux.HandleFunc("GET /api/v1/openapi.yaml", v1.ServeOpenAPI)
+
+	// Auth API (T11). Login is unauthenticated and lives on the outer mux so
+	// it bypasses BearerOrCookie; the rest are wired through apiMux so they
+	// inherit the standard auth + audit pipeline.
+	authAPI := v1auth.New(db, devMode)
+	apiMux.HandleFunc("POST /api/v1/auth/logout", authAPI.Logout)
+	apiMux.HandleFunc("GET /api/v1/auth/me", authAPI.Me)
+	apiMux.HandleFunc("GET /api/v1/auth/csrf", authAPI.CSRF)
+	apiMux.HandleFunc("POST /api/v1/auth/password/change", authAPI.PasswordChange)
+
+	accts := &v1accounts.Handler{DB: db}
+	apiMux.HandleFunc("GET /api/v1/accounts", accts.List)
+	apiMux.HandleFunc("GET /api/v1/accounts/{id}", accts.Get)
+	apiMux.HandleFunc("POST /api/v1/accounts", accts.Create)
+	apiMux.HandleFunc("PUT /api/v1/accounts/{id}", accts.Update)
+	apiMux.HandleFunc("DELETE /api/v1/accounts/{id}", accts.Delete)
+
+	contacts := &v1contacts.Handler{DB: db}
+	apiMux.HandleFunc("GET /api/v1/contacts", contacts.List)
+	apiMux.HandleFunc("GET /api/v1/contacts/{id}", contacts.Get)
+	apiMux.HandleFunc("POST /api/v1/contacts", contacts.Create)
+	apiMux.HandleFunc("PUT /api/v1/contacts/{id}", contacts.Update)
+	apiMux.HandleFunc("DELETE /api/v1/contacts/{id}", contacts.Delete)
+
+	mux.Handle("/api/v1/", v1.BearerOrCookie(db)(apiMux))
+	mux.Handle("POST /api/v1/auth/login", v1.LoginRateLimiter()(http.HandlerFunc(authAPI.Login)))
 
 	// Auth routes (no auth required)
 	mux.HandleFunc("GET /login", h.LoginPage)

@@ -6,16 +6,16 @@ import (
 )
 
 type Contact struct {
-	ID          int
-	Name        string
-	ContactType string
-	Phone       string
-	Email       string
-	Address     string
-	Notes       string
-	IsActive    bool
-	CreatedAt   string
-	UpdatedAt   string
+	ID          int    `json:"id"`
+	Name        string `json:"name"`
+	ContactType string `json:"contact_type"`
+	Phone       string `json:"phone"`
+	Email       string `json:"email"`
+	Address     string `json:"address"`
+	Notes       string `json:"notes"`
+	IsActive    bool   `json:"is_active"`
+	CreatedAt   string `json:"created_at"`
+	UpdatedAt   string `json:"updated_at"`
 }
 
 type ContactFilter struct {

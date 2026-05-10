@@ -6,17 +6,17 @@ import (
 )
 
 type Account struct {
-	ID            int
-	Code          string
-	Name          string
-	AccountType   string
-	NormalBalance string
-	ParentID      *int
-	IsSystem      bool
-	IsActive      bool
-	Description   string
-	CreatedAt     string
-	UpdatedAt     string
+	ID            int    `json:"id"`
+	Code          string `json:"code"`
+	Name          string `json:"name"`
+	AccountType   string `json:"account_type"`
+	NormalBalance string `json:"normal_balance"`
+	ParentID      *int   `json:"parent_id,omitempty"`
+	IsSystem      bool   `json:"is_system"`
+	IsActive      bool   `json:"is_active"`
+	Description   string `json:"description"`
+	CreatedAt     string `json:"created_at"`
+	UpdatedAt     string `json:"updated_at"`
 }
 
 type AccountFilter struct {
