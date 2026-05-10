@@ -338,6 +338,7 @@ func main() {
 	// API Tokens management UI
 	protected.HandleFunc("GET /settings/api-tokens", h.ListAPITokens)
 	protected.HandleFunc("GET /settings/api-tokens/new", h.NewAPIToken)
+	protected.HandleFunc("GET /settings/api-tokens/created", h.CreatedAPIToken)
 	protected.HandleFunc("POST /settings/api-tokens", h.CreateAPIToken)
 	protected.HandleFunc("POST /settings/api-tokens/{id}/revoke", h.RevokeAPIToken)
 

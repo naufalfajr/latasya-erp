@@ -1,0 +1,60 @@
+{{template "base" .}}
+{{define "content"}}
+{{$data := .Data}}
+
+<div class="max-w-lg">
+    <h1 class="text-2xl font-bold mb-6">Create API Token</h1>
+    <form method="POST" action="/settings/api-tokens" class="card bg-base-100 shadow">
+        {{template "csrf" $}}
+        <div class="card-body">
+
+            {{if $data.Errors.general}}
+            <div class="alert alert-error mb-4"><span>{{$data.Errors.general}}</span></div>
+            {{end}}
+
+            <div class="flex flex-col gap-1">
+                <label class="label" for="name">Name *</label>
+                <input type="text" id="name" name="name" placeholder="e.g., Telegram Bot"
+                       class="input {{if index $data.Errors "name"}}input-error{{end}}"
+                       value="{{$data.Name}}" required autofocus>
+                {{if index $data.Errors "name"}}
+                <span class="text-xs text-error">{{index $data.Errors "name"}}</span>
+                {{end}}
+            </div>
+
+            <div class="flex flex-col gap-1 mt-4">
+                <label class="label">Scopes *</label>
+                <p class="text-xs opacity-60 mb-2">Select at least one capability this token will grant.</p>
+                <div class="grid grid-cols-2 gap-2">
+                    {{range $data.AvailableScopes}}
+                    <label class="label cursor-pointer justify-start gap-2">
+                        <input type="checkbox" name="scopes" value="{{.}}" class="checkbox checkbox-sm"
+                               {{if $data.IsScopeChecked .}}checked{{end}}>
+                        <span class="label-text text-xs">{{.}}</span>
+                    </label>
+                    {{end}}
+                </div>
+                {{if index $data.Errors "scopes"}}
+                <span class="text-xs text-error">{{index $data.Errors "scopes"}}</span>
+                {{end}}
+            </div>
+
+            <div class="flex flex-col gap-1 mt-4">
+                <label class="label" for="expires_at">Expires (optional)</label>
+                <input type="date" id="expires_at" name="expires_at"
+                       class="input {{if index $data.Errors "expires_at"}}input-error{{end}}"
+                       value="{{$data.ExpiresAt}}">
+                {{if index $data.Errors "expires_at"}}
+                <span class="text-xs text-error">{{index $data.Errors "expires_at"}}</span>
+                {{end}}
+                <span class="text-xs opacity-60">Leave empty for no expiration.</span>
+            </div>
+
+            <div class="card-actions justify-end mt-6">
+                <a href="/settings/api-tokens" class="btn btn-ghost">Cancel</a>
+                <button type="submit" class="btn btn-primary">Create Token</button>
+            </div>
+        </div>
+    </form>
+</div>
+{{end}}
