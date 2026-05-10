@@ -1,0 +1,119 @@
+{{template "base" .}}
+{{define "content"}}
+{{$cn := (index .Data "CreditNote")}}
+
+<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+    <div>
+        <h1 class="text-2xl font-bold">{{$cn.CNNumber}}</h1>
+        <p class="text-sm opacity-60">
+            {{$cn.ContactName}} &middot; {{formatDate $cn.CNDate}}
+            {{if $cn.InvoiceID}}&middot; for invoice
+                <a href="/invoices/{{$cn.InvoiceID}}" class="link font-mono">{{$cn.InvoiceNumber}}</a>
+            {{end}}
+        </p>
+    </div>
+    <div class="flex gap-2 flex-wrap">
+        <a href="/credit-notes" class="btn btn-ghost btn-sm">Back</a>
+        {{if .User.HasCapability "invoices.manage"}}
+            {{if eq $cn.Status "draft"}}
+            <a href="/credit-notes/{{$cn.ID}}/edit" class="btn btn-sm">Edit</a>
+            <form method="POST" action="/credit-notes/{{$cn.ID}}/issue" class="inline">
+                {{template "csrf" $}}
+                <button type="submit" class="btn btn-info btn-sm"
+                    onclick="return confirm('Issue this credit note? This posts a journal entry and reduces the customer balance.')">Issue Credit Note</button>
+            </form>
+            <button class="btn btn-error btn-sm"
+                hx-delete="/credit-notes/{{$cn.ID}}"
+                hx-confirm="Delete this draft credit note?"
+                hx-target="body">Delete</button>
+            {{else if eq $cn.Status "issued"}}
+            <form method="POST" action="/credit-notes/{{$cn.ID}}/void" class="inline">
+                {{template "csrf" $}}
+                <button type="submit" class="btn btn-warning btn-sm"
+                    onclick="return confirm('Void this credit note? This reverses its effect on the customer balance.')">Void</button>
+            </form>
+            {{end}}
+        {{end}}
+    </div>
+</div>
+
+<div class="mb-4">
+    <span class="badge badge-lg
+        {{if eq $cn.Status "draft"}}badge-ghost
+        {{else if eq $cn.Status "issued"}}badge-info
+        {{else if eq $cn.Status "void"}}badge-error
+        {{end}}">{{$cn.Status}}</span>
+    <span class="badge badge-lg badge-outline ml-1 capitalize">{{$cn.Reason}}</span>
+    {{if $cn.JournalID}}
+    <a href="/journals/{{$cn.JournalID}}" class="link link-primary text-sm ml-2">View Journal Entry</a>
+    {{end}}
+</div>
+
+<div class="card bg-base-100 shadow mb-4">
+    <div class="card-body">
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+            <div>
+                <p class="text-sm opacity-60">Date</p>
+                <p class="font-semibold">{{formatDate $cn.CNDate}}</p>
+            </div>
+            <div>
+                <p class="text-sm opacity-60">Customer</p>
+                <p class="font-semibold">{{$cn.ContactName}}</p>
+            </div>
+            <div>
+                <p class="text-sm opacity-60">Reason</p>
+                <p class="font-semibold capitalize">{{$cn.Reason}}</p>
+            </div>
+            <div>
+                <p class="text-sm opacity-60">Total Credited</p>
+                <p class="font-semibold font-mono text-warning">{{formatIDR $cn.Total}}</p>
+            </div>
+        </div>
+
+        {{if $cn.Notes}}
+        <p class="text-sm opacity-60 mb-4">{{$cn.Notes}}</p>
+        {{end}}
+
+        <div class="overflow-x-auto">
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Description</th>
+                        <th>Account Reversed</th>
+                        <th class="text-right">Qty</th>
+                        <th class="text-right">Unit Price</th>
+                        <th class="text-right">Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range $cn.Lines}}
+                    <tr>
+                        <td>{{.Description}}</td>
+                        <td class="text-sm">{{.AccountCode}} - {{.AccountName}}</td>
+                        <td class="text-right">{{formatQty .Quantity}}</td>
+                        <td class="text-right font-mono">{{formatIDR .UnitPrice}}</td>
+                        <td class="text-right font-mono">{{formatIDR .Amount}}</td>
+                    </tr>
+                    {{end}}
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="4" class="text-right">Subtotal</td>
+                        <td class="text-right font-mono">{{formatIDR $cn.Subtotal}}</td>
+                    </tr>
+                    {{if gt $cn.TaxAmount 0}}
+                    <tr>
+                        <td colspan="4" class="text-right">Tax</td>
+                        <td class="text-right font-mono">{{formatIDR $cn.TaxAmount}}</td>
+                    </tr>
+                    {{end}}
+                    <tr class="font-bold">
+                        <td colspan="4" class="text-right">Total</td>
+                        <td class="text-right font-mono">{{formatIDR $cn.Total}}</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+{{end}}

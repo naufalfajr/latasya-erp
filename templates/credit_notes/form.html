@@ -1,0 +1,188 @@
+{{template "base" .}}
+{{define "content"}}
+{{$data := .Data}}
+{{$cn := $data.CreditNote}}
+
+<div class="max-w-4xl">
+    <h1 class="text-2xl font-bold mb-2">
+        {{if $data.IsEdit}}Edit Credit Note{{else}}New Credit Note{{end}}
+    </h1>
+    <p class="text-sm opacity-60 mb-6">
+        A credit note records a reduction of an amount a customer owes. Once issued it posts a
+        journal entry that reverses the corresponding portion of revenue and accounts receivable.
+    </p>
+
+    {{if $data.SourceInvoice}}
+    <div class="alert alert-info mb-4">
+        <span>Pre-filled from invoice
+            <a href="/invoices/{{$data.SourceInvoice.ID}}" class="link font-mono">{{$data.SourceInvoice.InvoiceNumber}}</a>.
+            Adjust the lines to credit only what's needed.</span>
+    </div>
+    {{end}}
+
+    {{if index $data.Errors "general"}}
+    <div class="alert alert-error mb-4"><span>{{index $data.Errors "general"}}</span></div>
+    {{end}}
+
+    <form method="POST" action="{{if $data.IsEdit}}/credit-notes/{{$cn.ID}}{{else}}/credit-notes{{end}}"
+        class="card bg-base-100 shadow">
+        {{template "csrf" $}}
+        {{if $cn.InvoiceID}}<input type="hidden" name="invoice_id" value="{{$cn.InvoiceID}}">{{end}}
+
+        <div class="card-body">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                <!-- Customer -->
+                <div class="flex flex-col gap-1">
+                    <label class="label">Customer *</label>
+                    <select name="contact_id" class="select {{if index $data.Errors "contact_id"}}select-error{{end}}" required>
+                        <option value="">Select customer</option>
+                        {{$selContact := $cn.ContactID}}
+                        {{range $data.Contacts}}
+                        <option value="{{.ID}}" {{if eq .ID $selContact}}selected{{end}}>{{.Name}}</option>
+                        {{end}}
+                    </select>
+                    {{if index $data.Errors "contact_id"}}
+                    <span class="text-xs text-error">{{index $data.Errors "contact_id"}}</span>
+                    {{end}}
+                </div>
+
+                <!-- Date -->
+                <div class="flex flex-col gap-1">
+                    <label class="label">Date *</label>
+                    <input type="date" name="cn_date"
+                        class="input {{if index $data.Errors "cn_date"}}input-error{{end}}"
+                        value="{{$cn.CNDate}}" required>
+                </div>
+
+                <!-- Reason -->
+                <div class="flex flex-col gap-1">
+                    <label class="label">Reason *</label>
+                    <select name="reason" class="select {{if index $data.Errors "reason"}}select-error{{end}}" required>
+                        {{$selReason := $cn.Reason}}
+                        {{range $data.Reasons}}
+                        <option value="{{.Value}}" {{if eq .Value $selReason}}selected{{end}}>{{.Label}}</option>
+                        {{end}}
+                    </select>
+                </div>
+
+                <!-- Invoice (read-only when prefilled) -->
+                <div class="flex flex-col gap-1">
+                    <label class="label">Linked Invoice</label>
+                    {{if $cn.InvoiceID}}
+                    <p class="text-sm font-mono pt-2">
+                        <a href="/invoices/{{$cn.InvoiceID}}" class="link">
+                            {{if $data.SourceInvoice}}{{$data.SourceInvoice.InvoiceNumber}}{{else}}#{{$cn.InvoiceID}}{{end}}
+                        </a>
+                    </p>
+                    {{else}}
+                    <p class="text-sm opacity-60 pt-2">— (standalone)</p>
+                    {{end}}
+                </div>
+            </div>
+
+            <!-- Line items -->
+            <div class="mb-4">
+                <div class="flex justify-between items-center mb-2">
+                    <label class="font-semibold">Line Items *</label>
+                    {{if index $data.Errors "lines"}}
+                    <span class="text-error text-sm">{{index $data.Errors "lines"}}</span>
+                    {{end}}
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="table table-sm" id="cn-lines-table">
+                        <thead>
+                            <tr>
+                                <th class="w-1/3">Description</th>
+                                <th>Revenue Account (to reverse)</th>
+                                <th class="w-20">Qty</th>
+                                <th class="w-32">Unit Price</th>
+                                <th class="w-32">Amount</th>
+                                <th class="w-10"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="cn-lines-body">
+                            {{range $i, $line := $data.Lines}}
+                            {{template "credit-note-line-row" (dict "Index" $i "Line" $line "Accounts" $data.RevenueAccounts)}}
+                            {{end}}
+                        </tbody>
+                    </table>
+                </div>
+
+                <button type="button" class="btn btn-ghost btn-sm mt-2"
+                    hx-get="/htmx/credit-note-line"
+                    hx-target="#cn-lines-body"
+                    hx-swap="beforeend">
+                    + Add Line
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                <div class="flex flex-col gap-1">
+                    <label class="label">Tax Amount (Rp)</label>
+                    <input type="number" name="tax_amount" class="input font-mono"
+                        value="{{if gt $cn.TaxAmount 0}}{{$cn.TaxAmount}}{{end}}" min="0">
+                </div>
+                <div class="flex flex-col gap-1">
+                    <label class="label">Notes</label>
+                    <input type="text" name="notes" class="input"
+                        value="{{$cn.Notes}}" placeholder="Optional notes">
+                </div>
+            </div>
+
+            <div class="card-actions justify-end mt-4">
+                <a href="/credit-notes" class="btn btn-ghost">Cancel</a>
+                <button type="submit" class="btn btn-primary">
+                    {{if $data.IsEdit}}Update{{else}}Create Draft{{end}}
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<script>
+function calcCnLineAmount(row) {
+    var qty = parseFloat(row.querySelector('[name="line_quantity"]').value || '1');
+    var price = parseInt(row.querySelector('[name="line_unit_price"]').value || '0');
+    if (isNaN(qty)) qty = 0;
+    row.querySelector('.line-amount').textContent = Math.round(qty * price).toLocaleString('id-ID');
+}
+document.addEventListener('input', function(e) {
+    if (e.target.closest('#cn-lines-table') && (e.target.name === 'line_quantity' || e.target.name === 'line_unit_price')) {
+        calcCnLineAmount(e.target.closest('tr'));
+    }
+});
+function removeCnLine(btn) { btn.closest('tr').remove(); }
+</script>
+{{end}}
+
+{{define "credit-note-line-row"}}
+<tr>
+    <td>
+        <input type="text" name="line_description" placeholder="Description"
+            class="input input-sm w-full" value="{{.Line.Description}}">
+    </td>
+    <td>
+        <select name="line_account_id" class="select select-sm w-full">
+            <option value="">Account</option>
+            {{$selAcct := .Line.AccountID}}
+            {{range .Accounts}}
+            <option value="{{.ID}}" {{if eq .ID $selAcct}}selected{{end}}>{{.Code}} - {{.Name}}</option>
+            {{end}}
+        </select>
+    </td>
+    <td>
+        <input type="number" name="line_quantity" class="input input-sm w-full"
+            value="{{if gt .Line.Quantity 0}}{{formatQty .Line.Quantity}}{{else}}1{{end}}"
+            step="0.01" min="0">
+    </td>
+    <td>
+        <input type="number" name="line_unit_price" placeholder="0" class="input input-sm w-full font-mono"
+            value="{{if gt .Line.UnitPrice 0}}{{.Line.UnitPrice}}{{end}}" min="0">
+    </td>
+    <td class="font-mono text-sm line-amount">{{if gt .Line.Amount 0}}{{.Line.Amount}}{{else}}0{{end}}</td>
+    <td>
+        <button type="button" class="btn btn-ghost btn-xs text-error" onclick="removeCnLine(this)">X</button>
+    </td>
+</tr>
+{{end}}

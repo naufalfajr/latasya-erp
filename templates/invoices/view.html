@@ -2,6 +2,7 @@
 {{define "content"}}
 {{$inv := (index .Data "Invoice")}}
 {{$assetAccounts := (index .Data "AssetAccounts")}}
+{{$creditNotes := (index .Data "CreditNotes")}}
 
 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
     <div>
@@ -24,6 +25,9 @@
                 hx-confirm="Delete this draft invoice?"
                 hx-target="body">Delete</button>
             {{end}}
+            {{if and (gt $inv.AmountDue 0) (or (eq $inv.Status "sent") (eq $inv.Status "partial") (eq $inv.Status "overdue"))}}
+            <a href="/credit-notes/new?invoice_id={{$inv.ID}}" class="btn btn-warning btn-sm">Create Credit Note</a>
+            {{end}}
         {{end}}
     </div>
 </div>
@@ -36,6 +40,7 @@
         {{else if eq $inv.Status "partial"}}badge-warning
         {{else if eq $inv.Status "paid"}}badge-success
         {{else if eq $inv.Status "overdue"}}badge-error
+        {{else if eq $inv.Status "cancelled"}}badge-error
         {{end}} badge-lg">{{$inv.Status}}</span>
     {{if $inv.JournalID}}
     <a href="/journals/{{$inv.JournalID}}" class="link link-primary text-sm ml-2">View Journal Entry</a>
@@ -110,6 +115,14 @@
                         <td colspan="4" class="text-right">Paid</td>
                         <td class="text-right font-mono">{{formatIDR $inv.AmountPaid}}</td>
                     </tr>
+                    {{end}}
+                    {{if gt $inv.AmountCredited 0}}
+                    <tr class="text-warning">
+                        <td colspan="4" class="text-right">Credited</td>
+                        <td class="text-right font-mono">{{formatIDR $inv.AmountCredited}}</td>
+                    </tr>
+                    {{end}}
+                    {{if or (gt $inv.AmountPaid 0) (gt $inv.AmountCredited 0)}}
                     <tr class="font-bold">
                         <td colspan="4" class="text-right">Balance Due</td>
                         <td class="text-right font-mono">{{formatIDR $inv.AmountDue}}</td>
@@ -120,6 +133,42 @@
         </div>
     </div>
 </div>
+
+{{if $creditNotes}}
+<div class="card bg-base-100 shadow mb-4">
+    <div class="card-body">
+        <h2 class="card-title text-lg">Credit Notes</h2>
+        <table class="table table-sm">
+            <thead>
+                <tr>
+                    <th>Number</th>
+                    <th>Date</th>
+                    <th>Reason</th>
+                    <th>Status</th>
+                    <th class="text-right">Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range $creditNotes}}
+                <tr>
+                    <td><a href="/credit-notes/{{.ID}}" class="link font-mono text-sm">{{.CNNumber}}</a></td>
+                    <td class="text-sm">{{formatDate .CNDate}}</td>
+                    <td class="text-sm capitalize">{{.Reason}}</td>
+                    <td>
+                        <span class="badge badge-sm
+                            {{if eq .Status "draft"}}badge-ghost
+                            {{else if eq .Status "issued"}}badge-info
+                            {{else if eq .Status "void"}}badge-error
+                            {{end}}">{{.Status}}</span>
+                    </td>
+                    <td class="text-right font-mono text-sm">{{formatIDR .Total}}</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+</div>
+{{end}}
 
 <!-- Record Payment Form -->
 {{if and (.User.HasCapability "invoices.manage") (or (eq $inv.Status "sent") (eq $inv.Status "partial") (eq $inv.Status "overdue"))}}
