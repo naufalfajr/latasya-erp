@@ -7,21 +7,21 @@ import (
 )
 
 type DashboardData struct {
-	CashBalance         int
-	MonthlyRevenue      int
-	MonthlyExpenses     int
-	OutstandingInvoices int
-	OutstandingBills    int
-	RecentTransactions  []RecentTransaction
+	CashBalance         int                 `json:"cash_balance"`
+	MonthlyRevenue      int                 `json:"monthly_revenue"`
+	MonthlyExpenses     int                 `json:"monthly_expenses"`
+	OutstandingInvoices int                 `json:"outstanding_invoices"`
+	OutstandingBills    int                 `json:"outstanding_bills"`
+	RecentTransactions  []RecentTransaction `json:"recent_transactions"`
 }
 
 type RecentTransaction struct {
-	ID          int
-	EntryDate   string
-	Reference   string
-	Description string
-	Amount      int
-	SourceType  string
+	ID          int    `json:"id"`
+	EntryDate   string `json:"entry_date"`
+	Reference   string `json:"reference"`
+	Description string `json:"description"`
+	Amount      int    `json:"amount"`
+	SourceType  string `json:"source_type"`
 }
 
 func GetDashboardData(db *sql.DB) (*DashboardData, error) {
