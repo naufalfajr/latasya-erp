@@ -1,0 +1,226 @@
+openapi: 3.1.0
+info:
+  title: Latasya ERP API
+  version: 1.0.0
+  description: |
+    JSON API for Latasya ERP — a bookkeeping web app for Indonesian transport businesses.
+    
+    ## Authentication
+    
+    Two authentication methods are supported:
+    
+    - **Cookie + CSRF**: For browser clients. Session cookie `session_id` + `X-CSRF-Token` header.
+    - **Bearer Token**: For bots, MCP servers, Telegram integrations. `Authorization: Bearer lat_<token>`.
+      Bearer tokens are scoped (subset of user capabilities) and revocable.
+      Bearer requests skip CSRF validation.
+    
+    ## Money & Quantities
+    
+    - **Currency (IDR)**: All monetary amounts are strings representing integer IDR values.
+      Example: `"50000"` = Rp 50.000. No decimals, no subunits.
+    - **Quantities**: Decimal strings with up to 2 decimal places.
+      Example: `"1.50"` = 1.5 units (stored internally as integer × 100).
+    
+    ## Pagination
+    
+    List endpoints return: `{"data": [...], "meta": {"page": 1, "per_page": 50, "total": 100, "total_pages": 2}}`
+    
+    Query params: `?page=1&per_page=50` (default 50, max 200).
+    
+    ## Errors
+    
+    All errors return: `{"error": "message", "code": "snake_case_code", "request_id": "...", "fields": {...}}`
+    
+    Common codes: `unauthorized`, `forbidden`, `not_found`, `validation_failed`, `conflict`, `rate_limited`, `invalid_token`.
+
+servers:
+  - url: /api/v1
+    description: Latasya ERP API v1
+
+security:
+  - BearerAuth: []
+  - CookieAuth: []
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: |
+        Bearer token created via /settings/api-tokens or POST /api/v1/api-tokens.
+        Format: `lat_<32-base62-chars>`. Scoped to a subset of user capabilities.
+    CookieAuth:
+      type: apiKey
+      in: cookie
+      name: session_id
+      description: Session cookie set on login. Requires X-CSRF-Token header for state-changing requests.
+
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema:
+        type: string
+        format: uuid
+      description: |
+        Unique key for idempotent requests. If the same key is used within 24 hours,
+        the original response is replayed without re-executing the operation.
+        Required for financial mutations (invoices, bills, journals, credit-notes).
+    PageParam:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PerPageParam:
+      name: per_page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+
+  schemas:
+    IDR:
+      type: string
+      pattern: '^-?[0-9]+$'
+      description: |
+        Indonesian Rupiah amount as integer-valued string.
+        Example: "50000" = Rp 50.000. No decimals, no subunits.
+      example: "50000"
+
+    Quantity:
+      type: string
+      pattern: '^[0-9]+(\.[0-9]{1,2})?$'
+      description: |
+        Quantity as decimal string with up to 2 decimal places.
+        Stored internally as integer × 100.
+        Example: "1.50" = 1.5 units.
+      example: "1.50"
+
+    BusinessDate:
+      type: string
+      format: date
+      description: Business date in YYYY-MM-DD format (Asia/Jakarta timezone context).
+      example: "2026-05-10"
+
+    Instant:
+      type: string
+      format: date-time
+      description: UTC timestamp in ISO-8601 format.
+      example: "2026-05-10T03:00:00Z"
+
+    Meta:
+      type: object
+      required: [page, per_page, total, total_pages]
+      properties:
+        page:
+          type: integer
+          example: 1
+        per_page:
+          type: integer
+          example: 50
+        total:
+          type: integer
+          example: 100
+        total_pages:
+          type: integer
+          example: 2
+
+    ErrorEnvelope:
+      type: object
+      required: [error, code]
+      properties:
+        error:
+          type: string
+          description: Human-readable error message.
+          example: "not authenticated"
+        code:
+          type: string
+          description: Machine-readable error code.
+          enum:
+            - invalid_request
+            - validation_failed
+            - unauthorized
+            - forbidden
+            - not_found
+            - conflict
+            - rate_limited
+            - invalid_token
+            - password_change_required
+            - idempotency_conflict
+            - internal_error
+          example: "unauthorized"
+        request_id:
+          type: string
+          description: Request ID for tracing (from audit middleware).
+          example: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4"
+        fields:
+          type: object
+          additionalProperties:
+            type: string
+          description: Field-level validation errors (only present for validation_failed).
+          example:
+            contact_id: "required"
+            amount: "must be positive"
+
+  responses:
+    Unauthorized:
+      description: Authentication required.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    Forbidden:
+      description: Insufficient permissions.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    ValidationFailed:
+      description: Validation error.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    Conflict:
+      description: Conflict (e.g., duplicate name, invalid state transition).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    RateLimited:
+      description: Too many requests.
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+          description: Seconds to wait before retrying.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+
+paths:
+  /openapi.yaml:
+    get:
+      operationId: getOpenAPISpec
+      summary: Get OpenAPI specification
+      description: Returns the raw OpenAPI 3.1 YAML specification.
+      security: []
+      responses:
+        '200':
+          description: OpenAPI YAML specification.
+          content:
+            application/yaml:
+              schema:
+                type: string

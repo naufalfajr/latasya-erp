@@ -18,6 +18,7 @@ import (
 	"github.com/naufal/latasya-erp/internal/handler"
 	"github.com/naufal/latasya-erp/internal/model"
 	"github.com/naufal/latasya-erp/internal/tmpl"
+	v1 "github.com/naufal/latasya-erp/internal/api/v1"
 )
 
 // version identifies the build. Overridden at link time via
@@ -74,6 +75,8 @@ func main() {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		fmt.Fprintf(w, "ok version=%s migrations=%d\n", version, migrations)
 	})
+
+	mux.HandleFunc("GET /api/v1/openapi.yaml", v1.ServeOpenAPI)
 
 	// Auth routes (no auth required)
 	mux.HandleFunc("GET /login", h.LoginPage)
