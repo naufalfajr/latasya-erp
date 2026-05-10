@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/naufal/latasya-erp/internal/model"
 )
 
 // auditRow captures the key columns we assert against in event tests.
@@ -736,5 +738,100 @@ func TestAudit_ContactUpdate_DiffsChangedFields(t *testing.T) {
 	}
 	if strings.Contains(row.Metadata, "contact_type") {
 		t.Errorf("contact.update should not include unchanged contact_type, got %q", row.Metadata)
+	}
+}
+
+// --- Credit Note ------------------------------------------------------------
+
+func TestAudit_CreditNoteCreate(t *testing.T) {
+	ts, db := testServer(t)
+	cookies := loginAsAdmin(t, ts)
+
+	db.Exec("INSERT INTO contacts (name, contact_type, is_active) VALUES ('CN Audit', 'customer', 1)")
+	var contactID, revenueID int
+	db.QueryRow("SELECT id FROM contacts WHERE name = 'CN Audit'").Scan(&contactID)
+	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
+
+	form := fmt.Sprintf(
+		"contact_id=%d&cn_date=2026-04-10&reason=cancellation&line_description=Refund&line_account_id=%d&line_quantity=1&line_unit_price=750000",
+		contactID, revenueID,
+	)
+	req, _ := requestWithCookies(db, "POST", ts.URL+"/credit-notes", cookies, form)
+	resp, _ := noRedirectClient().Do(req)
+	resp.Body.Close()
+
+	row := latestAuditFor(t, db, "credit_note.create")
+	if row.Actor != "admin" {
+		t.Errorf("actor = %q, want admin", row.Actor)
+	}
+	if !strings.Contains(row.Metadata, "750000") {
+		t.Errorf("credit_note.create metadata should contain total 750000, got %q", row.Metadata)
+	}
+}
+
+func TestAudit_CreditNoteIssue(t *testing.T) {
+	ts, db := testServer(t)
+	cookies := loginAsAdmin(t, ts)
+
+	db.Exec("INSERT INTO contacts (name, contact_type, is_active) VALUES ('CN Issue Audit', 'customer', 1)")
+	var contactID, revenueID int
+	db.QueryRow("SELECT id FROM contacts WHERE name = 'CN Issue Audit'").Scan(&contactID)
+	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
+
+	invID, _ := model.CreateInvoice(db, &model.Invoice{
+		ContactID: contactID, InvoiceDate: "2026-04-04", DueDate: "2026-04-30", CreatedBy: 1,
+	}, []model.InvoiceLine{
+		{Description: "Service", Quantity: 100, UnitPrice: 1000000, AccountID: revenueID},
+	})
+	model.SendInvoice(db, invID, 1)
+
+	form := fmt.Sprintf(
+		"contact_id=%d&invoice_id=%d&cn_date=2026-04-10&reason=cancellation&line_description=Refund&line_account_id=%d&line_quantity=1&line_unit_price=1000000",
+		contactID, invID, revenueID,
+	)
+	req, _ := requestWithCookies(db, "POST", ts.URL+"/credit-notes", cookies, form)
+	resp, _ := noRedirectClient().Do(req)
+	resp.Body.Close()
+
+	var cnID int
+	db.QueryRow("SELECT id FROM credit_notes ORDER BY id DESC LIMIT 1").Scan(&cnID)
+
+	req2, _ := requestWithCookies(db, "POST", ts.URL+"/credit-notes/"+strconv.Itoa(cnID)+"/issue", cookies, "")
+	resp2, _ := noRedirectClient().Do(req2)
+	resp2.Body.Close()
+
+	row := latestAuditFor(t, db, "credit_note.issue")
+	if !strings.Contains(row.Metadata, "journal_id") {
+		t.Errorf("credit_note.issue metadata should contain journal_id, got %q", row.Metadata)
+	}
+}
+
+func TestAudit_CreditNoteDelete(t *testing.T) {
+	ts, db := testServer(t)
+	cookies := loginAsAdmin(t, ts)
+
+	db.Exec("INSERT INTO contacts (name, contact_type, is_active) VALUES ('CN Del Audit', 'customer', 1)")
+	var contactID, revenueID int
+	db.QueryRow("SELECT id FROM contacts WHERE name = 'CN Del Audit'").Scan(&contactID)
+	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
+
+	form := fmt.Sprintf(
+		"contact_id=%d&cn_date=2026-04-10&reason=other&line_description=x&line_account_id=%d&line_quantity=1&line_unit_price=100000",
+		contactID, revenueID,
+	)
+	req, _ := requestWithCookies(db, "POST", ts.URL+"/credit-notes", cookies, form)
+	resp, _ := noRedirectClient().Do(req)
+	resp.Body.Close()
+
+	var cnID int
+	db.QueryRow("SELECT id FROM credit_notes ORDER BY id DESC LIMIT 1").Scan(&cnID)
+
+	req2, _ := requestWithCookies(db, "DELETE", ts.URL+"/credit-notes/"+strconv.Itoa(cnID), cookies, "")
+	resp2, _ := noRedirectClient().Do(req2)
+	resp2.Body.Close()
+
+	row := latestAuditFor(t, db, "credit_note.delete")
+	if !strings.Contains(row.Metadata, `"before"`) {
+		t.Errorf("credit_note.delete metadata should include before snapshot, got %q", row.Metadata)
 	}
 }

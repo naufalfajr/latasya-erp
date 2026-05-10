@@ -6,6 +6,8 @@ import (
 	"net/url"
 	"strconv"
 	"testing"
+
+	"github.com/naufal/latasya-erp/internal/model"
 )
 
 // Happy-path Update/Delete tests for the financial-mutation handlers.
@@ -496,5 +498,246 @@ func TestDeleteContact_Success(t *testing.T) {
 	db.QueryRow("SELECT COUNT(*) FROM contacts WHERE id = ?", contactID).Scan(&n)
 	if n != 0 {
 		t.Errorf("contact should be deleted, count = %d", n)
+	}
+}
+
+// --- Credit Note ------------------------------------------------------------
+
+func TestCreateCreditNote_Success(t *testing.T) {
+	ts, db := testServer(t)
+	cookies := loginAsAdmin(t, ts)
+
+	db.Exec("INSERT INTO contacts (name, contact_type, is_active) VALUES ('CN Cust', 'customer', 1)")
+	var contactID, revenueID int
+	db.QueryRow("SELECT id FROM contacts WHERE name = 'CN Cust'").Scan(&contactID)
+	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
+
+	form := fmt.Sprintf(
+		"contact_id=%d&cn_date=2026-04-10&reason=cancellation&line_description=Refund&line_account_id=%d&line_quantity=1&line_unit_price=1000000",
+		contactID, revenueID,
+	)
+	req, _ := requestWithCookies(db, "POST", ts.URL+"/credit-notes", cookies, form)
+	resp, err := noRedirectClient().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", resp.StatusCode)
+	}
+
+	var total int
+	db.QueryRow("SELECT total FROM credit_notes ORDER BY id DESC LIMIT 1").Scan(&total)
+	if total != 1000000 {
+		t.Errorf("total = %d, want 1000000", total)
+	}
+}
+
+func TestCreateCreditNote_ValidationError(t *testing.T) {
+	ts, db := testServer(t)
+	cookies := loginAsAdmin(t, ts)
+
+	var revenueID int
+	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
+
+	form := fmt.Sprintf(
+		"contact_id=&cn_date=2026-04-10&reason=cancellation&line_description=Refund&line_account_id=%d&line_quantity=1&line_unit_price=1000000",
+		revenueID,
+	)
+	req, _ := requestWithCookies(db, "POST", ts.URL+"/credit-notes", cookies, form)
+	resp, err := noRedirectClient().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200 (validation error), got %d", resp.StatusCode)
+	}
+}
+
+func TestUpdateCreditNote_Success(t *testing.T) {
+	ts, db := testServer(t)
+	cookies := loginAsAdmin(t, ts)
+
+	db.Exec("INSERT INTO contacts (name, contact_type, is_active) VALUES ('CN Edit', 'customer', 1)")
+	var contactID, revenueID int
+	db.QueryRow("SELECT id FROM contacts WHERE name = 'CN Edit'").Scan(&contactID)
+	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
+
+	cnID, err := model.CreateCreditNote(db, &model.CreditNote{
+		ContactID: contactID, CNDate: "2026-04-10",
+		Reason: model.CreditNoteReasonOther, CreatedBy: 1,
+	}, []model.CreditNoteLine{
+		{Description: "Original", Quantity: 100, UnitPrice: 500000, AccountID: revenueID},
+	})
+	if err != nil {
+		t.Fatalf("seed cn: %v", err)
+	}
+
+	form := fmt.Sprintf(
+		"contact_id=%d&cn_date=2026-04-11&reason=discount&line_description=Updated&line_account_id=%d&line_quantity=1&line_unit_price=2000000",
+		contactID, revenueID,
+	)
+	req, _ := requestWithCookies(db, "POST", ts.URL+"/credit-notes/"+strconv.Itoa(cnID), cookies, form)
+	resp, err := noRedirectClient().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", resp.StatusCode)
+	}
+
+	var total int
+	db.QueryRow("SELECT total FROM credit_notes WHERE id = ?", cnID).Scan(&total)
+	if total != 2000000 {
+		t.Errorf("total = %d, want 2000000", total)
+	}
+}
+
+func TestDeleteCreditNote_Success(t *testing.T) {
+	ts, db := testServer(t)
+	cookies := loginAsAdmin(t, ts)
+
+	db.Exec("INSERT INTO contacts (name, contact_type, is_active) VALUES ('CN Del', 'customer', 1)")
+	var contactID, revenueID int
+	db.QueryRow("SELECT id FROM contacts WHERE name = 'CN Del'").Scan(&contactID)
+	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
+
+	cnID, _ := model.CreateCreditNote(db, &model.CreditNote{
+		ContactID: contactID, CNDate: "2026-04-10",
+		Reason: model.CreditNoteReasonOther, CreatedBy: 1,
+	}, []model.CreditNoteLine{
+		{Description: "x", Quantity: 100, UnitPrice: 100000, AccountID: revenueID},
+	})
+
+	req, _ := requestWithCookies(db, "DELETE", ts.URL+"/credit-notes/"+strconv.Itoa(cnID), cookies, "")
+	resp, err := noRedirectClient().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+
+	var n int
+	db.QueryRow("SELECT COUNT(*) FROM credit_notes WHERE id = ?", cnID).Scan(&n)
+	if n != 0 {
+		t.Errorf("credit note should be deleted, count = %d", n)
+	}
+}
+
+func TestIssueCreditNote_HTTP(t *testing.T) {
+	ts, db := testServer(t)
+	cookies := loginAsAdmin(t, ts)
+
+	db.Exec("INSERT INTO contacts (name, contact_type, is_active) VALUES ('CN Issue', 'customer', 1)")
+	var contactID, revenueID int
+	db.QueryRow("SELECT id FROM contacts WHERE name = 'CN Issue'").Scan(&contactID)
+	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
+
+	invID, _ := model.CreateInvoice(db, &model.Invoice{
+		ContactID: contactID, InvoiceDate: "2026-04-04", DueDate: "2026-04-30", CreatedBy: 1,
+	}, []model.InvoiceLine{
+		{Description: "Service", Quantity: 100, UnitPrice: 1000000, AccountID: revenueID},
+	})
+	model.SendInvoice(db, invID, 1)
+
+	cnID, _ := model.CreateCreditNote(db, &model.CreditNote{
+		ContactID: contactID, InvoiceID: &invID, CNDate: "2026-04-10",
+		Reason: model.CreditNoteReasonCancellation, CreatedBy: 1,
+	}, []model.CreditNoteLine{
+		{Description: "Cancel", Quantity: 100, UnitPrice: 1000000, AccountID: revenueID},
+	})
+
+	req, _ := requestWithCookies(db, "POST", ts.URL+"/credit-notes/"+strconv.Itoa(cnID)+"/issue", cookies, "")
+	resp, err := noRedirectClient().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", resp.StatusCode)
+	}
+
+	var status string
+	db.QueryRow("SELECT status FROM credit_notes WHERE id = ?", cnID).Scan(&status)
+	if status != "issued" {
+		t.Errorf("status = %q, want issued", status)
+	}
+}
+
+func TestVoidCreditNote_HTTP(t *testing.T) {
+	ts, db := testServer(t)
+	cookies := loginAsAdmin(t, ts)
+
+	db.Exec("INSERT INTO contacts (name, contact_type, is_active) VALUES ('CN Void', 'customer', 1)")
+	var contactID, revenueID int
+	db.QueryRow("SELECT id FROM contacts WHERE name = 'CN Void'").Scan(&contactID)
+	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
+
+	invID, _ := model.CreateInvoice(db, &model.Invoice{
+		ContactID: contactID, InvoiceDate: "2026-04-04", DueDate: "2026-04-30", CreatedBy: 1,
+	}, []model.InvoiceLine{
+		{Description: "Service", Quantity: 100, UnitPrice: 1000000, AccountID: revenueID},
+	})
+	model.SendInvoice(db, invID, 1)
+
+	cnID, _ := model.CreateCreditNote(db, &model.CreditNote{
+		ContactID: contactID, InvoiceID: &invID, CNDate: "2026-04-10",
+		Reason: model.CreditNoteReasonCancellation, CreatedBy: 1,
+	}, []model.CreditNoteLine{
+		{Description: "Cancel", Quantity: 100, UnitPrice: 1000000, AccountID: revenueID},
+	})
+	model.IssueCreditNote(db, cnID, 1)
+
+	req, _ := requestWithCookies(db, "POST", ts.URL+"/credit-notes/"+strconv.Itoa(cnID)+"/void", cookies, "")
+	resp, err := noRedirectClient().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", resp.StatusCode)
+	}
+
+	var status string
+	db.QueryRow("SELECT status FROM credit_notes WHERE id = ?", cnID).Scan(&status)
+	if status != "void" {
+		t.Errorf("status = %q, want void", status)
+	}
+
+	var amountCredited int
+	db.QueryRow("SELECT amount_credited FROM invoices WHERE id = ?", invID).Scan(&amountCredited)
+	if amountCredited != 0 {
+		t.Errorf("invoice amount_credited = %d, want 0", amountCredited)
+	}
+}
+
+func TestCreditNote_ViewerCannotCreate(t *testing.T) {
+	ts, db := testServer(t)
+	cookies := loginAsViewer(t, ts, db)
+
+	db.Exec("INSERT INTO contacts (name, contact_type, is_active) VALUES ('Viewer Cust', 'customer', 1)")
+	var contactID, revenueID int
+	db.QueryRow("SELECT id FROM contacts WHERE name = 'Viewer Cust'").Scan(&contactID)
+	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
+
+	form := fmt.Sprintf(
+		"contact_id=%d&cn_date=2026-04-10&reason=cancellation&line_description=x&line_account_id=%d&line_quantity=1&line_unit_price=100000",
+		contactID, revenueID,
+	)
+	req, _ := requestWithCookies(db, "POST", ts.URL+"/credit-notes", cookies, form)
+	resp, err := noRedirectClient().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+
+	if resp.StatusCode != http.StatusForbidden {
+		t.Errorf("expected 403, got %d", resp.StatusCode)
 	}
 }
