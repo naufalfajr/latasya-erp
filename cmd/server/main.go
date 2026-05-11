@@ -336,11 +336,11 @@ func main() {
 	protected.HandleFunc("POST /password/change", h.PasswordChange)
 
 	// API Tokens management UI
-	protected.HandleFunc("GET /settings/api-tokens", h.ListAPITokens)
-	protected.HandleFunc("GET /settings/api-tokens/new", h.NewAPIToken)
-	protected.HandleFunc("GET /settings/api-tokens/created", h.CreatedAPIToken)
-	protected.HandleFunc("POST /settings/api-tokens", h.CreateAPIToken)
-	protected.HandleFunc("POST /settings/api-tokens/{id}/revoke", h.RevokeAPIToken)
+	protected.HandleFunc("GET /settings/api-tokens", auth.AdminOnly(h.ListAPITokens))
+	protected.HandleFunc("GET /settings/api-tokens/new", auth.AdminOnly(h.NewAPIToken))
+	protected.HandleFunc("GET /settings/api-tokens/created", auth.AdminOnly(h.CreatedAPIToken))
+	protected.HandleFunc("POST /settings/api-tokens", auth.AdminOnly(h.CreateAPIToken))
+	protected.HandleFunc("POST /settings/api-tokens/{id}/revoke", auth.AdminOnly(h.RevokeAPIToken))
 
 	// Audit log (admin-only via audit.view capability)
 	protected.HandleFunc("GET /audit", auth.CapabilityOnly(model.CapAuditView, h.AuditList))
