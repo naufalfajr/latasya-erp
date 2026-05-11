@@ -30,6 +30,13 @@ func (d apiTokenFormData) IsScopeChecked(scope string) bool {
 	return d.SelectedScopes[scope]
 }
 
+func availableScopes(user *model.User) []string {
+	if user.IsAdmin() {
+		return model.AllCapabilities
+	}
+	return user.Capabilities
+}
+
 // consumeFlash reads the "flash" cookie, clears it via Set-Cookie, and rewrites
 // the request's Cookie header to remove it so subsequent reads in this request
 // (e.g. inside h.render) return empty. Returns the cookie value or "" if absent.
@@ -79,7 +86,7 @@ func (h *Handler) ListAPITokens(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.Error("api_token: list", "user_id", user.ID, "error", err)
 		h.render(w, r, "templates/settings/api_tokens.html", "API Tokens", apiTokenFormData{
-			AvailableScopes: user.Capabilities,
+			AvailableScopes: availableScopes(user),
 			Errors:          map[string]string{"general": "Failed to load tokens"},
 		})
 		return
@@ -87,7 +94,7 @@ func (h *Handler) ListAPITokens(w http.ResponseWriter, r *http.Request) {
 
 	h.render(w, r, "templates/settings/api_tokens.html", "API Tokens", apiTokenFormData{
 		Tokens:          tokens,
-		AvailableScopes: user.Capabilities,
+		AvailableScopes: availableScopes(user),
 		Errors:          map[string]string{},
 	})
 }
@@ -100,7 +107,7 @@ func (h *Handler) NewAPIToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := apiTokenFormData{
-		AvailableScopes: user.Capabilities,
+		AvailableScopes: availableScopes(user),
 		SelectedScopes:  map[string]bool{},
 		Errors:          map[string]string{},
 	}
@@ -134,8 +141,9 @@ func (h *Handler) CreateAPIToken(w http.ResponseWriter, r *http.Request) {
 		errs["name"] = "Name is required"
 	}
 
-	userCaps := make(map[string]bool, len(user.Capabilities))
-	for _, c := range user.Capabilities {
+	allowed := availableScopes(user)
+	userCaps := make(map[string]bool, len(allowed))
+	for _, c := range allowed {
 		userCaps[c] = true
 	}
 
@@ -168,7 +176,7 @@ func (h *Handler) CreateAPIToken(w http.ResponseWriter, r *http.Request) {
 
 	if len(errs) > 0 {
 		renderForm(apiTokenFormData{
-			AvailableScopes: user.Capabilities,
+			AvailableScopes: availableScopes(user),
 			SelectedScopes:  selectedMap,
 			Errors:          errs,
 			Name:            name,
@@ -187,7 +195,7 @@ func (h *Handler) CreateAPIToken(w http.ResponseWriter, r *http.Request) {
 			fieldErrs["general"] = "Failed to create token"
 		}
 		renderForm(apiTokenFormData{
-			AvailableScopes: user.Capabilities,
+			AvailableScopes: availableScopes(user),
 			SelectedScopes:  selectedMap,
 			Errors:          fieldErrs,
 			Name:            name,
