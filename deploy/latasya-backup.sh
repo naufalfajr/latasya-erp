@@ -85,7 +85,12 @@ if [ -n "$R2_BUCKET" ]; then
   # `--checksum` makes rclone re-verify the remote object against the local
   # sha256 after upload; if R2 received a partial/corrupt write, rclone exits
   # non-zero and `set -e` aborts the script.
-  RCLONE_OPTS="--config /dev/null --checksum"
+  #
+  # `--s3-no-check-bucket` skips the HeadBucket / CreateBucket probe that
+  # rclone's S3 backend runs before every upload. Our R2 token is scoped to
+  # "Object Read & Write" on a specific bucket only — it has no bucket-level
+  # permissions, so the probe gets a 403 AccessDenied and aborts the copy.
+  RCLONE_OPTS="--config /dev/null --checksum --s3-no-check-bucket"
   rclone copy $RCLONE_OPTS "$BACKUP_DIR/$NAME.db"   "r2:$R2_BUCKET/"
   rclone copy $RCLONE_OPTS "$BACKUP_DIR/$NAME.json" "r2:$R2_BUCKET/"
   echo "    uploaded to r2:$R2_BUCKET/$NAME.db"
