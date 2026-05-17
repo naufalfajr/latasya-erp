@@ -77,11 +77,17 @@ if [ -n "$R2_BUCKET" ]; then
     echo "error: R2_BUCKET set but rclone is not installed" >&2
     exit 1
   fi
+  # All rclone config comes from RCLONE_CONFIG_R2_* env vars, so we tell rclone
+  # not to read or create any on-disk config file. Required because systemd
+  # `ProtectHome=true` masks $HOME, and rclone otherwise aborts trying to open
+  # $HOME/.rclone.conf.
+  #
   # `--checksum` makes rclone re-verify the remote object against the local
   # sha256 after upload; if R2 received a partial/corrupt write, rclone exits
   # non-zero and `set -e` aborts the script.
-  rclone copy --checksum "$BACKUP_DIR/$NAME.db"   "r2:$R2_BUCKET/"
-  rclone copy --checksum "$BACKUP_DIR/$NAME.json" "r2:$R2_BUCKET/"
+  RCLONE_OPTS="--config /dev/null --checksum"
+  rclone copy $RCLONE_OPTS "$BACKUP_DIR/$NAME.db"   "r2:$R2_BUCKET/"
+  rclone copy $RCLONE_OPTS "$BACKUP_DIR/$NAME.json" "r2:$R2_BUCKET/"
   echo "    uploaded to r2:$R2_BUCKET/$NAME.db"
 fi
 
