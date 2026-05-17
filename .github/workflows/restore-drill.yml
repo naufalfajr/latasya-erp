@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      R2_BUCKET: latasya-backups
+      R2_BUCKET: latasya
       # rclone S3 backend config from env vars — no rclone.conf file needed.
       RCLONE_CONFIG_R2_TYPE: s3
       RCLONE_CONFIG_R2_PROVIDER: Cloudflare
