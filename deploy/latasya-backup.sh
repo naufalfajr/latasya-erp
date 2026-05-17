@@ -7,12 +7,18 @@
 # so no -wal/-shm companion files are ever created in the backup directory.
 # Live DB stays open the entire time — no service downtime.
 #
+# After the local snapshot, if R2_BUCKET is set the script also uploads the
+# snapshot + .json sidecar to Cloudflare R2 via rclone. The R2 remote `r2`
+# is read from RCLONE_CONFIG_R2_* env vars (loaded from /etc/latasya/r2.env
+# by the systemd unit), so no rclone.conf file is needed.
+#
 # Configurable via env vars (defaults are production VPS paths):
 #   DB_PATH      path to the live database (default: /var/lib/latasya/latasya.db)
 #   BACKUP_DIR   where snapshots land   (default: /var/backups/latasya)
 #   RETENTION    how many to keep       (default: 12)
+#   R2_BUCKET    R2 bucket name; if unset, off-site upload is skipped
 #
-# Local test:
+# Local test (no R2):
 #   DB_PATH="$PWD/latasya.db" BACKUP_DIR=/tmp/latasya-backup-test ./deploy/latasya-backup.sh
 
 set -euo pipefail
@@ -20,6 +26,7 @@ set -euo pipefail
 DB_PATH="${DB_PATH:-/var/lib/latasya/latasya.db}"
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/latasya}"
 RETENTION="${RETENTION:-12}"
+R2_BUCKET="${R2_BUCKET:-}"
 
 if [ ! -f "$DB_PATH" ]; then
   echo "error: DB not found at $DB_PATH" >&2
@@ -64,6 +71,19 @@ SIZE=$(wc -c < "$NAME.db" | tr -d ' ')
 printf '{"created_at":"%s","sha256":"%s","byte_size":%s,"latest_migration":"%s"}\n' \
   "$TS" "$SHA" "$SIZE" "$LATEST_MIGRATION" > "$NAME.json"
 chmod 600 "$NAME.json"
+
+if [ -n "$R2_BUCKET" ]; then
+  if ! command -v rclone >/dev/null 2>&1; then
+    echo "error: R2_BUCKET set but rclone is not installed" >&2
+    exit 1
+  fi
+  # `--checksum` makes rclone re-verify the remote object against the local
+  # sha256 after upload; if R2 received a partial/corrupt write, rclone exits
+  # non-zero and `set -e` aborts the script.
+  rclone copy --checksum "$BACKUP_DIR/$NAME.db"   "r2:$R2_BUCKET/"
+  rclone copy --checksum "$BACKUP_DIR/$NAME.json" "r2:$R2_BUCKET/"
+  echo "    uploaded to r2:$R2_BUCKET/$NAME.db"
+fi
 
 KEEP_PLUS_ONE=$((RETENTION + 1))
 ls -1t "$BACKUP_DIR"/latasya-*.db 2>/dev/null | tail -n +"$KEEP_PLUS_ONE" \

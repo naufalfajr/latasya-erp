@@ -14,7 +14,14 @@ bin/
 
 # Environment
 .env
+*.env
+r2.env
 /server
+
+# Backup artifacts (local-test runs of deploy/latasya-backup.sh)
+*.db.tmp
+latasya-*.db
+latasya-*.json
 
 # Sisyphus
 .sisyphus/

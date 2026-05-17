@@ -1,0 +1,137 @@
+name: Restore drill
+
+# Weekly verification that the off-site backup in Cloudflare R2 is recoverable.
+# Designed to FAIL LOUDLY on email if any of these break:
+#   - upload pipeline silently stopped (freshness check)
+#   - backup file is corrupt (PRAGMA integrity_check)
+#   - current binary can't open the backup (schema-forward-compat)
+#   - data inside the backup is unbalanced (business invariant)
+#
+# Manual fire-drill: workflow_dispatch from the Actions tab.
+
+on:
+  schedule:
+    # Mondays 04:00 UTC = 11:00 Monday Jakarta. The Sun 19:00 UTC backup
+    # has ~9h to land before this drill reads it.
+    - cron: '0 4 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: restore-drill
+  cancel-in-progress: false
+
+jobs:
+  drill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      R2_BUCKET: latasya-backups
+      # rclone S3 backend config from env vars — no rclone.conf file needed.
+      RCLONE_CONFIG_R2_TYPE: s3
+      RCLONE_CONFIG_R2_PROVIDER: Cloudflare
+      RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${{ secrets.R2_READ_KEY_ID }}
+      RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_READ_SECRET }}
+      RCLONE_CONFIG_R2_ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: true
+
+      - name: Install rclone
+        run: curl -fsSL https://rclone.org/install.sh | sudo bash
+
+      - name: Find latest backup in R2
+        run: |
+          LATEST=$(rclone lsf "r2:$R2_BUCKET/" --include "latasya-*.db" | sort -r | head -1)
+          if [ -z "$LATEST" ]; then
+            echo "FAIL: no latasya-*.db objects in r2:$R2_BUCKET/"
+            exit 1
+          fi
+          echo "LATEST=$LATEST" >> "$GITHUB_ENV"
+          echo "JSON_NAME=${LATEST%.db}.json" >> "$GITHUB_ENV"
+          echo "found: $LATEST"
+
+      - name: Download backup and sidecar
+        run: |
+          mkdir -p restored
+          rclone copy --checksum "r2:$R2_BUCKET/$LATEST"    ./restored/
+          rclone copy --checksum "r2:$R2_BUCKET/$JSON_NAME" ./restored/
+          mv "./restored/$LATEST"    ./restored/restored.db
+          mv "./restored/$JSON_NAME" ./restored/metadata.json
+          ls -la ./restored/
+
+      - name: Layer 0 — Freshness (latest backup younger than 14 days)
+        run: |
+          CREATED_AT=$(jq -r .created_at ./restored/metadata.json)
+          # Sidecar format: YYYYMMDD-HHMMSS (UTC). Reformat to ISO-8601 for date(1).
+          ISO="${CREATED_AT:0:4}-${CREATED_AT:4:2}-${CREATED_AT:6:2}T${CREATED_AT:9:2}:${CREATED_AT:11:2}:${CREATED_AT:13:2}Z"
+          CREATED_EPOCH=$(date -d "$ISO" +%s)
+          NOW=$(date +%s)
+          AGE_DAYS=$(( (NOW - CREATED_EPOCH) / 86400 ))
+          echo "backup created $ISO ($AGE_DAYS days ago)"
+          if [ "$AGE_DAYS" -gt 14 ]; then
+            echo "FAIL: latest backup is $AGE_DAYS days old (threshold: 14)"
+            echo "      → upload pipeline on the VPS may be broken"
+            exit 1
+          fi
+
+      - name: Layer 1 — SQLite integrity check
+        run: |
+          result=$(sqlite3 ./restored/restored.db "PRAGMA integrity_check;")
+          echo "integrity_check: $result"
+          if [ "$result" != "ok" ]; then
+            echo "FAIL: PRAGMA integrity_check did not return 'ok'"
+            exit 1
+          fi
+
+      - name: Build current latasya-erp
+        run: |
+          go build -ldflags "-X main.version=drill-${GITHUB_SHA::8}" \
+            -o ./latasya-erp ./cmd/server
+
+      - name: Layer 2 — App boots against restored DB
+        run: |
+          DB_PATH="$PWD/restored/restored.db" PORT=8080 ./latasya-erp &
+          PID=$!
+          ok=0
+          for i in $(seq 1 15); do
+            if curl -fsS http://localhost:8080/healthz >/dev/null 2>&1; then
+              ok=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ok" != 1 ]; then
+            echo "FAIL: /healthz did not respond within 15s"
+            kill "$PID" 2>/dev/null || true
+            exit 1
+          fi
+          echo "healthz:"
+          curl -sS http://localhost:8080/healthz
+          kill "$PID" 2>/dev/null || true
+          wait "$PID" 2>/dev/null || true
+
+      - name: Layer 3 — Business invariant (debits == credits)
+        run: |
+          summary=$(sqlite3 ./restored/restored.db \
+            "SELECT printf('debit=%d credit=%d lines=%d',
+              COALESCE(SUM(debit),0),
+              COALESCE(SUM(credit),0),
+              COUNT(*)) FROM journal_lines;")
+          echo "$summary"
+          balanced=$(sqlite3 ./restored/restored.db \
+            "SELECT CASE WHEN COALESCE(SUM(debit),0) = COALESCE(SUM(credit),0)
+              THEN 'ok' ELSE 'unbalanced' END FROM journal_lines;")
+          if [ "$balanced" != "ok" ]; then
+            echo "FAIL: journal_lines is unbalanced — data corruption inside backup"
+            exit 1
+          fi
+          echo "ok: trial balance balanced"
+
+      - name: Summary
+        run: |
+          echo "Restore drill PASSED for $LATEST"

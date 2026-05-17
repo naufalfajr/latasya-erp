@@ -7,6 +7,12 @@ User=latasya
 Group=latasya
 ExecStart=/usr/local/bin/latasya-backup.sh
 
+# R2 credentials for off-site upload (Cloudflare R2 via rclone S3 backend).
+# Leading dash = unit still starts if the file is missing (local-snapshot
+# mode is degraded but functional during initial provisioning). The drill
+# catches silent off-site failures via its 14-day freshness assertion.
+EnvironmentFile=-/etc/latasya/r2.env
+
 # Backup writes here; live DB dir must be writable too because SQLite WAL
 # mode requires write access to the -shm file even for read-only queries.
 ReadWritePaths=/var/backups/latasya /var/lib/latasya
@@ -30,9 +36,9 @@ RestrictSUIDSGID=true
 LockPersonality=true
 MemoryDenyWriteExecute=true
 
-# Backup is fully local — no network needed.
-PrivateNetwork=true
-RestrictAddressFamilies=AF_UNIX
+# Outbound HTTPS to Cloudflare R2 for off-site upload (rclone). Inbound is
+# never required — there is no listening socket in this unit.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 
 CapabilityBoundingSet=
 AmbientCapabilities=
