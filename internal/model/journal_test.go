@@ -1,6 +1,7 @@
 package model_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/naufal/latasya-erp/internal/model"
@@ -183,6 +184,49 @@ func TestListJournalEntries_FilterByDate(t *testing.T) {
 	if len(entries) > 0 && entries[0].Description != "April" {
 		t.Errorf("expected 'April', got %q", entries[0].Description)
 	}
+}
+
+func TestListJournalEntries_AccountSummary(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+
+	var cashID, revenueID, expenseID int
+	db.QueryRow("SELECT id FROM accounts WHERE code = '1-1001'").Scan(&cashID)
+	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
+	db.QueryRow("SELECT id FROM accounts WHERE code = '5-1001'").Scan(&expenseID)
+
+	// Income: debit cash, credit revenue 4-1001 (category = credit side).
+	model.CreateJournalEntry(db,
+		&model.JournalEntry{EntryDate: "2026-04-04", Description: "Income", SourceType: model.SourceIncome, IsPosted: true, CreatedBy: 1},
+		[]model.JournalLine{{AccountID: cashID, Debit: 1000000}, {AccountID: revenueID, Credit: 1000000}})
+	// Expense: debit expense 5-1001, credit cash (category = debit side).
+	model.CreateJournalEntry(db,
+		&model.JournalEntry{EntryDate: "2026-04-05", Description: "Expense", SourceType: model.SourceExpense, IsPosted: true, CreatedBy: 1},
+		[]model.JournalLine{{AccountID: expenseID, Debit: 400000}, {AccountID: cashID, Credit: 400000}})
+
+	income, _ := model.ListJournalEntries(db, model.JournalFilter{SourceType: model.SourceIncome})
+	if len(income) != 1 || !strings.Contains(income[0].AccountSummary, "4-1001") {
+		t.Errorf("income AccountSummary should contain revenue account 4-1001, got %q", summaryOf(income))
+	}
+
+	expense, _ := model.ListJournalEntries(db, model.JournalFilter{SourceType: model.SourceExpense})
+	if len(expense) != 1 || !strings.Contains(expense[0].AccountSummary, "5-1001") {
+		t.Errorf("expense AccountSummary should contain expense account 5-1001, got %q", summaryOf(expense))
+	}
+
+	// No source filter (e.g. journals page): summary is not computed.
+	all, _ := model.ListJournalEntries(db, model.JournalFilter{})
+	for _, e := range all {
+		if e.AccountSummary != "" {
+			t.Errorf("expected empty AccountSummary without a source filter, got %q", e.AccountSummary)
+		}
+	}
+}
+
+func summaryOf(entries []model.JournalEntry) string {
+	if len(entries) == 0 {
+		return "(none)"
+	}
+	return entries[0].AccountSummary
 }
 
 func TestUpdateJournalEntry(t *testing.T) {

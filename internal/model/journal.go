@@ -23,6 +23,9 @@ type JournalEntry struct {
 	CreatedByName string        `json:"created_by_name,omitempty"`
 	TotalDebit    int           `json:"-"`
 	TotalCredit   int           `json:"-"`
+	// AccountSummary is the category account ("code name") shown on the
+	// income/expense list pages. Empty for callers that don't request it.
+	AccountSummary string `json:"account_summary,omitempty"`
 }
 
 // MarshalJSON serializes IDR-valued totals as strings to match the API
@@ -194,11 +197,29 @@ func getJournalLines(db *sql.DB, entryID int) ([]JournalLine, error) {
 }
 
 func ListJournalEntries(db *sql.DB, f JournalFilter) ([]JournalEntry, error) {
+	// Category account shown on the income/expense list pages: income entries
+	// credit a revenue account, expense entries debit an expense account. Other
+	// callers (journals page, etc.) don't display it, so leave it empty.
+	accountExpr := "''"
+	switch f.SourceType {
+	case SourceIncome:
+		accountExpr = `COALESCE((SELECT a.code || ' ' || a.name
+			FROM journal_lines jl2 JOIN accounts a ON a.id = jl2.account_id
+			WHERE jl2.entry_id = je.id AND jl2.credit > 0
+			ORDER BY jl2.id LIMIT 1), '')`
+	case SourceExpense:
+		accountExpr = `COALESCE((SELECT a.code || ' ' || a.name
+			FROM journal_lines jl2 JOIN accounts a ON a.id = jl2.account_id
+			WHERE jl2.entry_id = je.id AND jl2.debit > 0
+			ORDER BY jl2.id LIMIT 1), '')`
+	}
+
 	query := `SELECT je.id, je.entry_date, COALESCE(je.reference,''), je.description,
 			COALESCE(je.source_type,''), je.source_id, je.is_posted, je.created_by,
 			je.created_at, je.updated_at, u.full_name,
 			COALESCE((SELECT SUM(debit) FROM journal_lines WHERE entry_id = je.id), 0),
-			COALESCE((SELECT SUM(credit) FROM journal_lines WHERE entry_id = je.id), 0)
+			COALESCE((SELECT SUM(credit) FROM journal_lines WHERE entry_id = je.id), 0),
+			` + accountExpr + `
 		 FROM journal_entries je
 		 JOIN users u ON u.id = je.created_by
 		 WHERE 1=1`
@@ -235,7 +256,7 @@ func ListJournalEntries(db *sql.DB, f JournalFilter) ([]JournalEntry, error) {
 		err := rows.Scan(&je.ID, &je.EntryDate, &je.Reference, &je.Description,
 			&je.SourceType, &je.SourceID, &je.IsPosted, &je.CreatedBy,
 			&je.CreatedAt, &je.UpdatedAt, &je.CreatedByName,
-			&je.TotalDebit, &je.TotalCredit)
+			&je.TotalDebit, &je.TotalCredit, &je.AccountSummary)
 		if err != nil {
 			return nil, fmt.Errorf("scan journal entry: %w", err)
 		}
