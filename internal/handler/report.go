@@ -108,6 +108,7 @@ func (h *Handler) GeneralLedger(w http.ResponseWriter, r *http.Request) {
 
 	var entries []model.GeneralLedgerEntry
 	var selectedAccount *model.Account
+	var totalDebit, totalCredit int
 	if accountID > 0 {
 		var err error
 		entries, err = model.GeneralLedger(h.DB, accountID, from, to)
@@ -116,6 +117,21 @@ func (h *Handler) GeneralLedger(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		selectedAccount, _ = model.GetAccount(h.DB, accountID)
+		for _, e := range entries {
+			totalDebit += e.Debit
+			totalCredit += e.Credit
+		}
+	}
+
+	// Present the net in the account's natural sign so it matches how the P&L
+	// and balance sheet show the same account: debit-normal accounts net as
+	// debit-credit, credit-normal accounts (revenue/liability/equity) net as
+	// credit-debit. Without this, a revenue account's footer would be negative
+	// while its P&L line is positive, breaking the reconciliation this footer
+	// exists for.
+	net := totalDebit - totalCredit
+	if selectedAccount != nil && selectedAccount.NormalBalance == "credit" {
+		net = totalCredit - totalDebit
 	}
 
 	h.render(w, r, "templates/reports/general_ledger.html", "General Ledger", map[string]any{
@@ -125,5 +141,8 @@ func (h *Handler) GeneralLedger(w http.ResponseWriter, r *http.Request) {
 		"AccountID":       accountID,
 		"From":            from,
 		"To":              to,
+		"TotalDebit":      totalDebit,
+		"TotalCredit":     totalCredit,
+		"Net":             net,
 	})
 }

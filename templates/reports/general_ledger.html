@@ -43,6 +43,7 @@
                     <th>Date</th>
                     <th>Reference</th>
                     <th>Description</th>
+                    <th>Source</th>
                     <th class="text-right">Debit</th>
                     <th class="text-right">Credit</th>
                     <th class="text-right">Balance</th>
@@ -54,14 +55,31 @@
                     <td class="text-sm">{{formatDate .EntryDate}}</td>
                     <td class="font-mono text-sm">{{.Reference}}</td>
                     <td>{{.Description}}</td>
+                    <td>
+                        {{if .SourceType}}
+                        <span class="badge badge-ghost badge-xs">{{.SourceType}}</span>
+                        {{else}}
+                        <span class="badge badge-ghost badge-xs">manual</span>
+                        {{end}}
+                    </td>
                     <td class="text-right font-mono">{{if gt .Debit 0}}{{formatIDR .Debit}}{{end}}</td>
                     <td class="text-right font-mono">{{if gt .Credit 0}}{{formatIDR .Credit}}{{end}}</td>
                     <td class="text-right font-mono font-semibold">{{formatIDR .Balance}}</td>
                 </tr>
                 {{else}}
-                <tr><td colspan="6" class="text-center py-8 opacity-60">No transactions for this account</td></tr>
+                <tr><td colspan="7" class="text-center py-8 opacity-60">No transactions for this account</td></tr>
                 {{end}}
             </tbody>
+            {{if (index $data "Entries")}}
+            <tfoot>
+                <tr class="font-semibold border-t-2">
+                    <td colspan="4" class="text-right">Total</td>
+                    <td class="text-right font-mono">{{formatIDR (index $data "TotalDebit")}}</td>
+                    <td class="text-right font-mono">{{formatIDR (index $data "TotalCredit")}}</td>
+                    <td class="text-right font-mono">{{formatIDR (index $data "Net")}}</td>
+                </tr>
+            </tfoot>
+            {{end}}
         </table>
         {{else}}
         <p class="text-center py-8 opacity-60">Select an account to view its ledger</p>

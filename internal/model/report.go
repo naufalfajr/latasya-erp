@@ -234,6 +234,7 @@ type GeneralLedgerEntry struct {
 	EntryDate   string `json:"entry_date"`
 	Reference   string `json:"reference"`
 	Description string `json:"description"`
+	SourceType  string `json:"source_type"`
 	Debit       int    `json:"debit"`
 	Credit      int    `json:"credit"`
 	Balance     int    `json:"balance"`
@@ -242,7 +243,7 @@ type GeneralLedgerEntry struct {
 // GeneralLedger returns all transactions for a specific account within a date range.
 func GeneralLedger(db *sql.DB, accountID int, dateFrom, dateTo string) ([]GeneralLedgerEntry, error) {
 	query := `
-		SELECT je.entry_date, COALESCE(je.reference,''), je.description, jl.debit, jl.credit
+		SELECT je.entry_date, COALESCE(je.reference,''), je.description, COALESCE(je.source_type,''), jl.debit, jl.credit
 		FROM journal_lines jl
 		JOIN journal_entries je ON je.id = jl.entry_id AND je.is_posted = 1
 		WHERE jl.account_id = ?`
@@ -268,7 +269,7 @@ func GeneralLedger(db *sql.DB, accountID int, dateFrom, dateTo string) ([]Genera
 	var runningBalance int
 	for rows.Next() {
 		var e GeneralLedgerEntry
-		if err := rows.Scan(&e.EntryDate, &e.Reference, &e.Description, &e.Debit, &e.Credit); err != nil {
+		if err := rows.Scan(&e.EntryDate, &e.Reference, &e.Description, &e.SourceType, &e.Debit, &e.Credit); err != nil {
 			return nil, fmt.Errorf("scan general ledger: %w", err)
 		}
 		runningBalance += e.Debit - e.Credit
