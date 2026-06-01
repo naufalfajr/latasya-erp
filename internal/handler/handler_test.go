@@ -11,6 +11,7 @@ import (
 
 	"github.com/naufal/latasya-erp/internal/auth"
 	"github.com/naufal/latasya-erp/internal/handler"
+	"github.com/naufal/latasya-erp/internal/model"
 	"github.com/naufal/latasya-erp/internal/testutil"
 )
 
@@ -749,6 +750,18 @@ func TestListIncome(t *testing.T) {
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
+	// Seed an income entry so the list shows the revenue account in the new
+	// Account column.
+	var cashID, revenueID int
+	db.QueryRow("SELECT id FROM accounts WHERE code = '1-1001'").Scan(&cashID)
+	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
+	if _, err := model.CreateJournalEntry(db,
+		&model.JournalEntry{EntryDate: "2026-04-04", Description: "Bus fare", SourceType: model.SourceIncome, IsPosted: true, CreatedBy: 1},
+		[]model.JournalLine{{AccountID: cashID, Debit: 500000}, {AccountID: revenueID, Credit: 500000}},
+	); err != nil {
+		t.Fatalf("seed income: %v", err)
+	}
+
 	client := &http.Client{}
 	req, _ := requestWithCookies(db, "GET", ts.URL+"/income", cookies, "")
 	resp, err := client.Do(req)
@@ -759,6 +772,9 @@ func TestListIncome(t *testing.T) {
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+	if body := readBody(t, resp); !strings.Contains(body, "4-1001") {
+		t.Errorf("income list should show the revenue account code 4-1001 in the Account column")
 	}
 }
 
@@ -837,6 +853,18 @@ func TestListExpenses(t *testing.T) {
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
+	// Seed an expense entry so the list shows the expense account in the new
+	// Account column.
+	var cashID, fuelID int
+	db.QueryRow("SELECT id FROM accounts WHERE code = '1-1001'").Scan(&cashID)
+	db.QueryRow("SELECT id FROM accounts WHERE code = '5-1001'").Scan(&fuelID)
+	if _, err := model.CreateJournalEntry(db,
+		&model.JournalEntry{EntryDate: "2026-04-05", Description: "Fuel", SourceType: model.SourceExpense, IsPosted: true, CreatedBy: 1},
+		[]model.JournalLine{{AccountID: fuelID, Debit: 400000}, {AccountID: cashID, Credit: 400000}},
+	); err != nil {
+		t.Fatalf("seed expense: %v", err)
+	}
+
 	client := &http.Client{}
 	req, _ := requestWithCookies(db, "GET", ts.URL+"/expenses", cookies, "")
 	resp, err := client.Do(req)
@@ -847,6 +875,9 @@ func TestListExpenses(t *testing.T) {
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+	if body := readBody(t, resp); !strings.Contains(body, "5-1001") {
+		t.Errorf("expense list should show the expense account code 5-1001 in the Account column")
 	}
 }
 
