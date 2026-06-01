@@ -17,21 +17,21 @@
         hx-trigger="change"
         hx-target="#journal-table"
         hx-select="#journal-table"
-        hx-include="[name='to'],[name='search']">
+        hx-include="[name='to'],[name='search']" hx-push-url="true">
     <input type="date" name="to" value="{{$data.Filter.DateTo}}" placeholder="To"
         class="input input-sm"
         hx-get="/journals"
         hx-trigger="change"
         hx-target="#journal-table"
         hx-select="#journal-table"
-        hx-include="[name='from'],[name='search']">
+        hx-include="[name='from'],[name='search']" hx-push-url="true">
     <input type="text" name="search" value="{{$data.Filter.Search}}" placeholder="Search..."
         class="input input-sm w-full max-w-xs"
         hx-get="/journals"
         hx-trigger="keyup changed delay:300ms"
         hx-target="#journal-table"
         hx-select="#journal-table"
-        hx-include="[name='from'],[name='to']">
+        hx-include="[name='from'],[name='to']" hx-push-url="true">
 </div>
 
 <!-- Journal entries table -->
@@ -74,5 +74,30 @@
             {{end}}
         </tbody>
     </table>
+
+    {{$pg := $data.Pagination}}
+    {{if gt $pg.TotalPages 1}}
+    <div class="flex items-center justify-between mt-4">
+        <div class="text-sm opacity-60">Page {{$pg.Page}} of {{$pg.TotalPages}}</div>
+        <div class="join">
+            {{if $pg.HasPrev}}
+            <button class="join-item btn btn-sm"
+                hx-get="/journals" hx-target="#journal-table" hx-select="#journal-table"
+                hx-include="[name='from'],[name='to'],[name='search']"
+                hx-vals='{"page": "{{$pg.PrevPage}}"}' hx-push-url="true">‹ Prev</button>
+            {{else}}
+            <button class="join-item btn btn-sm" disabled>‹ Prev</button>
+            {{end}}
+            {{if $pg.HasNext}}
+            <button class="join-item btn btn-sm"
+                hx-get="/journals" hx-target="#journal-table" hx-select="#journal-table"
+                hx-include="[name='from'],[name='to'],[name='search']"
+                hx-vals='{"page": "{{$pg.NextPage}}"}' hx-push-url="true">Next ›</button>
+            {{else}}
+            <button class="join-item btn btn-sm" disabled>Next ›</button>
+            {{end}}
+        </div>
+    </div>
+    {{end}}
 </div>
 {{end}}

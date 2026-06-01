@@ -117,11 +117,20 @@ func extractExpenseShape(je *model.JournalEntry) (amount, expenseAccount, paymen
 // Query params: ?from=, ?to=, ?search=, ?page=, ?per_page=
 // Auth: any authenticated user.
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
+	page := v1.ParsePage(r)
 	f := model.JournalFilter{
 		SourceType: model.SourceExpense,
 		DateFrom:   r.URL.Query().Get("from"),
 		DateTo:     r.URL.Query().Get("to"),
 		Search:     r.URL.Query().Get("search"),
+		Limit:      page.PerPage,
+		Offset:     page.Offset(),
+	}
+
+	total, err := model.CountJournalEntries(h.DB, f)
+	if err != nil {
+		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to list expense entries", nil)
+		return
 	}
 
 	entries, err := model.ListJournalEntries(h.DB, f)
@@ -130,19 +139,8 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	page := v1.ParsePage(r)
-	total := len(entries)
-	start := page.Offset()
-	if start > total {
-		start = total
-	}
-	end := start + page.PerPage
-	if end > total {
-		end = total
-	}
-
-	result := make([]expenseEntry, 0, end-start)
-	for _, je := range entries[start:end] {
+	result := make([]expenseEntry, 0, len(entries))
+	for _, je := range entries {
 		result = append(result, toExpenseEntry(&je))
 	}
 

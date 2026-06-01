@@ -26,6 +26,14 @@ func (h *Handler) ListInvoices(w http.ResponseWriter, r *http.Request) {
 		Search: r.URL.Query().Get("search"),
 	}
 
+	total, err := model.CountInvoices(h.DB, f)
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	pg := newPagination(parsePage(r), total)
+	f.Limit, f.Offset = pg.PageSize, pg.Offset()
+
 	invoices, err := model.ListInvoices(h.DB, f)
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -33,9 +41,10 @@ func (h *Handler) ListInvoices(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.render(w, r, "templates/invoices/index.html", "Invoices", map[string]any{
-		"Invoices": invoices,
-		"Filter":   f.Status,
-		"Search":   f.Search,
+		"Invoices":   invoices,
+		"Filter":     f.Status,
+		"Search":     f.Search,
+		"Pagination": newPageNav(pg, map[string]string{"status": f.Status, "search": f.Search}),
 	})
 }
 

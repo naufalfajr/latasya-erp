@@ -153,10 +153,20 @@ func validateBillInput(inp *billInput) (map[string]string, []model.BillLine, int
 // List handles GET /api/v1/bills
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	page := v1.ParsePage(r)
-	bills, err := model.ListBills(h.DB, model.BillFilter{
+	filter := model.BillFilter{
 		Status: r.URL.Query().Get("status"),
 		Search: r.URL.Query().Get("search"),
-	})
+		Limit:  page.PerPage,
+		Offset: page.Offset(),
+	}
+
+	total, err := model.CountBills(h.DB, filter)
+	if err != nil {
+		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to list bills", nil)
+		return
+	}
+
+	bills, err := model.ListBills(h.DB, filter)
 	if err != nil {
 		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to list bills", nil)
 		return
@@ -165,16 +175,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		bills = []model.Bill{}
 	}
 
-	total := len(bills)
-	start := page.Offset()
-	if start > total {
-		start = total
-	}
-	end := start + page.PerPage
-	if end > total {
-		end = total
-	}
-	v1.WriteList(w, http.StatusOK, bills[start:end], page, total)
+	v1.WriteList(w, http.StatusOK, bills, page, total)
 }
 
 // Get handles GET /api/v1/bills/{id}

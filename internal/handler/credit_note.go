@@ -40,6 +40,14 @@ func (h *Handler) ListCreditNotes(w http.ResponseWriter, r *http.Request) {
 		Status: r.URL.Query().Get("status"),
 		Search: r.URL.Query().Get("search"),
 	}
+	total, err := model.CountCreditNotes(h.DB, f)
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	pg := newPagination(parsePage(r), total)
+	f.Limit, f.Offset = pg.PageSize, pg.Offset()
+
 	notes, err := model.ListCreditNotes(h.DB, f)
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -49,6 +57,7 @@ func (h *Handler) ListCreditNotes(w http.ResponseWriter, r *http.Request) {
 		"CreditNotes": notes,
 		"Filter":      f.Status,
 		"Search":      f.Search,
+		"Pagination":  newPageNav(pg, map[string]string{"status": f.Status, "search": f.Search}),
 	})
 }
 

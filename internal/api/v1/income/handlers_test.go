@@ -179,6 +179,59 @@ func TestListIncome(t *testing.T) {
 	})
 }
 
+// TestListIncome_Paginated guards that pagination is pushed to the DB: a window
+// is returned and Meta.Total reflects the true count (regression test for the
+// fetch-all-then-slice bug).
+func TestListIncome_Paginated(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+	revID := revenueAccountID(t, db)
+	depID := assetAccountID(t, db)
+
+	for i := 0; i < 3; i++ {
+		resp := doRequest(t, ts, http.MethodPost, "/api/v1/income", token, map[string]any{
+			"entry_date":      "2026-05-10",
+			"description":     "pay",
+			"amount":          "1000",
+			"revenue_account": revID,
+			"deposit_account": depID,
+		})
+		if resp.StatusCode != http.StatusCreated {
+			t.Fatalf("create %d: status %d", i, resp.StatusCode)
+		}
+		resp.Body.Close()
+	}
+
+	var env struct {
+		Data []map[string]any `json:"data"`
+		Meta v1.Meta          `json:"meta"`
+	}
+	resp := doRequest(t, ts, http.MethodGet, "/api/v1/income?per_page=2&page=1", token, nil)
+	if err := json.NewDecoder(resp.Body).Decode(&env); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	resp.Body.Close()
+	if len(env.Data) != 2 {
+		t.Errorf("page 1 per_page=2: got %d rows, want 2", len(env.Data))
+	}
+	if env.Meta.Total != 3 || env.Meta.TotalPages != 2 {
+		t.Errorf("meta: got total=%d pages=%d, want total=3 pages=2", env.Meta.Total, env.Meta.TotalPages)
+	}
+
+	var env2 struct {
+		Data []map[string]any `json:"data"`
+		Meta v1.Meta          `json:"meta"`
+	}
+	resp2 := doRequest(t, ts, http.MethodGet, "/api/v1/income?per_page=2&page=2", token, nil)
+	if err := json.NewDecoder(resp2.Body).Decode(&env2); err != nil {
+		t.Fatalf("decode p2: %v", err)
+	}
+	resp2.Body.Close()
+	if len(env2.Data) != 1 {
+		t.Errorf("page 2: got %d rows, want 1", len(env2.Data))
+	}
+}
+
 func TestGetIncome(t *testing.T) {
 	ts, db := setupServer(t)
 	token := adminToken(t, db)

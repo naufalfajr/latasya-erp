@@ -74,6 +74,44 @@ type JournalFilter struct {
 	DateTo     string
 	SourceType string
 	Search     string
+	Limit      int // 0 = no limit (return all)
+	Offset     int
+}
+
+// journalWhere builds the shared WHERE fragment (and its args) used by both
+// ListJournalEntries and CountJournalEntries so the two never drift.
+func journalWhere(f JournalFilter) (string, []any) {
+	var where string
+	var args []any
+	if f.DateFrom != "" {
+		where += " AND je.entry_date >= ?"
+		args = append(args, f.DateFrom)
+	}
+	if f.DateTo != "" {
+		where += " AND je.entry_date <= ?"
+		args = append(args, f.DateTo)
+	}
+	if f.SourceType != "" {
+		where += " AND je.source_type = ?"
+		args = append(args, f.SourceType)
+	}
+	if f.Search != "" {
+		where += " AND (je.reference LIKE ? OR je.description LIKE ?)"
+		s := "%" + f.Search + "%"
+		args = append(args, s, s)
+	}
+	return where, args
+}
+
+// CountJournalEntries returns the total entries matching the filter, ignoring
+// Limit/Offset — used for pagination page counts.
+func CountJournalEntries(db *sql.DB, f JournalFilter) (int, error) {
+	where, args := journalWhere(f)
+	var n int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM journal_entries je WHERE 1=1`+where, args...).Scan(&n); err != nil {
+		return 0, fmt.Errorf("count journal entries: %w", err)
+	}
+	return n, nil
 }
 
 // GenerateReference creates a reference like JE-202604-0001
@@ -214,6 +252,7 @@ func ListJournalEntries(db *sql.DB, f JournalFilter) ([]JournalEntry, error) {
 			ORDER BY jl2.id LIMIT 1), '')`
 	}
 
+	where, args := journalWhere(f)
 	query := `SELECT je.id, je.entry_date, COALESCE(je.reference,''), je.description,
 			COALESCE(je.source_type,''), je.source_id, je.is_posted, je.created_by,
 			je.created_at, je.updated_at, u.full_name,
@@ -222,27 +261,11 @@ func ListJournalEntries(db *sql.DB, f JournalFilter) ([]JournalEntry, error) {
 			` + accountExpr + `
 		 FROM journal_entries je
 		 JOIN users u ON u.id = je.created_by
-		 WHERE 1=1`
-	var args []any
-
-	if f.DateFrom != "" {
-		query += " AND je.entry_date >= ?"
-		args = append(args, f.DateFrom)
+		 WHERE 1=1` + where + ` ORDER BY je.entry_date DESC, je.id DESC`
+	if f.Limit > 0 {
+		query += " LIMIT ? OFFSET ?"
+		args = append(args, f.Limit, f.Offset)
 	}
-	if f.DateTo != "" {
-		query += " AND je.entry_date <= ?"
-		args = append(args, f.DateTo)
-	}
-	if f.SourceType != "" {
-		query += " AND je.source_type = ?"
-		args = append(args, f.SourceType)
-	}
-	if f.Search != "" {
-		query += " AND (je.reference LIKE ? OR je.description LIKE ?)"
-		s := "%" + f.Search + "%"
-		args = append(args, s, s)
-	}
-	query += " ORDER BY je.entry_date DESC, je.id DESC"
 
 	rows, err := db.Query(query, args...)
 	if err != nil {

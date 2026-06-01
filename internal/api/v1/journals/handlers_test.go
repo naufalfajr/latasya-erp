@@ -134,6 +134,52 @@ func TestListJournals(t *testing.T) {
 	}
 }
 
+// TestListJournals_Paginated verifies pagination is pushed to the DB: a window
+// is returned (not the full set), and Meta reflects the true total.
+func TestListJournals_Paginated(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	ts := newTestServer(t, db)
+	token := adminToken(t, db)
+	a, b := twoAccountIDs(t, db)
+
+	for i := 0; i < 3; i++ {
+		resp := doReq(t, ts, http.MethodPost, "/api/v1/journals", token, "", balancedBody(a, b, "100000"))
+		if resp.StatusCode != http.StatusCreated {
+			t.Fatalf("create %d: %d", i, resp.StatusCode)
+		}
+		resp.Body.Close()
+	}
+
+	var env struct {
+		Data []model.JournalEntry `json:"data"`
+		Meta v1.Meta              `json:"meta"`
+	}
+	resp := doReq(t, ts, http.MethodGet, "/api/v1/journals?per_page=2&page=1", token, "", nil)
+	if err := json.NewDecoder(resp.Body).Decode(&env); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	resp.Body.Close()
+	if len(env.Data) != 2 {
+		t.Errorf("per_page=2 page 1 should return 2 rows, got %d", len(env.Data))
+	}
+	if env.Meta.Total != 3 || env.Meta.TotalPages != 2 {
+		t.Errorf("expected total=3 total_pages=2, got total=%d total_pages=%d", env.Meta.Total, env.Meta.TotalPages)
+	}
+
+	var env2 struct {
+		Data []model.JournalEntry `json:"data"`
+		Meta v1.Meta              `json:"meta"`
+	}
+	resp2 := doReq(t, ts, http.MethodGet, "/api/v1/journals?per_page=2&page=2", token, "", nil)
+	if err := json.NewDecoder(resp2.Body).Decode(&env2); err != nil {
+		t.Fatalf("decode page2: %v", err)
+	}
+	resp2.Body.Close()
+	if len(env2.Data) != 1 {
+		t.Errorf("page 2 should return the remaining 1 row, got %d", len(env2.Data))
+	}
+}
+
 func TestGetJournal(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	ts := newTestServer(t, db)
