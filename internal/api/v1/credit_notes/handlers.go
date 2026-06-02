@@ -152,10 +152,20 @@ func validateInput(inp *creditNoteInput) (map[string]string, []model.CreditNoteL
 // List handles GET /api/v1/credit-notes
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	page := v1.ParsePage(r)
-	notes, err := model.ListCreditNotes(h.DB, model.CreditNoteFilter{
+	filter := model.CreditNoteFilter{
 		Status: r.URL.Query().Get("status"),
 		Search: r.URL.Query().Get("search"),
-	})
+		Limit:  page.PerPage,
+		Offset: page.Offset(),
+	}
+
+	total, err := model.CountCreditNotes(h.DB, filter)
+	if err != nil {
+		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to list credit notes", nil)
+		return
+	}
+
+	notes, err := model.ListCreditNotes(h.DB, filter)
 	if err != nil {
 		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to list credit notes", nil)
 		return
@@ -164,16 +174,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		notes = []model.CreditNote{}
 	}
 
-	total := len(notes)
-	start := page.Offset()
-	if start > total {
-		start = total
-	}
-	end := start + page.PerPage
-	if end > total {
-		end = total
-	}
-	v1.WriteList(w, http.StatusOK, notes[start:end], page, total)
+	v1.WriteList(w, http.StatusOK, notes, page, total)
 }
 
 // Get handles GET /api/v1/credit-notes/{id}

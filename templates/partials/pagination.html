@@ -1,0 +1,19 @@
+{{define "pagination"}}
+{{if gt .TotalPages 1}}
+<div class="flex items-center justify-between mt-4">
+    <div class="text-sm opacity-60">Page {{.Page}} of {{.TotalPages}}</div>
+    <div class="join">
+        {{if .HasPrev}}
+        <a class="join-item btn btn-sm" href="{{.PrevURL}}">‹ Prev</a>
+        {{else}}
+        <button class="join-item btn btn-sm" disabled>‹ Prev</button>
+        {{end}}
+        {{if .HasNext}}
+        <a class="join-item btn btn-sm" href="{{.NextURL}}">Next ›</a>
+        {{else}}
+        <button class="join-item btn btn-sm" disabled>Next ›</button>
+        {{end}}
+    </div>
+</div>
+{{end}}
+{{end}}

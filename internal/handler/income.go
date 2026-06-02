@@ -29,13 +29,24 @@ func (h *Handler) ListIncome(w http.ResponseWriter, r *http.Request) {
 		Search:     r.URL.Query().Get("search"),
 	}
 
+	total, err := model.CountJournalEntries(h.DB, f)
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	pg := newPagination(parsePage(r), total)
+	f.Limit, f.Offset = pg.PageSize, pg.Offset()
+
 	entries, err := model.ListJournalEntries(h.DB, f)
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
-	h.render(w, r, "templates/income/index.html", "Income", entries)
+	h.render(w, r, "templates/income/index.html", "Income", map[string]any{
+		"Entries":    entries,
+		"Pagination": newPageNav(pg, map[string]string{"from": f.DateFrom, "to": f.DateTo, "search": f.Search}),
+	})
 }
 
 func (h *Handler) NewIncome(w http.ResponseWriter, r *http.Request) {

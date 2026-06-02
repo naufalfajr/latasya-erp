@@ -25,14 +25,24 @@ func (h *Handler) ListBills(w http.ResponseWriter, r *http.Request) {
 		Status: r.URL.Query().Get("status"),
 		Search: r.URL.Query().Get("search"),
 	}
+	total, err := model.CountBills(h.DB, f)
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	pg := newPagination(parsePage(r), total)
+	f.Limit, f.Offset = pg.PageSize, pg.Offset()
+
 	bills, err := model.ListBills(h.DB, f)
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 	h.render(w, r, "templates/bills/index.html", "Bills", map[string]any{
-		"Bills":  bills,
-		"Filter": f.Status,
+		"Bills":      bills,
+		"Filter":     f.Status,
+		"Search":     f.Search,
+		"Pagination": newPageNav(pg, map[string]string{"status": f.Status, "search": f.Search}),
 	})
 }
 

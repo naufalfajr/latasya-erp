@@ -370,3 +370,44 @@ func TestCreateJournalEntry_MultipleLines(t *testing.T) {
 		t.Errorf("expected balanced 650000, got debit=%d credit=%d", entry.TotalDebit, entry.TotalCredit)
 	}
 }
+
+func TestListJournalEntries_Pagination(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+
+	var cashID, revenueID int
+	db.QueryRow("SELECT id FROM accounts WHERE code = '1-1001'").Scan(&cashID)
+	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
+
+	// Seed 5 entries.
+	for i := 0; i < 5; i++ {
+		model.CreateJournalEntry(db,
+			&model.JournalEntry{EntryDate: "2026-04-04", Description: "E", SourceType: "manual", IsPosted: true, CreatedBy: 1},
+			[]model.JournalLine{{AccountID: cashID, Debit: 1000}, {AccountID: revenueID, Credit: 1000}})
+	}
+
+	// Count ignores Limit/Offset.
+	total, err := model.CountJournalEntries(db, model.JournalFilter{Limit: 2})
+	if err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if total != 5 {
+		t.Errorf("expected count 5, got %d", total)
+	}
+
+	// Limit/Offset returns the right window.
+	page1, _ := model.ListJournalEntries(db, model.JournalFilter{Limit: 2, Offset: 0})
+	page2, _ := model.ListJournalEntries(db, model.JournalFilter{Limit: 2, Offset: 2})
+	page3, _ := model.ListJournalEntries(db, model.JournalFilter{Limit: 2, Offset: 4})
+	if len(page1) != 2 || len(page2) != 2 || len(page3) != 1 {
+		t.Errorf("expected windows 2/2/1, got %d/%d/%d", len(page1), len(page2), len(page3))
+	}
+	if page1[0].ID == page2[0].ID {
+		t.Error("page 1 and page 2 should not overlap")
+	}
+
+	// Limit == 0 returns everything (back-compat).
+	all, _ := model.ListJournalEntries(db, model.JournalFilter{})
+	if len(all) != 5 {
+		t.Errorf("expected all 5 with no limit, got %d", len(all))
+	}
+}

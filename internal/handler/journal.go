@@ -12,8 +12,9 @@ import (
 )
 
 type journalPageData struct {
-	Entries []model.JournalEntry
-	Filter  model.JournalFilter
+	Entries    []model.JournalEntry
+	Filter     model.JournalFilter
+	Pagination Pagination
 }
 
 func (h *Handler) ListJournals(w http.ResponseWriter, r *http.Request) {
@@ -24,6 +25,14 @@ func (h *Handler) ListJournals(w http.ResponseWriter, r *http.Request) {
 		Search:     r.URL.Query().Get("search"),
 	}
 
+	total, err := model.CountJournalEntries(h.DB, f)
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	pg := newPagination(parsePage(r), total)
+	f.Limit, f.Offset = pg.PageSize, pg.Offset()
+
 	entries, err := model.ListJournalEntries(h.DB, f)
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -31,8 +40,9 @@ func (h *Handler) ListJournals(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.render(w, r, "templates/journals/index.html", "Journal Entries", journalPageData{
-		Entries: entries,
-		Filter:  f,
+		Entries:    entries,
+		Filter:     f,
+		Pagination: pg,
 	})
 }
 

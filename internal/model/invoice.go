@@ -83,6 +83,36 @@ func (l InvoiceLine) MarshalJSON() ([]byte, error) {
 type InvoiceFilter struct {
 	Status string
 	Search string
+	Limit  int // 0 = no limit (return all)
+	Offset int
+}
+
+// invoiceWhere builds the shared WHERE fragment used by ListInvoices and
+// CountInvoices. References c.name, so callers must JOIN contacts c.
+func invoiceWhere(f InvoiceFilter) (string, []any) {
+	var where string
+	var args []any
+	if f.Status != "" {
+		where += " AND i.status = ?"
+		args = append(args, f.Status)
+	}
+	if f.Search != "" {
+		where += " AND (i.invoice_number LIKE ? OR c.name LIKE ?)"
+		s := "%" + f.Search + "%"
+		args = append(args, s, s)
+	}
+	return where, args
+}
+
+// CountInvoices returns the total invoices matching the filter, ignoring
+// Limit/Offset.
+func CountInvoices(db *sql.DB, f InvoiceFilter) (int, error) {
+	where, args := invoiceWhere(f)
+	var n int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM invoices i JOIN contacts c ON c.id = i.contact_id WHERE 1=1`+where, args...).Scan(&n); err != nil {
+		return 0, fmt.Errorf("count invoices: %w", err)
+	}
+	return n, nil
 }
 
 func GenerateInvoiceNumber(db *sql.DB) (string, error) {
@@ -192,24 +222,17 @@ func getInvoiceLines(db *sql.DB, invoiceID int) ([]InvoiceLine, error) {
 }
 
 func ListInvoices(db *sql.DB, f InvoiceFilter) ([]Invoice, error) {
+	where, args := invoiceWhere(f)
 	query := `SELECT i.id, i.invoice_number, i.contact_id, i.invoice_date, i.due_date, i.status,
 			i.subtotal, i.tax_amount, i.total, i.amount_paid, i.amount_credited, COALESCE(i.notes,''),
 			i.journal_id, i.created_by, i.created_at, i.updated_at, c.name
 		 FROM invoices i
 		 JOIN contacts c ON c.id = i.contact_id
-		 WHERE 1=1`
-	var args []any
-
-	if f.Status != "" {
-		query += " AND i.status = ?"
-		args = append(args, f.Status)
+		 WHERE 1=1` + where + ` ORDER BY i.invoice_date DESC, i.id DESC`
+	if f.Limit > 0 {
+		query += " LIMIT ? OFFSET ?"
+		args = append(args, f.Limit, f.Offset)
 	}
-	if f.Search != "" {
-		query += " AND (i.invoice_number LIKE ? OR c.name LIKE ?)"
-		s := "%" + f.Search + "%"
-		args = append(args, s, s)
-	}
-	query += " ORDER BY i.invoice_date DESC, i.id DESC"
 
 	rows, err := db.Query(query, args...)
 	if err != nil {

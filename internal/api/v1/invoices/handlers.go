@@ -153,6 +153,14 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	filter := model.InvoiceFilter{
 		Status: r.URL.Query().Get("status"),
 		Search: r.URL.Query().Get("search"),
+		Limit:  page.PerPage,
+		Offset: page.Offset(),
+	}
+
+	total, err := model.CountInvoices(h.DB, filter)
+	if err != nil {
+		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to list invoices", nil)
+		return
 	}
 
 	invoices, err := model.ListInvoices(h.DB, filter)
@@ -164,17 +172,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		invoices = []model.Invoice{}
 	}
 
-	total := len(invoices)
-	start := page.Offset()
-	if start > total {
-		start = total
-	}
-	end := start + page.PerPage
-	if end > total {
-		end = total
-	}
-
-	v1.WriteList(w, http.StatusOK, invoices[start:end], page, total)
+	v1.WriteList(w, http.StatusOK, invoices, page, total)
 }
 
 // Get handles GET /api/v1/invoices/{id}.

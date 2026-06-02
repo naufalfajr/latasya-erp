@@ -40,6 +40,35 @@ type BillLine struct {
 type BillFilter struct {
 	Status string
 	Search string
+	Limit  int // 0 = no limit (return all)
+	Offset int
+}
+
+// billWhere builds the shared WHERE fragment used by ListBills and CountBills.
+// References c.name, so callers must JOIN contacts c.
+func billWhere(f BillFilter) (string, []any) {
+	var where string
+	var args []any
+	if f.Status != "" {
+		where += " AND b.status = ?"
+		args = append(args, f.Status)
+	}
+	if f.Search != "" {
+		where += " AND (b.bill_number LIKE ? OR c.name LIKE ?)"
+		s := "%" + f.Search + "%"
+		args = append(args, s, s)
+	}
+	return where, args
+}
+
+// CountBills returns the total bills matching the filter, ignoring Limit/Offset.
+func CountBills(db *sql.DB, f BillFilter) (int, error) {
+	where, args := billWhere(f)
+	var n int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM bills b JOIN contacts c ON c.id = b.contact_id WHERE 1=1`+where, args...).Scan(&n); err != nil {
+		return 0, fmt.Errorf("count bills: %w", err)
+	}
+	return n, nil
 }
 
 func GenerateBillNumber(db *sql.DB) (string, error) {
@@ -131,22 +160,15 @@ func GetBill(db *sql.DB, id int) (*Bill, error) {
 }
 
 func ListBills(db *sql.DB, f BillFilter) ([]Bill, error) {
+	where, args := billWhere(f)
 	query := `SELECT b.id, b.bill_number, b.contact_id, b.bill_date, b.due_date, b.status,
 			b.subtotal, b.tax_amount, b.total, b.amount_paid, COALESCE(b.notes,''),
 			b.journal_id, b.created_by, b.created_at, b.updated_at, c.name
-		 FROM bills b JOIN contacts c ON c.id = b.contact_id WHERE 1=1`
-	var args []any
-
-	if f.Status != "" {
-		query += " AND b.status = ?"
-		args = append(args, f.Status)
+		 FROM bills b JOIN contacts c ON c.id = b.contact_id WHERE 1=1` + where + ` ORDER BY b.bill_date DESC, b.id DESC`
+	if f.Limit > 0 {
+		query += " LIMIT ? OFFSET ?"
+		args = append(args, f.Limit, f.Offset)
 	}
-	if f.Search != "" {
-		query += " AND (b.bill_number LIKE ? OR c.name LIKE ?)"
-		s := "%" + f.Search + "%"
-		args = append(args, s, s)
-	}
-	query += " ORDER BY b.bill_date DESC, b.id DESC"
 
 	rows, err := db.Query(query, args...)
 	if err != nil {

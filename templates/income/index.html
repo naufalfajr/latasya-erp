@@ -7,7 +7,8 @@
     {{end}}
 </div>
 
-{{$entries := .Data}}
+{{$data := .Data}}
+{{$entries := index $data "Entries"}}
 
 <div id="income-table" class="overflow-x-auto">
     <table class="table table-sm">
@@ -51,4 +52,6 @@
         </tbody>
     </table>
 </div>
+
+{{template "pagination" (index $data "Pagination")}}
 {{end}}

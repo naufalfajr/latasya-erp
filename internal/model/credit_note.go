@@ -47,6 +47,41 @@ type CreditNoteLine struct {
 type CreditNoteFilter struct {
 	Status string
 	Search string
+	Limit  int // 0 = no limit (return all)
+	Offset int
+}
+
+// creditNoteWhere builds the shared WHERE fragment used by ListCreditNotes and
+// CountCreditNotes. References c.name and i.invoice_number, so callers must JOIN
+// contacts c and LEFT JOIN invoices i.
+func creditNoteWhere(f CreditNoteFilter) (string, []any) {
+	var where string
+	var args []any
+	if f.Status != "" {
+		where += " AND cn.status = ?"
+		args = append(args, f.Status)
+	}
+	if f.Search != "" {
+		where += " AND (cn.cn_number LIKE ? OR c.name LIKE ? OR i.invoice_number LIKE ?)"
+		s := "%" + f.Search + "%"
+		args = append(args, s, s, s)
+	}
+	return where, args
+}
+
+// CountCreditNotes returns the total credit notes matching the filter, ignoring
+// Limit/Offset.
+func CountCreditNotes(db *sql.DB, f CreditNoteFilter) (int, error) {
+	where, args := creditNoteWhere(f)
+	var n int
+	q := `SELECT COUNT(*) FROM credit_notes cn
+		 JOIN contacts c ON c.id = cn.contact_id
+		 LEFT JOIN invoices i ON i.id = cn.invoice_id
+		 WHERE 1=1` + where
+	if err := db.QueryRow(q, args...).Scan(&n); err != nil {
+		return 0, fmt.Errorf("count credit notes: %w", err)
+	}
+	return n, nil
 }
 
 func GenerateCreditNoteNumber(db *sql.DB) (string, error) {
@@ -162,6 +197,7 @@ func getCreditNoteLines(db *sql.DB, cnID int) ([]CreditNoteLine, error) {
 }
 
 func ListCreditNotes(db *sql.DB, f CreditNoteFilter) ([]CreditNote, error) {
+	where, args := creditNoteWhere(f)
 	query := `SELECT cn.id, cn.cn_number, cn.contact_id, cn.invoice_id, cn.cn_date, cn.reason, cn.status,
 			cn.subtotal, cn.tax_amount, cn.total, COALESCE(cn.notes,''),
 			cn.journal_id, cn.created_by, cn.created_at, cn.updated_at,
@@ -169,19 +205,11 @@ func ListCreditNotes(db *sql.DB, f CreditNoteFilter) ([]CreditNote, error) {
 		 FROM credit_notes cn
 		 JOIN contacts c ON c.id = cn.contact_id
 		 LEFT JOIN invoices i ON i.id = cn.invoice_id
-		 WHERE 1=1`
-	var args []any
-
-	if f.Status != "" {
-		query += " AND cn.status = ?"
-		args = append(args, f.Status)
+		 WHERE 1=1` + where + ` ORDER BY cn.cn_date DESC, cn.id DESC`
+	if f.Limit > 0 {
+		query += " LIMIT ? OFFSET ?"
+		args = append(args, f.Limit, f.Offset)
 	}
-	if f.Search != "" {
-		query += " AND (cn.cn_number LIKE ? OR c.name LIKE ? OR i.invoice_number LIKE ?)"
-		s := "%" + f.Search + "%"
-		args = append(args, s, s, s)
-	}
-	query += " ORDER BY cn.cn_date DESC, cn.id DESC"
 
 	rows, err := db.Query(query, args...)
 	if err != nil {

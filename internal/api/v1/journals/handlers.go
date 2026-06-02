@@ -118,6 +118,14 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		DateTo:     r.URL.Query().Get("to"),
 		SourceType: r.URL.Query().Get("source"),
 		Search:     r.URL.Query().Get("search"),
+		Limit:      page.PerPage,
+		Offset:     page.Offset(),
+	}
+
+	total, err := model.CountJournalEntries(h.DB, filter)
+	if err != nil {
+		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to list journals", nil)
+		return
 	}
 
 	entries, err := model.ListJournalEntries(h.DB, filter)
@@ -129,17 +137,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		entries = []model.JournalEntry{}
 	}
 
-	total := len(entries)
-	start := page.Offset()
-	if start > total {
-		start = total
-	}
-	end := start + page.PerPage
-	if end > total {
-		end = total
-	}
-
-	v1.WriteList(w, http.StatusOK, entries[start:end], page, total)
+	v1.WriteList(w, http.StatusOK, entries, page, total)
 }
 
 // Get handles GET /api/v1/journals/{id}.
