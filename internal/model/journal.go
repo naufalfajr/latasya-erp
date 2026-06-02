@@ -104,11 +104,14 @@ func journalWhere(f JournalFilter) (string, []any) {
 }
 
 // CountJournalEntries returns the total entries matching the filter, ignoring
-// Limit/Offset — used for pagination page counts.
+// Limit/Offset — used for pagination page counts. It JOINs users to mirror
+// ListJournalEntries' row set, so the count can't include an entry the listing
+// would drop (which would overstate the page count).
 func CountJournalEntries(db *sql.DB, f JournalFilter) (int, error) {
 	where, args := journalWhere(f)
 	var n int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM journal_entries je WHERE 1=1`+where, args...).Scan(&n); err != nil {
+	q := `SELECT COUNT(*) FROM journal_entries je JOIN users u ON u.id = je.created_by WHERE 1=1` + where
+	if err := db.QueryRow(q, args...).Scan(&n); err != nil {
 		return 0, fmt.Errorf("count journal entries: %w", err)
 	}
 	return n, nil
