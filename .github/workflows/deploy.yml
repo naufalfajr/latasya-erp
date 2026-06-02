@@ -12,6 +12,7 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -24,6 +25,7 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     environment: production
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -62,14 +64,16 @@ jobs:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
         run: |
-          scp -i ~/.ssh/deploy_key latasya-erp "$VPS_USER@$VPS_HOST:/tmp/latasya-erp"
+          scp -o BatchMode=yes -o ConnectTimeout=15 \
+            -i ~/.ssh/deploy_key latasya-erp "$VPS_USER@$VPS_HOST:/tmp/latasya-erp"
 
       - name: Install and restart
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
         run: |
-          ssh -i ~/.ssh/deploy_key "$VPS_USER@$VPS_HOST" \
+          ssh -o BatchMode=yes -o ConnectTimeout=15 \
+            -i ~/.ssh/deploy_key "$VPS_USER@$VPS_HOST" \
             'sudo install -m 755 /tmp/latasya-erp /usr/local/bin/latasya-erp && sudo systemctl restart latasya-erp'
 
       - name: Verify service is healthy
@@ -78,7 +82,8 @@ jobs:
           VPS_USER: ${{ secrets.VPS_USER }}
           EXPECTED_SHA: ${{ github.sha }}
         run: |
-          ssh -i ~/.ssh/deploy_key "$VPS_USER@$VPS_HOST" \
+          ssh -o BatchMode=yes -o ConnectTimeout=15 \
+            -i ~/.ssh/deploy_key "$VPS_USER@$VPS_HOST" \
             "EXPECTED_SHA=$EXPECTED_SHA bash -s" <<'EOF'
           set -euo pipefail
 
