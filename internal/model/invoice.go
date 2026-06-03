@@ -650,3 +650,65 @@ func BulkDeleteDraftInvoices(db *sql.DB, ids []int) ([]DeletedInvoice, []int, er
 	}
 	return deleted, skipped, nil
 }
+
+// SentInvoice identifies an invoice marked sent by BulkSendInvoices, with the
+// journal entry that was posted (for reconciliation against the ledger).
+type SentInvoice struct {
+	ID            int    `json:"id"`
+	InvoiceNumber string `json:"invoice_number"`
+	JournalID     *int   `json:"journal_id,omitempty"`
+}
+
+// FailedInvoice identifies an invoice whose bulk send failed, with the reason.
+type FailedInvoice struct {
+	ID            int    `json:"id"`
+	InvoiceNumber string `json:"invoice_number"`
+	Error         string `json:"error"`
+}
+
+// BulkSendResult summarizes a bulk-send batch: invoices sent, IDs skipped
+// (unknown or not draft), and invoices whose send failed (with the reason).
+type BulkSendResult struct {
+	Sent    []SentInvoice   `json:"sent"`
+	Skipped []int           `json:"skipped"`
+	Failed  []FailedInvoice `json:"failed"`
+}
+
+// bulkSendMu serializes BulkSendInvoices so two concurrent runs (e.g. a
+// double-clicked button) cannot both pass the draft check for the same invoice
+// and post duplicate journal entries. Single-process scope.
+var bulkSendMu sync.Mutex
+
+// BulkSendInvoices sends each draft invoice among the given IDs (marking it
+// "sent" and posting its AR journal entry via SendInvoice). IDs that are unknown
+// or not in draft status are skipped; a send error is recorded under Failed and
+// does not abort the batch.
+func BulkSendInvoices(db *sql.DB, ids []int, userID int) (*BulkSendResult, error) {
+	bulkSendMu.Lock()
+	defer bulkSendMu.Unlock()
+
+	res := &BulkSendResult{Sent: []SentInvoice{}, Skipped: []int{}, Failed: []FailedInvoice{}}
+	for _, id := range ids {
+		var status, number string
+		err := db.QueryRow("SELECT status, invoice_number FROM invoices WHERE id = ?", id).Scan(&status, &number)
+		if errors.Is(err, sql.ErrNoRows) {
+			res.Skipped = append(res.Skipped, id)
+			continue
+		}
+		if err != nil {
+			return nil, fmt.Errorf("lookup invoice %d: %w", id, err)
+		}
+		if status != StatusDraft {
+			res.Skipped = append(res.Skipped, id)
+			continue
+		}
+		if err := SendInvoice(db, id, userID); err != nil {
+			res.Failed = append(res.Failed, FailedInvoice{ID: id, InvoiceNumber: number, Error: err.Error()})
+			continue
+		}
+		var journalID *int
+		db.QueryRow("SELECT journal_id FROM invoices WHERE id = ?", id).Scan(&journalID)
+		res.Sent = append(res.Sent, SentInvoice{ID: id, InvoiceNumber: number, JournalID: journalID})
+	}
+	return res, nil
+}

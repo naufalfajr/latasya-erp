@@ -516,6 +516,53 @@ func (h *Handler) BulkDelete(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+type bulkSendInput struct {
+	IDs []int `json:"ids"`
+}
+
+// BulkSend handles POST /api/v1/invoices/bulk-send. It marks the draft invoices
+// among the provided IDs as sent (posting each one's AR journal entry).
+// Non-draft or unknown IDs are skipped. Requires invoices.manage.
+func (h *Handler) BulkSend(w http.ResponseWriter, r *http.Request) {
+	if !v1.HasEffectiveCapability(r.Context(), model.CapInvoicesManage) {
+		v1.WriteError(w, r, http.StatusForbidden, v1.CodeForbidden, "invoices.manage capability required", nil)
+		return
+	}
+	user := auth.UserFromContext(r.Context())
+
+	var inp bulkSendInput
+	if err := v1.DecodeJSON(w, r, &inp); err != nil {
+		v1.WriteError(w, r, http.StatusBadRequest, v1.CodeInvalidRequest, "invalid request body", nil)
+		return
+	}
+	if len(inp.IDs) == 0 {
+		v1.WriteError(w, r, http.StatusUnprocessableEntity, v1.CodeValidationFailed, "validation failed",
+			map[string]string{"ids": "at least one id required"})
+		return
+	}
+
+	res, err := model.BulkSendInvoices(h.DB, inp.IDs, user.ID)
+	if err != nil {
+		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to send invoices", nil)
+		return
+	}
+
+	audit.Log(r.Context(), h.DB, audit.Event{
+		Action:     "invoice.bulk_send",
+		TargetType: "invoice",
+		Metadata:   map[string]any{"sent": res.Sent, "skipped": res.Skipped, "failed": res.Failed},
+	})
+
+	v1.WriteJSON(w, http.StatusOK, map[string]any{
+		"data": map[string]any{
+			"sent":          len(res.Sent),
+			"sent_invoices": res.Sent,
+			"skipped":       res.Skipped,
+			"failed":        res.Failed,
+		},
+	})
+}
+
 // Payment handles POST /api/v1/invoices/{id}/payment.
 func (h *Handler) Payment(w http.ResponseWriter, r *http.Request) {
 	if !v1.HasEffectiveCapability(r.Context(), model.CapInvoicesManage) {

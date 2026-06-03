@@ -159,6 +159,7 @@ func main() {
 	apiMux.Handle("POST /api/v1/invoices/{id}/payment", idem(http.HandlerFunc(invoicesAPI.Payment)))
 	apiMux.Handle("POST /api/v1/invoices/generate-recurring", idem(http.HandlerFunc(invoicesAPI.GenerateRecurring)))
 	apiMux.HandleFunc("POST /api/v1/invoices/bulk-delete", invoicesAPI.BulkDelete)
+	apiMux.HandleFunc("POST /api/v1/invoices/bulk-send", invoicesAPI.BulkSend)
 
 	apiTokensAPI := &v1apitokens.Handler{DB: db}
 	apiMux.HandleFunc("GET /api/v1/api-tokens", apiTokensAPI.List)
@@ -270,6 +271,7 @@ func main() {
 	protected.HandleFunc("POST /invoices", auth.CapabilityOnly(model.CapInvoicesManage, h.CreateInvoice))
 	protected.HandleFunc("POST /invoices/generate-recurring", auth.CapabilityOnly(model.CapInvoicesManage, h.GenerateRecurringInvoices))
 	protected.HandleFunc("POST /invoices/bulk-delete", auth.CapabilityOnly(model.CapInvoicesManage, h.BulkDeleteInvoices))
+	protected.HandleFunc("POST /invoices/bulk-send", auth.CapabilityOnly(model.CapInvoicesManage, h.BulkSendInvoices))
 	protected.HandleFunc("GET /invoices/{id}", h.ViewInvoice)
 	protected.HandleFunc("GET /invoices/{id}/edit", h.EditInvoice)
 	protected.HandleFunc("POST /invoices/{id}", auth.CapabilityOnly(model.CapInvoicesManage, h.UpdateInvoice))
