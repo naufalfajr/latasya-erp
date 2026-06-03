@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/auth"
@@ -119,6 +120,77 @@ func (h *Handler) CreateInvoice(w http.ResponseWriter, r *http.Request) {
 
 	h.setFlash(w, "Invoice created successfully")
 	http.Redirect(w, r, fmt.Sprintf("/invoices/%d", invID), http.StatusSeeOther)
+}
+
+func (h *Handler) GenerateRecurringInvoices(w http.ResponseWriter, r *http.Request) {
+	user := auth.UserFromContext(r.Context())
+
+	now := time.Now()
+	invoiceDate := now.Format("2006-01-02")
+	dueDate := now.AddDate(0, 0, 10).Format("2006-01-02")
+
+	result, err := model.GenerateRecurringInvoices(h.DB, invoiceDate, dueDate, user.ID)
+	if err != nil {
+		h.setFlash(w, "Error generating invoices: "+err.Error())
+		http.Redirect(w, r, "/invoices", http.StatusSeeOther)
+		return
+	}
+
+	audit.Log(r.Context(), h.DB, audit.Event{
+		Action:     "invoice.generate_recurring",
+		TargetType: "invoice",
+		Metadata: map[string]any{
+			"invoice_date":     invoiceDate,
+			"due_date":         dueDate,
+			"created":          result.Created,
+			"skipped":          result.Skipped,
+			"failed":           result.Failed,
+			"created_invoices": result.CreatedNumbers(),
+		},
+	})
+
+	msg := fmt.Sprintf("Generated %d draft invoice(s). Skipped %d customer(s).", result.Created, result.Skipped)
+	if result.Failed > 0 {
+		msg += fmt.Sprintf(" Failed %d.", result.Failed)
+	}
+	h.setFlash(w, msg)
+	http.Redirect(w, r, "/invoices", http.StatusSeeOther)
+}
+
+func (h *Handler) BulkDeleteInvoices(w http.ResponseWriter, r *http.Request) {
+	r.ParseForm()
+	var ids []int
+	for _, s := range r.Form["ids"] {
+		if id, err := strconv.Atoi(s); err == nil {
+			ids = append(ids, id)
+		}
+	}
+
+	if len(ids) == 0 {
+		h.setFlash(w, "No invoices selected")
+		http.Redirect(w, r, "/invoices", http.StatusSeeOther)
+		return
+	}
+
+	deleted, skipped, err := model.BulkDeleteDraftInvoices(h.DB, ids)
+	if err != nil {
+		h.setFlash(w, "Error deleting invoices: "+err.Error())
+		http.Redirect(w, r, "/invoices", http.StatusSeeOther)
+		return
+	}
+
+	audit.Log(r.Context(), h.DB, audit.Event{
+		Action:     "invoice.bulk_delete",
+		TargetType: "invoice",
+		Metadata:   map[string]any{"deleted": deleted, "skipped": len(skipped)},
+	})
+
+	msg := fmt.Sprintf("Deleted %d draft invoice(s).", len(deleted))
+	if len(skipped) > 0 {
+		msg += fmt.Sprintf(" Skipped %d (not draft).", len(skipped))
+	}
+	h.setFlash(w, msg)
+	http.Redirect(w, r, "/invoices", http.StatusSeeOther)
 }
 
 func (h *Handler) ViewInvoice(w http.ResponseWriter, r *http.Request) {

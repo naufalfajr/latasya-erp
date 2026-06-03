@@ -1,9 +1,19 @@
 {{template "base" .}}
 {{define "content"}}
+{{$canManage := .User.HasCapability "invoices.manage"}}
 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
     <h1 class="text-2xl font-bold">Invoices</h1>
-    {{if .User.HasCapability "invoices.manage"}}
-    <a href="/invoices/new" class="btn btn-primary btn-sm">+ New Invoice</a>
+    {{if $canManage}}
+    <div class="flex gap-2 flex-wrap">
+        <button type="submit" form="bulk-invoice-form" class="btn btn-error btn-sm btn-outline"
+            onclick="return confirm('Delete the selected draft invoices? This cannot be undone.')">Delete selected</button>
+        <form method="POST" action="/invoices/generate-recurring" class="inline">
+            {{template "csrf" $}}
+            <button type="submit" class="btn btn-secondary btn-sm"
+                onclick="return confirm('Generate a draft invoice for every active customer by cloning their latest invoice? Customers already invoiced this month are skipped.')">Generate Recurring Invoices</button>
+        </form>
+        <a href="/invoices/new" class="btn btn-primary btn-sm">+ New Invoice</a>
+    </div>
     {{end}}
 </div>
 
@@ -20,9 +30,11 @@
 </div>
 
 <div class="overflow-x-auto">
+    {{if $canManage}}<form id="bulk-invoice-form" method="POST" action="/invoices/bulk-delete">{{template "csrf" $}}{{end}}
     <table class="table table-sm">
         <thead>
             <tr>
+                {{if $canManage}}<th><input type="checkbox" class="checkbox checkbox-xs" onclick="document.querySelectorAll('input[name=ids]').forEach(c=>{c.checked=this.checked})" aria-label="Select all draft invoices"></th>{{end}}
                 <th>Number</th>
                 <th>Customer</th>
                 <th>Date</th>
@@ -37,6 +49,7 @@
         <tbody>
             {{range (index $data "Invoices")}}
             <tr id="invoice-{{.ID}}">
+                {{if $canManage}}<td>{{if eq .Status "draft"}}<input type="checkbox" name="ids" value="{{.ID}}" class="checkbox checkbox-xs" aria-label="Select invoice {{.InvoiceNumber}}">{{end}}</td>{{end}}
                 <td class="font-mono text-sm">{{.InvoiceNumber}}</td>
                 <td>{{.ContactName}}</td>
                 <td class="text-sm">{{formatDate .InvoiceDate}}</td>
@@ -60,11 +73,12 @@
             </tr>
             {{else}}
             <tr>
-                <td colspan="9" class="text-center py-8 opacity-60">No invoices found</td>
+                <td colspan="{{if $canManage}}10{{else}}9{{end}}" class="text-center py-8 opacity-60">No invoices found</td>
             </tr>
             {{end}}
         </tbody>
     </table>
+    {{if $canManage}}</form>{{end}}
 </div>
 
 {{template "pagination" (index $data "Pagination")}}
