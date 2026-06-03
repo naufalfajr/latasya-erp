@@ -219,10 +219,10 @@ func (h *Handler) BulkSendInvoices(w http.ResponseWriter, r *http.Request) {
 	audit.Log(r.Context(), h.DB, audit.Event{
 		Action:     "invoice.bulk_send",
 		TargetType: "invoice",
-		Metadata:   map[string]any{"sent": res.Sent, "skipped": len(res.Skipped), "failed": res.Failed},
+		Metadata:   map[string]any{"sent": res.Sent, "skipped": res.Skipped, "failed": res.Failed},
 	})
 
-	msg := fmt.Sprintf("Marked %d invoice(s) as sent.", len(res.Sent))
+	msg := fmt.Sprintf("Marked %d invoice(s) as sent (journal entries posted).", len(res.Sent))
 	if len(res.Skipped) > 0 {
 		msg += fmt.Sprintf(" Skipped %d (not draft).", len(res.Skipped))
 	}

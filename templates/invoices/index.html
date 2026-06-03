@@ -8,9 +8,10 @@
         <button type="submit" form="bulk-invoice-form" hidden
             class="btn btn-info btn-sm bulk-action-btn" data-label="Mark as sent"
             formaction="/invoices/bulk-send"
-            onclick="return confirm('Mark the selected draft invoices as sent? This posts a journal entry for each and cannot be undone.')">Mark as sent</button>
+            onclick="return confirm('Mark the selected draft invoices as sent? A journal entry is posted for each, dated by the invoice date (may affect prior periods). This cannot be undone.')">Mark as sent</button>
         <button type="submit" form="bulk-invoice-form" hidden
             class="btn btn-error btn-sm bulk-action-btn" data-label="Delete selected"
+            formaction="/invoices/bulk-delete"
             onclick="return confirm('Delete the selected draft invoices? This cannot be undone.')">Delete selected</button>
         <form method="POST" action="/invoices/generate-recurring" class="inline">
             {{template "csrf" $}}
@@ -35,7 +36,7 @@
 </div>
 
 <div class="overflow-x-auto">
-    {{if $canManage}}<form id="bulk-invoice-form" method="POST" action="/invoices/bulk-delete">{{template "csrf" $}}{{end}}
+    {{if $canManage}}<form id="bulk-invoice-form" method="POST" action="/invoices/bulk-send">{{template "csrf" $}}{{end}}
     <table class="table table-sm">
         <thead>
             <tr>
