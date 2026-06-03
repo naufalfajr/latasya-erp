@@ -2402,7 +2402,7 @@ paths:
                         description: Number of invoices sent.
                       sent_invoices:
                         type: array
-                        description: The invoices that were sent (id + number).
+                        description: The invoices that were sent (id, number, posted journal id).
                         items:
                           type: object
                           properties:
@@ -2410,6 +2410,9 @@ paths:
                               type: integer
                             invoice_number:
                               type: string
+                            journal_id:
+                              type: integer
+                              nullable: true
                       skipped:
                         type: array
                         items:
@@ -2417,13 +2420,15 @@ paths:
                         description: IDs skipped (unknown or not draft).
                       failed:
                         type: array
-                        description: Invoices whose send failed.
+                        description: Invoices whose send failed, with the reason.
                         items:
                           type: object
                           properties:
                             id:
                               type: integer
                             invoice_number:
+                              type: string
+                            error:
                               type: string
         '401':
           $ref: '#/components/responses/Unauthorized'
