@@ -2364,6 +2364,74 @@ paths:
         '422':
           $ref: '#/components/responses/ValidationFailed'
 
+  /invoices/bulk-send:
+    post:
+      operationId: bulkSendInvoices
+      summary: Bulk-send draft invoices
+      description: |
+        Marks the draft invoices among the provided IDs as sent, posting each
+        one's AR journal entry. IDs that are unknown or not in draft status are
+        skipped; a send failure is reported under failed. Requires invoices.manage.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids:
+                  type: array
+                  items:
+                    type: integer
+                  minItems: 1
+      responses:
+        '200':
+          description: Bulk send result.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    required: [sent, sent_invoices, skipped, failed]
+                    properties:
+                      sent:
+                        type: integer
+                        description: Number of invoices sent.
+                      sent_invoices:
+                        type: array
+                        description: The invoices that were sent (id + number).
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: integer
+                            invoice_number:
+                              type: string
+                      skipped:
+                        type: array
+                        items:
+                          type: integer
+                        description: IDs skipped (unknown or not draft).
+                      failed:
+                        type: array
+                        description: Invoices whose send failed.
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: integer
+                            invoice_number:
+                              type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
   /bills:
     get:
       operationId: listBills
