@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	v1 "github.com/naufal/latasya-erp/internal/api/v1"
 	"github.com/naufal/latasya-erp/internal/audit"
@@ -431,6 +432,88 @@ func (h *Handler) Send(w http.ResponseWriter, r *http.Request) {
 	})
 
 	v1.WriteJSON(w, http.StatusOK, map[string]any{"data": updated})
+}
+
+// GenerateRecurring handles POST /api/v1/invoices/generate-recurring. It
+// creates a draft invoice for every active customer by cloning each one's most
+// recent invoice. Requires invoices.manage. Invoice date is today, due date is
+// today + 10 days. Idempotency-Key is supported.
+func (h *Handler) GenerateRecurring(w http.ResponseWriter, r *http.Request) {
+	if !v1.HasEffectiveCapability(r.Context(), model.CapInvoicesManage) {
+		v1.WriteError(w, r, http.StatusForbidden, v1.CodeForbidden, "invoices.manage capability required", nil)
+		return
+	}
+	user := auth.UserFromContext(r.Context())
+
+	now := time.Now()
+	invoiceDate := now.Format("2006-01-02")
+	dueDate := now.AddDate(0, 0, 10).Format("2006-01-02")
+
+	result, err := model.GenerateRecurringInvoices(h.DB, invoiceDate, dueDate, user.ID)
+	if err != nil {
+		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to generate recurring invoices", nil)
+		return
+	}
+
+	audit.Log(r.Context(), h.DB, audit.Event{
+		Action:     "invoice.generate_recurring",
+		TargetType: "invoice",
+		Metadata: map[string]any{
+			"invoice_date":     invoiceDate,
+			"due_date":         dueDate,
+			"created":          result.Created,
+			"skipped":          result.Skipped,
+			"failed":           result.Failed,
+			"created_invoices": result.CreatedNumbers(),
+		},
+	})
+
+	v1.WriteJSON(w, http.StatusOK, map[string]any{"data": result})
+}
+
+type bulkDeleteInput struct {
+	IDs []int `json:"ids"`
+}
+
+// BulkDelete handles POST /api/v1/invoices/bulk-delete. It deletes the draft
+// invoices among the provided IDs; non-draft or unknown IDs are skipped and
+// returned. Requires invoices.manage.
+func (h *Handler) BulkDelete(w http.ResponseWriter, r *http.Request) {
+	if !v1.HasEffectiveCapability(r.Context(), model.CapInvoicesManage) {
+		v1.WriteError(w, r, http.StatusForbidden, v1.CodeForbidden, "invoices.manage capability required", nil)
+		return
+	}
+
+	var inp bulkDeleteInput
+	if err := v1.DecodeJSON(w, r, &inp); err != nil {
+		v1.WriteError(w, r, http.StatusBadRequest, v1.CodeInvalidRequest, "invalid request body", nil)
+		return
+	}
+	if len(inp.IDs) == 0 {
+		v1.WriteError(w, r, http.StatusUnprocessableEntity, v1.CodeValidationFailed, "validation failed",
+			map[string]string{"ids": "at least one id required"})
+		return
+	}
+
+	deleted, skipped, err := model.BulkDeleteDraftInvoices(h.DB, inp.IDs)
+	if err != nil {
+		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to delete invoices", nil)
+		return
+	}
+
+	audit.Log(r.Context(), h.DB, audit.Event{
+		Action:     "invoice.bulk_delete",
+		TargetType: "invoice",
+		Metadata:   map[string]any{"deleted": deleted, "skipped": skipped},
+	})
+
+	v1.WriteJSON(w, http.StatusOK, map[string]any{
+		"data": map[string]any{
+			"deleted":          len(deleted),
+			"deleted_invoices": deleted,
+			"skipped":          skipped,
+		},
+	})
 }
 
 // Payment handles POST /api/v1/invoices/{id}/payment.

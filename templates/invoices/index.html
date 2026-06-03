@@ -1,16 +1,27 @@
 {{template "base" .}}
 {{define "content"}}
+{{$canManage := .User.HasCapability "invoices.manage"}}
 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
     <h1 class="text-2xl font-bold">Invoices</h1>
-    {{if .User.HasCapability "invoices.manage"}}
-    <a href="/invoices/new" class="btn btn-primary btn-sm">+ New Invoice</a>
+    {{if $canManage}}
+    <div class="flex gap-2 flex-wrap">
+        <button type="submit" form="bulk-invoice-form" id="delete-selected-btn" hidden
+            class="btn btn-error btn-sm"
+            onclick="return confirm('Delete the selected draft invoices? This cannot be undone.')">Delete selected</button>
+        <form method="POST" action="/invoices/generate-recurring" class="inline">
+            {{template "csrf" $}}
+            <button type="submit" class="btn btn-secondary btn-sm"
+                onclick="return confirm('Generate a draft invoice for every active customer by cloning their latest invoice? Customers already invoiced this month are skipped.')">Generate Recurring Invoices</button>
+        </form>
+        <a href="/invoices/new" class="btn btn-primary btn-sm">+ New Invoice</a>
+    </div>
     {{end}}
 </div>
 
 {{$data := .Data}}
 
 <!-- Status filter tabs -->
-<div class="tabs tabs-boxed mb-4 flex-wrap">
+<div class="tabs tabs-box mb-4 flex-wrap">
     <a href="/invoices" class="tab {{if eq (index $data "Filter") ""}}tab-active{{end}}">All</a>
     <a href="/invoices?status=draft" class="tab {{if eq (index $data "Filter") "draft"}}tab-active{{end}}">Draft</a>
     <a href="/invoices?status=sent" class="tab {{if eq (index $data "Filter") "sent"}}tab-active{{end}}">Sent</a>
@@ -20,9 +31,11 @@
 </div>
 
 <div class="overflow-x-auto">
+    {{if $canManage}}<form id="bulk-invoice-form" method="POST" action="/invoices/bulk-delete">{{template "csrf" $}}{{end}}
     <table class="table table-sm">
         <thead>
             <tr>
+                {{if $canManage}}<th><input type="checkbox" id="select-all-drafts" class="checkbox checkbox-xs" aria-label="Select all draft invoices"></th>{{end}}
                 <th>Number</th>
                 <th>Customer</th>
                 <th>Date</th>
@@ -37,6 +50,7 @@
         <tbody>
             {{range (index $data "Invoices")}}
             <tr id="invoice-{{.ID}}">
+                {{if $canManage}}<td>{{if eq .Status "draft"}}<input type="checkbox" name="ids" value="{{.ID}}" class="checkbox checkbox-xs" aria-label="Select invoice {{.InvoiceNumber}}">{{end}}</td>{{end}}
                 <td class="font-mono text-sm">{{.InvoiceNumber}}</td>
                 <td>{{.ContactName}}</td>
                 <td class="text-sm">{{formatDate .InvoiceDate}}</td>
@@ -60,12 +74,65 @@
             </tr>
             {{else}}
             <tr>
-                <td colspan="9" class="text-center py-8 opacity-60">No invoices found</td>
+                <td colspan="{{if $canManage}}10{{else}}9{{end}}" class="text-center py-8 opacity-60">No invoices found</td>
             </tr>
             {{end}}
         </tbody>
     </table>
+    {{if $canManage}}</form>{{end}}
 </div>
 
 {{template "pagination" (index $data "Pagination")}}
+
+<script>
+(function () {
+  if (window._invListInit) return;
+  window._invListInit = true;
+
+  function updateDeleteBtn() {
+    var btn = document.getElementById('delete-selected-btn');
+    if (!btn) return;
+    var n = document.querySelectorAll('input[name="ids"]:checked').length;
+    btn.hidden = (n === 0);
+    btn.textContent = n > 0 ? 'Delete selected (' + n + ')' : 'Delete selected';
+  }
+
+  document.addEventListener('change', function (e) {
+    var t = e.target;
+    if (!t) return;
+
+    if (t.name === 'ids') {
+      updateDeleteBtn();
+      var all = document.querySelectorAll('input[name="ids"]');
+      var checked = document.querySelectorAll('input[name="ids"]:checked');
+      var selectAll = document.getElementById('select-all-drafts');
+      if (selectAll) {
+        selectAll.indeterminate = checked.length > 0 && checked.length < all.length;
+        selectAll.checked = all.length > 0 && checked.length === all.length;
+      }
+      return;
+    }
+
+    if (t.id === 'select-all-drafts') {
+      document.querySelectorAll('input[name="ids"]').forEach(function (c) {
+        c.checked = t.checked;
+      });
+      t.indeterminate = false;
+      updateDeleteBtn();
+    }
+  });
+
+  function onLoad() {
+    updateDeleteBtn();
+    var selectAll = document.getElementById('select-all-drafts');
+    if (selectAll) {
+      selectAll.checked = false;
+      selectAll.indeterminate = false;
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', onLoad);
+  document.addEventListener('htmx:load', onLoad);
+})();
+</script>
 {{end}}
