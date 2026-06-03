@@ -5,8 +5,12 @@
     <h1 class="text-2xl font-bold">Invoices</h1>
     {{if $canManage}}
     <div class="flex gap-2 flex-wrap">
-        <button type="submit" form="bulk-invoice-form" id="delete-selected-btn" hidden
-            class="btn btn-error btn-sm"
+        <button type="submit" form="bulk-invoice-form" hidden
+            class="btn btn-info btn-sm bulk-action-btn" data-label="Mark as sent"
+            formaction="/invoices/bulk-send"
+            onclick="return confirm('Mark the selected draft invoices as sent? This posts a journal entry for each and cannot be undone.')">Mark as sent</button>
+        <button type="submit" form="bulk-invoice-form" hidden
+            class="btn btn-error btn-sm bulk-action-btn" data-label="Delete selected"
             onclick="return confirm('Delete the selected draft invoices? This cannot be undone.')">Delete selected</button>
         <form method="POST" action="/invoices/generate-recurring" class="inline">
             {{template "csrf" $}}
@@ -89,12 +93,13 @@
   if (window._invListInit) return;
   window._invListInit = true;
 
-  function updateDeleteBtn() {
-    var btn = document.getElementById('delete-selected-btn');
-    if (!btn) return;
+  function updateBulkButtons() {
     var n = document.querySelectorAll('input[name="ids"]:checked').length;
-    btn.hidden = (n === 0);
-    btn.textContent = n > 0 ? 'Delete selected (' + n + ')' : 'Delete selected';
+    document.querySelectorAll('.bulk-action-btn').forEach(function (btn) {
+      btn.hidden = (n === 0);
+      var label = btn.dataset.label || btn.textContent;
+      btn.textContent = n > 0 ? label + ' (' + n + ')' : label;
+    });
   }
 
   document.addEventListener('change', function (e) {
@@ -102,7 +107,7 @@
     if (!t) return;
 
     if (t.name === 'ids') {
-      updateDeleteBtn();
+      updateBulkButtons();
       var all = document.querySelectorAll('input[name="ids"]');
       var checked = document.querySelectorAll('input[name="ids"]:checked');
       var selectAll = document.getElementById('select-all-drafts');
@@ -118,12 +123,12 @@
         c.checked = t.checked;
       });
       t.indeterminate = false;
-      updateDeleteBtn();
+      updateBulkButtons();
     }
   });
 
   function onLoad() {
-    updateDeleteBtn();
+    updateBulkButtons();
     var selectAll = document.getElementById('select-all-drafts');
     if (selectAll) {
       selectAll.checked = false;

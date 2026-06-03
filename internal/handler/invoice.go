@@ -193,6 +193,46 @@ func (h *Handler) BulkDeleteInvoices(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/invoices", http.StatusSeeOther)
 }
 
+func (h *Handler) BulkSendInvoices(w http.ResponseWriter, r *http.Request) {
+	r.ParseForm()
+	var ids []int
+	for _, s := range r.Form["ids"] {
+		if id, err := strconv.Atoi(s); err == nil {
+			ids = append(ids, id)
+		}
+	}
+
+	if len(ids) == 0 {
+		h.setFlash(w, "No invoices selected")
+		http.Redirect(w, r, "/invoices", http.StatusSeeOther)
+		return
+	}
+
+	user := auth.UserFromContext(r.Context())
+	res, err := model.BulkSendInvoices(h.DB, ids, user.ID)
+	if err != nil {
+		h.setFlash(w, "Error sending invoices: "+err.Error())
+		http.Redirect(w, r, "/invoices", http.StatusSeeOther)
+		return
+	}
+
+	audit.Log(r.Context(), h.DB, audit.Event{
+		Action:     "invoice.bulk_send",
+		TargetType: "invoice",
+		Metadata:   map[string]any{"sent": res.Sent, "skipped": len(res.Skipped), "failed": res.Failed},
+	})
+
+	msg := fmt.Sprintf("Marked %d invoice(s) as sent.", len(res.Sent))
+	if len(res.Skipped) > 0 {
+		msg += fmt.Sprintf(" Skipped %d (not draft).", len(res.Skipped))
+	}
+	if len(res.Failed) > 0 {
+		msg += fmt.Sprintf(" Failed %d.", len(res.Failed))
+	}
+	h.setFlash(w, msg)
+	http.Redirect(w, r, "/invoices", http.StatusSeeOther)
+}
+
 func (h *Handler) ViewInvoice(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
