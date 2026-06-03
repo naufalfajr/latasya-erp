@@ -3,8 +3,10 @@ package model
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
+	"sync"
 )
 
 type Invoice struct {
@@ -436,4 +438,215 @@ func DeleteInvoice(db *sql.DB, id int) error {
 
 func (inv *Invoice) AmountDue() int {
 	return inv.Total - inv.AmountPaid - inv.AmountCredited
+}
+
+// Outcomes reported per customer by GenerateRecurringInvoices.
+const (
+	GeneratedInvoiceCreated          = "created"
+	GeneratedInvoiceSkippedNoHistory = "skipped_no_history"
+	GeneratedInvoiceSkippedThisMonth = "skipped_already_invoiced"
+	GeneratedInvoiceFailed           = "failed"
+)
+
+// GeneratedInvoice records the outcome for a single customer in a
+// recurring-invoice batch run.
+type GeneratedInvoice struct {
+	ContactID     int    `json:"contact_id"`
+	ContactName   string `json:"contact_name"`
+	InvoiceID     int    `json:"invoice_id,omitempty"`
+	InvoiceNumber string `json:"invoice_number,omitempty"`
+	Result        string `json:"result"`
+	Error         string `json:"error,omitempty"`
+}
+
+// GenerateRecurringInvoicesResult summarizes a recurring-invoice batch run.
+type GenerateRecurringInvoicesResult struct {
+	Created int                `json:"created"`
+	Skipped int                `json:"skipped"`
+	Failed  int                `json:"failed"`
+	Items   []GeneratedInvoice `json:"items"`
+}
+
+// CreatedNumbers returns the invoice numbers created in the batch, for audit logging.
+func (r *GenerateRecurringInvoicesResult) CreatedNumbers() []string {
+	nums := []string{}
+	for _, it := range r.Items {
+		if it.Result == GeneratedInvoiceCreated {
+			nums = append(nums, it.InvoiceNumber)
+		}
+	}
+	return nums
+}
+
+// recurringInvoiceMu serializes GenerateRecurringInvoices so two concurrent runs
+// cannot both pass the per-customer "already invoiced this month" check, or both
+// reserve the same document number, before either commits. SetMaxOpenConns(1)
+// only serializes individual statements, not this check-then-insert sequence.
+// Sufficient for the single-process deployment; horizontal scaling would need a
+// DB-level lock.
+var recurringInvoiceMu sync.Mutex
+
+// GenerateRecurringInvoices creates a draft invoice for every active customer by
+// cloning the line items and tax of that customer's most recent non-cancelled
+// invoice (a cancelled/disputed invoice is never used as a template).
+//
+// A customer is skipped when they already have an invoice dated in
+// invoiceDate's month (prevents double-billing on repeat runs) or have no
+// invoice to clone. Per-customer errors are recorded as "failed" items and do
+// not abort the batch. Generated invoices are drafts — no journal entry is
+// posted; notes are NOT copied (they are period-specific).
+func GenerateRecurringInvoices(db *sql.DB, invoiceDate, dueDate string, userID int) (*GenerateRecurringInvoicesResult, error) {
+	if len(invoiceDate) < 7 {
+		return nil, fmt.Errorf("invalid invoice date: %q", invoiceDate)
+	}
+	monthPrefix := invoiceDate[:7] // YYYY-MM
+
+	recurringInvoiceMu.Lock()
+	defer recurringInvoiceMu.Unlock()
+
+	active := true
+	customers, err := ListContacts(db, ContactFilter{Type: "customer", IsActive: &active})
+	if err != nil {
+		return nil, fmt.Errorf("list active customers: %w", err)
+	}
+
+	result := &GenerateRecurringInvoicesResult{Items: []GeneratedInvoice{}}
+
+	for _, c := range customers {
+		item := GeneratedInvoice{ContactID: c.ID, ContactName: c.Name}
+
+		var thisMonth int
+		if err := db.QueryRow(
+			"SELECT COUNT(*) FROM invoices WHERE contact_id = ? AND substr(invoice_date, 1, 7) = ?",
+			c.ID, monthPrefix,
+		).Scan(&thisMonth); err != nil {
+			item.Result, item.Error = GeneratedInvoiceFailed, err.Error()
+			result.Failed++
+			result.Items = append(result.Items, item)
+			continue
+		}
+		if thisMonth > 0 {
+			item.Result = GeneratedInvoiceSkippedThisMonth
+			result.Skipped++
+			result.Items = append(result.Items, item)
+			continue
+		}
+
+		// Clone the most recent non-cancelled invoice; never re-bill a cancelled one.
+		var latestID int
+		err := db.QueryRow(
+			"SELECT id FROM invoices WHERE contact_id = ? AND status != 'cancelled' ORDER BY invoice_date DESC, id DESC LIMIT 1",
+			c.ID,
+		).Scan(&latestID)
+		if errors.Is(err, sql.ErrNoRows) {
+			item.Result = GeneratedInvoiceSkippedNoHistory
+			result.Skipped++
+			result.Items = append(result.Items, item)
+			continue
+		}
+		if err != nil {
+			item.Result, item.Error = GeneratedInvoiceFailed, err.Error()
+			result.Failed++
+			result.Items = append(result.Items, item)
+			continue
+		}
+
+		latest, err := GetInvoice(db, latestID)
+		if err != nil {
+			item.Result, item.Error = GeneratedInvoiceFailed, err.Error()
+			result.Failed++
+			result.Items = append(result.Items, item)
+			continue
+		}
+		if len(latest.Lines) == 0 {
+			item.Result = GeneratedInvoiceSkippedNoHistory
+			result.Skipped++
+			result.Items = append(result.Items, item)
+			continue
+		}
+
+		lines := make([]InvoiceLine, 0, len(latest.Lines))
+		for _, l := range latest.Lines {
+			lines = append(lines, InvoiceLine{
+				Description: l.Description,
+				Quantity:    l.Quantity,
+				UnitPrice:   l.UnitPrice,
+				AccountID:   l.AccountID,
+			})
+		}
+
+		inv := &Invoice{
+			ContactID:   c.ID,
+			InvoiceDate: invoiceDate,
+			DueDate:     dueDate,
+			TaxAmount:   latest.TaxAmount,
+			CreatedBy:   userID,
+		}
+
+		invID, err := CreateInvoice(db, inv, lines)
+		if err != nil {
+			item.Result, item.Error = GeneratedInvoiceFailed, err.Error()
+			result.Failed++
+			result.Items = append(result.Items, item)
+			continue
+		}
+
+		item.InvoiceID = invID
+		item.InvoiceNumber = inv.InvoiceNumber
+		item.Result = GeneratedInvoiceCreated
+		result.Created++
+		result.Items = append(result.Items, item)
+	}
+
+	return result, nil
+}
+
+// DeletedInvoice identifies an invoice removed by BulkDeleteDraftInvoices, so
+// the caller can record exactly which invoices were deleted in the audit trail.
+type DeletedInvoice struct {
+	ID            int    `json:"id"`
+	InvoiceNumber string `json:"invoice_number"`
+}
+
+// BulkDeleteDraftInvoices deletes the draft invoices among the given IDs in a
+// single transaction. IDs that are non-existent or not in draft status are
+// skipped (not deleted) and returned. Returns the deleted invoices (id +
+// number) and the skipped IDs.
+func BulkDeleteDraftInvoices(db *sql.DB, ids []int) ([]DeletedInvoice, []int, error) {
+	deleted := []DeletedInvoice{}
+	skipped := []int{}
+	if len(ids) == 0 {
+		return deleted, skipped, nil
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		return nil, nil, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	for _, id := range ids {
+		var status, number string
+		err := tx.QueryRow("SELECT status, invoice_number FROM invoices WHERE id = ?", id).Scan(&status, &number)
+		if errors.Is(err, sql.ErrNoRows) {
+			skipped = append(skipped, id)
+			continue
+		}
+		if err != nil {
+			return nil, nil, fmt.Errorf("lookup invoice %d: %w", id, err)
+		}
+		if status != StatusDraft {
+			skipped = append(skipped, id)
+			continue
+		}
+		if _, err := tx.Exec("DELETE FROM invoices WHERE id = ?", id); err != nil {
+			return nil, nil, fmt.Errorf("delete invoice %d: %w", id, err)
+		}
+		deleted = append(deleted, DeletedInvoice{ID: id, InvoiceNumber: number})
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, nil, fmt.Errorf("commit: %w", err)
+	}
+	return deleted, skipped, nil
 }
