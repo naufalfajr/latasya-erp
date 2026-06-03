@@ -32,6 +32,7 @@ func setupServer(t *testing.T) (*httptest.Server, *sql.DB) {
 	apiMux.Handle("POST /api/v1/invoices/{id}/payment", idem(http.HandlerFunc(h.Payment)))
 	apiMux.Handle("POST /api/v1/invoices/generate-recurring", idem(http.HandlerFunc(h.GenerateRecurring)))
 	apiMux.HandleFunc("POST /api/v1/invoices/bulk-delete", h.BulkDelete)
+	apiMux.HandleFunc("POST /api/v1/invoices/bulk-send", h.BulkSend)
 
 	mux := http.NewServeMux()
 	mux.Handle("/api/v1/", v1.BearerOrCookie(db)(apiMux))
@@ -624,6 +625,53 @@ func TestBulkDelete(t *testing.T) {
 	t.Run("no_capability_403", func(t *testing.T) {
 		tok := noScopeToken(t, db)
 		resp := doRequest(t, ts, http.MethodPost, "/api/v1/invoices/bulk-delete", tok, map[string]any{"ids": []int{1}}, nil)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusForbidden {
+			t.Fatalf("status: got %d want 403", resp.StatusCode)
+		}
+	})
+}
+
+func TestBulkSend(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+	cid := seedContact(t, db)
+	rev := accountID(t, db, "4-1001")
+
+	id1, _ := createInvoice(t, ts, token, defaultInvoiceBody(cid, rev))
+	id2, _ := createInvoice(t, ts, token, defaultInvoiceBody(cid, rev))
+
+	t.Run("success", func(t *testing.T) {
+		body := map[string]any{"ids": []int{id1, id2}}
+		resp := doRequest(t, ts, http.MethodPost, "/api/v1/invoices/bulk-send", token, body, nil)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("status: got %d want 200", resp.StatusCode)
+		}
+		var env struct {
+			Data struct {
+				Sent int `json:"sent"`
+			} `json:"data"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&env); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if env.Data.Sent != 2 {
+			t.Errorf("sent: got %d want 2", env.Data.Sent)
+		}
+	})
+
+	t.Run("empty_422", func(t *testing.T) {
+		resp := doRequest(t, ts, http.MethodPost, "/api/v1/invoices/bulk-send", token, map[string]any{"ids": []int{}}, nil)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusUnprocessableEntity {
+			t.Fatalf("status: got %d want 422", resp.StatusCode)
+		}
+	})
+
+	t.Run("no_capability_403", func(t *testing.T) {
+		tok := noScopeToken(t, db)
+		resp := doRequest(t, ts, http.MethodPost, "/api/v1/invoices/bulk-send", tok, map[string]any{"ids": []int{1}}, nil)
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusForbidden {
 			t.Fatalf("status: got %d want 403", resp.StatusCode)
