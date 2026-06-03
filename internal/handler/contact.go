@@ -18,11 +18,11 @@ func (h *Handler) ListContacts(w http.ResponseWriter, r *http.Request) {
 	filterType := r.URL.Query().Get("type")
 	search := r.URL.Query().Get("search")
 
-	active := true
+	// Show both active and inactive contacts so the status column is meaningful
+	// and inactive contacts remain reachable for reactivation via the edit page.
 	contacts, err := model.ListContacts(h.DB, model.ContactFilter{
-		Type:     filterType,
-		IsActive: &active,
-		Search:   search,
+		Type:   filterType,
+		Search: search,
 	})
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
