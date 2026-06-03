@@ -435,6 +435,11 @@ func TestBulkSendInvoices(t *testing.T) {
 	if len(res.Failed) != 0 {
 		t.Errorf("failed: got %v want 0", res.Failed)
 	}
+	for _, s := range res.Sent {
+		if s.JournalID == nil {
+			t.Errorf("sent invoice %d: expected journal_id in result", s.ID)
+		}
+	}
 
 	for _, id := range []int{d1, d2} {
 		inv, _ := model.GetInvoice(db, id)

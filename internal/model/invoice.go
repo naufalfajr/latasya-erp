@@ -651,18 +651,27 @@ func BulkDeleteDraftInvoices(db *sql.DB, ids []int) ([]DeletedInvoice, []int, er
 	return deleted, skipped, nil
 }
 
-// SentInvoice identifies an invoice acted on by BulkSendInvoices.
+// SentInvoice identifies an invoice marked sent by BulkSendInvoices, with the
+// journal entry that was posted (for reconciliation against the ledger).
 type SentInvoice struct {
 	ID            int    `json:"id"`
 	InvoiceNumber string `json:"invoice_number"`
+	JournalID     *int   `json:"journal_id,omitempty"`
+}
+
+// FailedInvoice identifies an invoice whose bulk send failed, with the reason.
+type FailedInvoice struct {
+	ID            int    `json:"id"`
+	InvoiceNumber string `json:"invoice_number"`
+	Error         string `json:"error"`
 }
 
 // BulkSendResult summarizes a bulk-send batch: invoices sent, IDs skipped
-// (unknown or not draft), and invoices whose send failed.
+// (unknown or not draft), and invoices whose send failed (with the reason).
 type BulkSendResult struct {
-	Sent    []SentInvoice `json:"sent"`
-	Skipped []int         `json:"skipped"`
-	Failed  []SentInvoice `json:"failed"`
+	Sent    []SentInvoice   `json:"sent"`
+	Skipped []int           `json:"skipped"`
+	Failed  []FailedInvoice `json:"failed"`
 }
 
 // bulkSendMu serializes BulkSendInvoices so two concurrent runs (e.g. a
@@ -678,7 +687,7 @@ func BulkSendInvoices(db *sql.DB, ids []int, userID int) (*BulkSendResult, error
 	bulkSendMu.Lock()
 	defer bulkSendMu.Unlock()
 
-	res := &BulkSendResult{Sent: []SentInvoice{}, Skipped: []int{}, Failed: []SentInvoice{}}
+	res := &BulkSendResult{Sent: []SentInvoice{}, Skipped: []int{}, Failed: []FailedInvoice{}}
 	for _, id := range ids {
 		var status, number string
 		err := db.QueryRow("SELECT status, invoice_number FROM invoices WHERE id = ?", id).Scan(&status, &number)
@@ -694,10 +703,12 @@ func BulkSendInvoices(db *sql.DB, ids []int, userID int) (*BulkSendResult, error
 			continue
 		}
 		if err := SendInvoice(db, id, userID); err != nil {
-			res.Failed = append(res.Failed, SentInvoice{ID: id, InvoiceNumber: number})
+			res.Failed = append(res.Failed, FailedInvoice{ID: id, InvoiceNumber: number, Error: err.Error()})
 			continue
 		}
-		res.Sent = append(res.Sent, SentInvoice{ID: id, InvoiceNumber: number})
+		var journalID *int
+		db.QueryRow("SELECT journal_id FROM invoices WHERE id = ?", id).Scan(&journalID)
+		res.Sent = append(res.Sent, SentInvoice{ID: id, InvoiceNumber: number, JournalID: journalID})
 	}
 	return res, nil
 }
