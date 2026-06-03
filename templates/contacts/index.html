@@ -10,7 +10,7 @@
 {{$data := .Data}}
 
 <!-- Filter tabs -->
-<div class="tabs tabs-boxed mb-4">
+<div class="tabs tabs-box mb-4">
     <a href="/contacts" class="tab {{if eq $data.Filter ""}}tab-active{{end}}">All</a>
     <a href="/contacts?type=customer" class="tab {{if eq $data.Filter "customer"}}tab-active{{end}}">Customers</a>
     <a href="/contacts?type=supplier" class="tab {{if eq $data.Filter "supplier"}}tab-active{{end}}">Suppliers</a>
@@ -40,12 +40,13 @@
                 <th class="hidden sm:table-cell">Email</th>
                 <th class="hidden md:table-cell">Address</th>
                 <th class="hidden md:table-cell">Notes</th>
+                <th>Status</th>
                 {{if .User.HasCapability "contacts.manage"}}<th>Actions</th>{{end}}
             </tr>
         </thead>
         <tbody>
             {{range $data.Contacts}}
-            <tr id="contact-{{.ID}}">
+            <tr id="contact-{{.ID}}"{{if not .IsActive}} class="opacity-60"{{end}}>
                 <td class="font-semibold">{{.Name}}</td>
                 <td><span class="badge badge-sm
                     {{if eq .ContactType "customer"}}badge-success
@@ -55,6 +56,10 @@
                 <td class="hidden sm:table-cell text-sm">{{.Email}}</td>
                 <td class="hidden md:table-cell text-sm opacity-60">{{.Address}}</td>
                 <td class="hidden md:table-cell text-sm opacity-60">{{.Notes}}</td>
+                <td>
+                    <input type="checkbox" class="toggle toggle-sm toggle-success" {{if .IsActive}}checked{{end}} disabled
+                        aria-label="{{.Name}} status: {{if .IsActive}}active{{else}}inactive{{end}}">
+                </td>
                 {{if $.User.HasCapability "contacts.manage"}}
                 <td>
                     <div class="flex gap-1">
@@ -70,7 +75,7 @@
             </tr>
             {{else}}
             <tr>
-                <td colspan="6" class="text-center py-8 opacity-60">No contacts found. Add your first contact.</td>
+                <td colspan="{{if $.User.HasCapability "contacts.manage"}}8{{else}}7{{end}}" class="text-center py-8 opacity-60">No contacts found. Add your first contact.</td>
             </tr>
             {{end}}
         </tbody>
