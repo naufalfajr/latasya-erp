@@ -650,3 +650,54 @@ func BulkDeleteDraftInvoices(db *sql.DB, ids []int) ([]DeletedInvoice, []int, er
 	}
 	return deleted, skipped, nil
 }
+
+// SentInvoice identifies an invoice acted on by BulkSendInvoices.
+type SentInvoice struct {
+	ID            int    `json:"id"`
+	InvoiceNumber string `json:"invoice_number"`
+}
+
+// BulkSendResult summarizes a bulk-send batch: invoices sent, IDs skipped
+// (unknown or not draft), and invoices whose send failed.
+type BulkSendResult struct {
+	Sent    []SentInvoice `json:"sent"`
+	Skipped []int         `json:"skipped"`
+	Failed  []SentInvoice `json:"failed"`
+}
+
+// bulkSendMu serializes BulkSendInvoices so two concurrent runs (e.g. a
+// double-clicked button) cannot both pass the draft check for the same invoice
+// and post duplicate journal entries. Single-process scope.
+var bulkSendMu sync.Mutex
+
+// BulkSendInvoices sends each draft invoice among the given IDs (marking it
+// "sent" and posting its AR journal entry via SendInvoice). IDs that are unknown
+// or not in draft status are skipped; a send error is recorded under Failed and
+// does not abort the batch.
+func BulkSendInvoices(db *sql.DB, ids []int, userID int) (*BulkSendResult, error) {
+	bulkSendMu.Lock()
+	defer bulkSendMu.Unlock()
+
+	res := &BulkSendResult{Sent: []SentInvoice{}, Skipped: []int{}, Failed: []SentInvoice{}}
+	for _, id := range ids {
+		var status, number string
+		err := db.QueryRow("SELECT status, invoice_number FROM invoices WHERE id = ?", id).Scan(&status, &number)
+		if errors.Is(err, sql.ErrNoRows) {
+			res.Skipped = append(res.Skipped, id)
+			continue
+		}
+		if err != nil {
+			return nil, fmt.Errorf("lookup invoice %d: %w", id, err)
+		}
+		if status != StatusDraft {
+			res.Skipped = append(res.Skipped, id)
+			continue
+		}
+		if err := SendInvoice(db, id, userID); err != nil {
+			res.Failed = append(res.Failed, SentInvoice{ID: id, InvoiceNumber: number})
+			continue
+		}
+		res.Sent = append(res.Sent, SentInvoice{ID: id, InvoiceNumber: number})
+	}
+	return res, nil
+}

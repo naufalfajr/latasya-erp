@@ -401,3 +401,48 @@ func TestInvoiceNumberNoCollisionAfterDelete(t *testing.T) {
 		t.Fatalf("invoice-number collision after mid-sequence delete: n4=%q (n1=%q n3=%q)", n4, n1, n3)
 	}
 }
+
+func TestBulkSendInvoices(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+
+	db.Exec("INSERT INTO contacts (name, contact_type, is_active) VALUES ('Send Co', 'customer', 1)")
+	var contactID, revenueID int
+	db.QueryRow("SELECT id FROM contacts WHERE name = 'Send Co'").Scan(&contactID)
+	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
+
+	mk := func() int {
+		id, _ := model.CreateInvoice(db, &model.Invoice{
+			ContactID: contactID, InvoiceDate: "2026-04-04", DueDate: "2026-04-30", CreatedBy: 1,
+		}, []model.InvoiceLine{{Description: "x", Quantity: 100, UnitPrice: 1000000, AccountID: revenueID}})
+		return id
+	}
+
+	d1 := mk()
+	d2 := mk()
+	alreadySent := mk()
+	model.SendInvoice(db, alreadySent, 1)
+
+	res, err := model.BulkSendInvoices(db, []int{d1, d2, alreadySent, 999999}, 1)
+	if err != nil {
+		t.Fatalf("bulk send: %v", err)
+	}
+	if len(res.Sent) != 2 {
+		t.Errorf("sent: got %d want 2", len(res.Sent))
+	}
+	if len(res.Skipped) != 2 {
+		t.Errorf("skipped: got %v want 2 (already-sent + missing id)", res.Skipped)
+	}
+	if len(res.Failed) != 0 {
+		t.Errorf("failed: got %v want 0", res.Failed)
+	}
+
+	for _, id := range []int{d1, d2} {
+		inv, _ := model.GetInvoice(db, id)
+		if inv.Status != "sent" {
+			t.Errorf("invoice %d status: got %q want sent", id, inv.Status)
+		}
+		if inv.JournalID == nil {
+			t.Errorf("invoice %d: expected a journal entry after send", id)
+		}
+	}
+}
