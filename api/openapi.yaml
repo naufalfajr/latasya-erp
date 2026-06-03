@@ -493,6 +493,42 @@ components:
           type: integer
           description: Asset account ID receiving the payment.
 
+    GenerateRecurringResult:
+      type: object
+      required: [created, skipped, failed, items]
+      properties:
+        created:
+          type: integer
+          description: Number of draft invoices created.
+        skipped:
+          type: integer
+          description: Number of active customers skipped.
+        failed:
+          type: integer
+          description: Number of customers whose invoice could not be created.
+        items:
+          type: array
+          items:
+            type: object
+            required: [contact_id, contact_name, result]
+            properties:
+              contact_id:
+                type: integer
+              contact_name:
+                type: string
+              invoice_id:
+                type: integer
+                description: Present only when result is "created".
+              invoice_number:
+                type: string
+                description: Present only when result is "created".
+              result:
+                type: string
+                enum: [created, skipped_no_history, skipped_already_invoiced, failed]
+              error:
+                type: string
+                description: Present only when result is "failed".
+
     BillLine:
       type: object
       properties:
@@ -2239,6 +2275,92 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /invoices/generate-recurring:
+    parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+    post:
+      operationId: generateRecurringInvoices
+      summary: Generate draft invoices for all active customers
+      description: |
+        Creates a draft invoice for every active customer by cloning the line
+        items and tax of that customer's most recent invoice. Invoice date is
+        today; due date is today + 10 days. Customers already invoiced in the
+        current month, or with no prior invoice to clone, are skipped.
+        Requires invoices.manage.
+      responses:
+        '200':
+          description: Batch result summary.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/GenerateRecurringResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /invoices/bulk-delete:
+    post:
+      operationId: bulkDeleteInvoices
+      summary: Bulk-delete draft invoices
+      description: |
+        Deletes the draft invoices among the provided IDs. IDs that are unknown
+        or not in draft status are skipped and returned. Requires invoices.manage.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids:
+                  type: array
+                  items:
+                    type: integer
+                  minItems: 1
+      responses:
+        '200':
+          description: Bulk delete result.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    required: [deleted, deleted_invoices, skipped]
+                    properties:
+                      deleted:
+                        type: integer
+                        description: Number of draft invoices deleted.
+                      deleted_invoices:
+                        type: array
+                        description: The invoices that were deleted (id + number).
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: integer
+                            invoice_number:
+                              type: string
+                      skipped:
+                        type: array
+                        items:
+                          type: integer
+                        description: IDs skipped (unknown or not draft).
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '422':
           $ref: '#/components/responses/ValidationFailed'
 
