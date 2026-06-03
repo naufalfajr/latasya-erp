@@ -30,6 +30,8 @@ func setupServer(t *testing.T) (*httptest.Server, *sql.DB) {
 	apiMux.HandleFunc("DELETE /api/v1/invoices/{id}", h.Delete)
 	apiMux.Handle("POST /api/v1/invoices/{id}/send", idem(http.HandlerFunc(h.Send)))
 	apiMux.Handle("POST /api/v1/invoices/{id}/payment", idem(http.HandlerFunc(h.Payment)))
+	apiMux.Handle("POST /api/v1/invoices/generate-recurring", idem(http.HandlerFunc(h.GenerateRecurring)))
+	apiMux.HandleFunc("POST /api/v1/invoices/bulk-delete", h.BulkDelete)
 
 	mux := http.NewServeMux()
 	mux.Handle("/api/v1/", v1.BearerOrCookie(db)(apiMux))
@@ -538,6 +540,95 @@ func TestDeleteInvoice_Draft(t *testing.T) {
 	if resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("status: got %d want 204", resp.StatusCode)
 	}
+}
+
+func TestGenerateRecurring(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+	cid := seedContact(t, db)
+	rev := accountID(t, db, "4-1001")
+
+	body := defaultInvoiceBody(cid, rev)
+	body["invoice_date"] = "2020-01-10"
+	body["due_date"] = "2020-01-20"
+	createInvoice(t, ts, token, body)
+
+	t.Run("success", func(t *testing.T) {
+		resp := doRequest(t, ts, http.MethodPost, "/api/v1/invoices/generate-recurring", token, nil, nil)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("status: got %d want 200", resp.StatusCode)
+		}
+		var env struct {
+			Data struct {
+				Created int `json:"created"`
+				Skipped int `json:"skipped"`
+			} `json:"data"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&env); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if env.Data.Created < 1 {
+			t.Errorf("created: got %d want >= 1", env.Data.Created)
+		}
+	})
+
+	t.Run("no_capability_403", func(t *testing.T) {
+		tok := noScopeToken(t, db)
+		resp := doRequest(t, ts, http.MethodPost, "/api/v1/invoices/generate-recurring", tok, nil, nil)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusForbidden {
+			t.Fatalf("status: got %d want 403", resp.StatusCode)
+		}
+	})
+}
+
+func TestBulkDelete(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+	cid := seedContact(t, db)
+	rev := accountID(t, db, "4-1001")
+
+	id1, _ := createInvoice(t, ts, token, defaultInvoiceBody(cid, rev))
+	id2, _ := createInvoice(t, ts, token, defaultInvoiceBody(cid, rev))
+
+	t.Run("success", func(t *testing.T) {
+		body := map[string]any{"ids": []int{id1, id2}}
+		resp := doRequest(t, ts, http.MethodPost, "/api/v1/invoices/bulk-delete", token, body, nil)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("status: got %d want 200", resp.StatusCode)
+		}
+		var env struct {
+			Data struct {
+				Deleted int   `json:"deleted"`
+				Skipped []int `json:"skipped"`
+			} `json:"data"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&env); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if env.Data.Deleted != 2 {
+			t.Errorf("deleted: got %d want 2", env.Data.Deleted)
+		}
+	})
+
+	t.Run("empty_422", func(t *testing.T) {
+		resp := doRequest(t, ts, http.MethodPost, "/api/v1/invoices/bulk-delete", token, map[string]any{"ids": []int{}}, nil)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusUnprocessableEntity {
+			t.Fatalf("status: got %d want 422", resp.StatusCode)
+		}
+	})
+
+	t.Run("no_capability_403", func(t *testing.T) {
+		tok := noScopeToken(t, db)
+		resp := doRequest(t, ts, http.MethodPost, "/api/v1/invoices/bulk-delete", tok, map[string]any{"ids": []int{1}}, nil)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusForbidden {
+			t.Fatalf("status: got %d want 403", resp.StatusCode)
+		}
+	})
 }
 
 func readBody(r *http.Response) ([]byte, error) {
