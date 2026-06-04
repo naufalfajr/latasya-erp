@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Invoice {{.Data.InvoiceNumber}}</title>
+    <title>Invoice {{.Data.Invoice.InvoiceNumber}}</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: Arial, sans-serif; font-size: 14px; color: #333; padding: 40px; max-width: 800px; margin: 0 auto; }
@@ -27,7 +27,8 @@
     </style>
 </head>
 <body>
-    {{$inv := .Data}}
+    {{$inv := .Data.Invoice}}
+    {{$co := .Data.Company}}
     <div class="no-print" style="margin-bottom:20px">
         <button onclick="window.print()" style="padding:8px 16px;cursor:pointer">Print</button>
         <a href="/invoices/{{$inv.ID}}" style="margin-left:10px">Back</a>
@@ -35,8 +36,11 @@
 
     <div class="header">
         <div>
-            <div class="company">Latasya Transport</div>
-            <p style="color:#666;margin-top:4px">School Bus & Travel Service</p>
+            <div class="company">{{$co.Name}}</div>
+            {{if $co.Tagline}}<p style="color:#666;margin-top:4px">{{$co.Tagline}}</p>{{end}}
+            {{if $co.Address}}<p style="color:#666;margin-top:4px;white-space:pre-line">{{$co.Address}}</p>{{end}}
+            {{if or $co.Phone $co.Email}}<p style="color:#666;font-size:12px;margin-top:4px">{{$co.Phone}}{{if and $co.Phone $co.Email}} · {{end}}{{$co.Email}}</p>{{end}}
+            {{if $co.NPWP}}<p style="color:#666;font-size:12px">NPWP: {{$co.NPWP}}</p>{{end}}
         </div>
         <div class="invoice-title">INVOICE</div>
     </div>
@@ -117,6 +121,17 @@
         <label>Notes</label>
         <p style="margin-top:4px">{{$inv.Notes}}</p>
     </div>
+    {{end}}
+
+    {{if or $co.BankName $co.BankAccountNumber}}
+    <div class="notes" style="margin-top:20px">
+        <label>Payment</label>
+        <p style="margin-top:4px">{{$co.BankName}}{{if $co.BankAccountNumber}} — {{$co.BankAccountNumber}}{{end}}{{if $co.BankAccountHolder}} (a.n. {{$co.BankAccountHolder}}){{end}}</p>
+    </div>
+    {{end}}
+
+    {{if $co.InvoiceFooter}}
+    <div style="margin-top:20px;text-align:center;color:#666;font-size:12px;white-space:pre-line">{{$co.InvoiceFooter}}</div>
     {{end}}
 </body>
 </html>

@@ -5,6 +5,7 @@ package invoices
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/auth"
 	"github.com/naufal/latasya-erp/internal/model"
+	"github.com/naufal/latasya-erp/internal/pdf"
 )
 
 type Handler struct {
@@ -645,4 +647,40 @@ func (h *Handler) Payment(w http.ResponseWriter, r *http.Request) {
 	})
 
 	v1.WriteJSON(w, http.StatusOK, map[string]any{"data": updated})
+}
+
+// PDF handles GET /api/v1/invoices/{id}/pdf. It is read-only and not
+// capability-gated, like the other invoice read endpoints. Note the rendered
+// document embeds company-profile fields (bank account, NPWP) that the JSON
+// endpoints do not return; gate this route before issuing down-scoped tokens
+// (e.g. Telegram bot or third-party MCP).
+func (h *Handler) PDF(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "invoice not found", nil)
+		return
+	}
+
+	inv, err := model.GetInvoice(h.DB, id)
+	if err != nil {
+		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "invoice not found", nil)
+		return
+	}
+
+	company, err := model.GetCompanyProfile(h.DB)
+	if err != nil {
+		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to load company profile", nil)
+		return
+	}
+
+	data, err := pdf.InvoicePDF(inv, company)
+	if err != nil {
+		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to generate pdf", nil)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", inv.InvoiceNumber+".pdf"))
+	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+	w.Write(data)
 }

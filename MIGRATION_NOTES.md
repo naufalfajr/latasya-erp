@@ -105,7 +105,7 @@ May be removed when the SPA can:
 - Record a payment against an invoice
 - Delete a draft invoice
 
-**Exception:** `/invoices/{id}/print` HTML route stays until PDF generation is implemented in the API. The HTML print view is the only way to produce a printable invoice until a `/api/v1/invoices/{id}/pdf` endpoint exists.
+**Exception (resolved):** A `/api/v1/invoices/{id}/pdf` endpoint now generates the PDF directly (pure-Go stdlib generator in `internal/pdf`, no headless browser), so this no longer blocks invoice sunset. The HTML `/invoices/{id}/print` route is retained as a browser-print convenience but is no longer the only way to produce a printable invoice.
 
 ### bills
 
@@ -290,7 +290,7 @@ These items were considered during the API migration plan and explicitly deferre
 
 **Rate-limit persistence across deploys.** The in-memory rate limiter resets on every deploy. For a solo-dev cadence with infrequent deploys, this is acceptable. A Redis-backed limiter is a follow-up if abuse becomes a concern.
 
-**`/api/v1/invoices/{id}/pdf` endpoint.** The HTML print route (`/invoices/{id}/print`) stays until PDF generation is implemented. Generating PDFs from Go requires either a headless browser or a PDF library; both are out of scope for v1.
+**`/api/v1/invoices/{id}/pdf` endpoint.** Implemented. PDFs are produced by a pure-Go standard-library writer in `internal/pdf` (no headless browser, no third-party dependency), preserving the single-binary deploy model. Both surfaces are wired: HTML `GET /invoices/{id}/pdf` (inline) and API `GET /api/v1/invoices/{id}/pdf` (attachment). Seller identity and bank details come from the editable Company Profile at `/settings/company`.
 
 **Bulk operations.** No bulk create, bulk update, or bulk delete endpoints exist in v1. Each resource is created/updated/deleted individually. Bulk operations are out of scope.
 

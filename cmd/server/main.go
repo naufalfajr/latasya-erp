@@ -152,6 +152,7 @@ func main() {
 	invoicesAPI := &v1invoices.Handler{DB: db}
 	apiMux.HandleFunc("GET /api/v1/invoices", invoicesAPI.List)
 	apiMux.HandleFunc("GET /api/v1/invoices/{id}", invoicesAPI.Get)
+	apiMux.HandleFunc("GET /api/v1/invoices/{id}/pdf", invoicesAPI.PDF)
 	apiMux.Handle("POST /api/v1/invoices", idem(http.HandlerFunc(invoicesAPI.Create)))
 	apiMux.Handle("PUT /api/v1/invoices/{id}", idem(http.HandlerFunc(invoicesAPI.Update)))
 	apiMux.HandleFunc("DELETE /api/v1/invoices/{id}", invoicesAPI.Delete)
@@ -279,6 +280,7 @@ func main() {
 	protected.HandleFunc("POST /invoices/{id}/send", auth.CapabilityOnly(model.CapInvoicesManage, h.SendInvoice))
 	protected.HandleFunc("POST /invoices/{id}/payment", auth.CapabilityOnly(model.CapInvoicesManage, h.InvoicePayment))
 	protected.HandleFunc("GET /invoices/{id}/print", h.PrintInvoice)
+	protected.HandleFunc("GET /invoices/{id}/pdf", h.InvoicePDF)
 
 	// Credit Notes (piggyback on invoices.manage capability)
 	protected.HandleFunc("GET /credit-notes", h.ListCreditNotes)
@@ -347,6 +349,10 @@ func main() {
 	protected.HandleFunc("GET /settings/api-tokens/created", auth.AdminOnly(h.CreatedAPIToken))
 	protected.HandleFunc("POST /settings/api-tokens", auth.AdminOnly(h.CreateAPIToken))
 	protected.HandleFunc("POST /settings/api-tokens/{id}/revoke", auth.AdminOnly(h.RevokeAPIToken))
+
+	// Company Profile (admin-only settings shown on invoices)
+	protected.HandleFunc("GET /settings/company", auth.AdminOnly(h.CompanyProfilePage))
+	protected.HandleFunc("POST /settings/company", auth.AdminOnly(h.UpdateCompanyProfile))
 
 	// Audit log (admin-only via audit.view capability)
 	protected.HandleFunc("GET /audit", auth.CapabilityOnly(model.CapAuditView, h.AuditList))

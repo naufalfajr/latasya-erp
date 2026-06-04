@@ -1,0 +1,75 @@
+{{template "base" .}}
+{{define "content"}}
+{{$data := .Data}}
+{{$c := $data.Company}}
+<div class="mb-6">
+    <h1 class="text-2xl font-bold">Company Profile</h1>
+    <p class="text-sm opacity-60">These details appear on every invoice (print view and PDF).</p>
+</div>
+
+{{if $data.Errors.general}}
+<div class="alert alert-error mb-4">{{$data.Errors.general}}</div>
+{{end}}
+
+<form method="POST" action="/settings/company" class="max-w-2xl">
+    {{template "csrf" $}}
+
+    <div class="divider">Identity</div>
+    <div class="form-control mb-3">
+        <label class="label" for="name"><span class="label-text">Company name <span class="text-error">*</span></span></label>
+        <input id="name" name="name" type="text" value="{{$c.Name}}" class="input input-bordered {{if $data.Errors.name}}input-error{{end}}" required>
+        {{if $data.Errors.name}}<span class="text-error text-sm mt-1">{{$data.Errors.name}}</span>{{end}}
+    </div>
+    <div class="form-control mb-3">
+        <label class="label" for="tagline"><span class="label-text">Tagline</span></label>
+        <input id="tagline" name="tagline" type="text" value="{{$c.Tagline}}" class="input input-bordered" placeholder="School Bus & Travel Service">
+    </div>
+    <div class="form-control mb-3">
+        <label class="label" for="address"><span class="label-text">Address</span></label>
+        <textarea id="address" name="address" class="textarea textarea-bordered" rows="2">{{$c.Address}}</textarea>
+    </div>
+
+    <div class="divider">Contact</div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div class="form-control">
+            <label class="label" for="phone"><span class="label-text">Phone</span></label>
+            <input id="phone" name="phone" type="text" value="{{$c.Phone}}" class="input input-bordered">
+        </div>
+        <div class="form-control">
+            <label class="label" for="email"><span class="label-text">Email</span></label>
+            <input id="email" name="email" type="text" value="{{$c.Email}}" class="input input-bordered">
+        </div>
+    </div>
+
+    <div class="divider">Tax</div>
+    <div class="form-control mb-3">
+        <label class="label" for="npwp"><span class="label-text">NPWP</span></label>
+        <input id="npwp" name="npwp" type="text" value="{{$c.NPWP}}" class="input input-bordered" placeholder="00.000.000.0-000.000">
+    </div>
+
+    <div class="divider">Bank / Payment</div>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div class="form-control">
+            <label class="label" for="bank_name"><span class="label-text">Bank</span></label>
+            <input id="bank_name" name="bank_name" type="text" value="{{$c.BankName}}" class="input input-bordered" placeholder="BCA">
+        </div>
+        <div class="form-control">
+            <label class="label" for="bank_account_number"><span class="label-text">Account number</span></label>
+            <input id="bank_account_number" name="bank_account_number" type="text" value="{{$c.BankAccountNumber}}" class="input input-bordered">
+        </div>
+        <div class="form-control">
+            <label class="label" for="bank_account_holder"><span class="label-text">Account holder</span></label>
+            <input id="bank_account_holder" name="bank_account_holder" type="text" value="{{$c.BankAccountHolder}}" class="input input-bordered">
+        </div>
+    </div>
+
+    <div class="divider">Invoice Footer</div>
+    <div class="form-control mb-4">
+        <label class="label" for="invoice_footer"><span class="label-text">Footer note</span></label>
+        <textarea id="invoice_footer" name="invoice_footer" class="textarea textarea-bordered" rows="2" placeholder="Terima kasih atas kepercayaan Anda.">{{$c.InvoiceFooter}}</textarea>
+        <span class="text-xs opacity-60 mt-1">Shown at the bottom of every invoice (e.g. payment terms or a thank-you note).</span>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Save</button>
+</form>
+{{end}}

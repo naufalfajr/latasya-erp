@@ -2210,6 +2210,29 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
 
+  /invoices/{id}/pdf:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      operationId: getInvoicePDF
+      summary: Download an invoice as a PDF document
+      responses:
+        '200':
+          description: PDF document.
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /invoices/{id}/send:
     parameters:
       - name: id
