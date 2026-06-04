@@ -395,4 +395,3 @@ func validateJournal(je *model.JournalEntry, lines []model.JournalLine) map[stri
 
 	return errors
 }
-

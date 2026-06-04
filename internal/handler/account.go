@@ -9,10 +9,10 @@ import (
 )
 
 type accountPageData struct {
-	Accounts    []model.Account
-	Filter      string
-	Search      string
-	TypeCounts  map[string]int
+	Accounts   []model.Account
+	Filter     string
+	Search     string
+	TypeCounts map[string]int
 }
 
 func (h *Handler) ListAccounts(w http.ResponseWriter, r *http.Request) {
