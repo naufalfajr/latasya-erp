@@ -73,6 +73,7 @@ func testServer(t *testing.T) (*httptest.Server, *sql.DB) {
 	protected.HandleFunc("POST /invoices/{id}/send", auth.CapabilityOnly("invoices.manage", h.SendInvoice))
 	protected.HandleFunc("POST /invoices/{id}/payment", auth.CapabilityOnly("invoices.manage", h.InvoicePayment))
 	protected.HandleFunc("GET /invoices/{id}/print", h.PrintInvoice)
+	protected.HandleFunc("GET /invoices/{id}/pdf", h.InvoicePDF)
 	protected.HandleFunc("GET /credit-notes", h.ListCreditNotes)
 	protected.HandleFunc("GET /credit-notes/new", h.NewCreditNote)
 	protected.HandleFunc("POST /credit-notes", auth.CapabilityOnly("invoices.manage", h.CreateCreditNote))

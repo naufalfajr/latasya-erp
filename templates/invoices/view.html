@@ -12,6 +12,7 @@
     <div class="flex gap-2 flex-wrap">
         <a href="/invoices" class="btn btn-ghost btn-sm">Back</a>
         <a href="/invoices/{{$inv.ID}}/print" class="btn btn-sm" target="_blank">Print</a>
+        <a href="/invoices/{{$inv.ID}}/pdf" class="btn btn-sm">PDF</a>
         {{if .User.HasCapability "invoices.manage"}}
             {{if eq $inv.Status "draft"}}
             <a href="/invoices/{{$inv.ID}}/edit" class="btn btn-sm">Edit</a>

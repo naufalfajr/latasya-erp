@@ -9,6 +9,7 @@ import (
 	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/auth"
 	"github.com/naufal/latasya-erp/internal/model"
+	"github.com/naufal/latasya-erp/internal/pdf"
 )
 
 type invoiceFormData struct {
@@ -487,6 +488,11 @@ func (h *Handler) DeleteInvoice(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/invoices", http.StatusSeeOther)
 }
 
+type invoicePrintData struct {
+	Invoice *model.Invoice
+	Company *model.CompanyProfile
+}
+
 func (h *Handler) PrintInvoice(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
@@ -500,6 +506,12 @@ func (h *Handler) PrintInvoice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	company, err := model.GetCompanyProfile(h.DB)
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
 	// Print uses a standalone template (no base layout)
 	t, err := h.getTemplate("templates/invoices/print.html")
 	if err != nil {
@@ -510,9 +522,39 @@ func (h *Handler) PrintInvoice(w http.ResponseWriter, r *http.Request) {
 	pd := PageData{
 		User:  auth.UserFromContext(r.Context()),
 		Title: "Invoice " + inv.InvoiceNumber,
-		Data:  inv,
+		Data:  invoicePrintData{Invoice: inv, Company: company},
 	}
 	t.ExecuteTemplate(w, "templates/invoices/print.html", pd)
+}
+
+func (h *Handler) InvoicePDF(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	inv, err := model.GetInvoice(h.DB, id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	company, err := model.GetCompanyProfile(h.DB)
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	data, err := pdf.InvoicePDF(inv, company)
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=%q", inv.InvoiceNumber+".pdf"))
+	w.Write(data)
 }
 
 // HTMX partial for adding invoice lines
