@@ -9,11 +9,11 @@ import (
 
 func FuncMap() template.FuncMap {
 	return template.FuncMap{
-		"formatIDR": formatIDR,
-		"formatQty": formatQty,
+		"formatIDR":  formatIDR,
+		"formatQty":  formatQty,
 		"formatDate": formatDate,
-		"add": func(a, b int) int { return a + b },
-		"sub": func(a, b int) int { return a - b },
+		"add":        func(a, b int) int { return a + b },
+		"sub":        func(a, b int) int { return a - b },
 		// Go templates have built-in eq that handles multiple types
 		"seq": func(n int) []int {
 			s := make([]int, n)

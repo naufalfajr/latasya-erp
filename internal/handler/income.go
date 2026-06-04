@@ -11,14 +11,14 @@ import (
 )
 
 type incomeFormData struct {
-	Entry          *model.JournalEntry
-	Amount         int
-	RevenueAccount int
-	DepositAccount int
+	Entry           *model.JournalEntry
+	Amount          int
+	RevenueAccount  int
+	DepositAccount  int
 	RevenueAccounts []model.Account
 	DepositAccounts []model.Account
-	Errors         map[string]string
-	IsEdit         bool
+	Errors          map[string]string
+	IsEdit          bool
 }
 
 func (h *Handler) ListIncome(w http.ResponseWriter, r *http.Request) {

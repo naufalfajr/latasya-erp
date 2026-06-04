@@ -1,0 +1,65 @@
+name: CI
+
+# Gate for pull requests into main. Deploy assumes these checks already passed,
+# so it only ships and health-checks — no test job of its own.
+
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  # A new push to the same PR cancels the in-flight run.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: true
+
+      - name: Verify gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "FAIL: these files are not gofmt-formatted:"
+            echo "$unformatted"
+            echo "      → run 'gofmt -w .' and commit"
+            exit 1
+          fi
+          echo "ok: all files gofmt-clean"
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: staticcheck
+        run: go run honnef.co/go/tools/cmd/staticcheck@v0.7.0 ./...
+
+      - name: Build
+        run: go build ./...
+
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.3.0 ./...
+
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: true
+
+      - name: Test (race detector)
+        run: go test -race ./...

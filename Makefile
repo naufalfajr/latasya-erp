@@ -5,21 +5,25 @@ TAILWIND := ./bin/tailwindcss
 DAISYUI := ./bin/daisyui.mjs
 DAISYUI_THEME := ./bin/daisyui-theme.mjs
 
+# Pinned CSS toolchain versions — keep in sync with .github/workflows/deploy.yml
+TAILWIND_VERSION := v4.3.0
+DAISYUI_VERSION := v5.5.20
+
 $(TAILWIND):
 	@mkdir -p bin
 	@echo "Downloading Tailwind CSS standalone CLI..."
-	@curl -sL https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-macos-arm64 -o $(TAILWIND)
+	@curl -sL https://github.com/tailwindlabs/tailwindcss/releases/download/$(TAILWIND_VERSION)/tailwindcss-macos-arm64 -o $(TAILWIND)
 	@chmod +x $(TAILWIND)
 
 $(DAISYUI):
 	@mkdir -p bin
 	@echo "Downloading daisyUI plugin..."
-	@curl -sL https://github.com/saadeghi/daisyui/releases/latest/download/daisyui.mjs -o $(DAISYUI)
+	@curl -sL https://github.com/saadeghi/daisyui/releases/download/$(DAISYUI_VERSION)/daisyui.mjs -o $(DAISYUI)
 
 $(DAISYUI_THEME):
 	@mkdir -p bin
 	@echo "Downloading daisyUI theme plugin..."
-	@curl -sL https://github.com/saadeghi/daisyui/releases/latest/download/daisyui-theme.mjs -o $(DAISYUI_THEME)
+	@curl -sL https://github.com/saadeghi/daisyui/releases/download/$(DAISYUI_VERSION)/daisyui-theme.mjs -o $(DAISYUI_THEME)
 
 # Build CSS
 css: $(TAILWIND) $(DAISYUI) $(DAISYUI_THEME)

@@ -54,6 +54,7 @@ func TestRequireAuth_ValidSession(t *testing.T) {
 		user := auth.UserFromContext(r.Context())
 		if user == nil {
 			t.Error("expected user in context")
+			return
 		}
 		if user.Username != "admin" {
 			t.Errorf("expected admin user, got %q", user.Username)
