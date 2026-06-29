@@ -3,6 +3,7 @@ package handler
 import (
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/naufal/latasya-erp/internal/audit"
@@ -10,8 +11,9 @@ import (
 )
 
 type companyProfileFormData struct {
-	Company *model.CompanyProfile
-	Errors  map[string]string
+	Company         *model.CompanyProfile
+	RevenueAccounts []model.Account
+	Errors          map[string]string
 }
 
 func (h *Handler) CompanyProfilePage(w http.ResponseWriter, r *http.Request) {
@@ -24,9 +26,12 @@ func (h *Handler) CompanyProfilePage(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	active := true
+	revenueAccounts, _ := model.ListAccounts(h.DB, model.AccountFilter{Type: "revenue", IsActive: &active})
 	h.render(w, r, "templates/settings/company.html", "Company Profile", companyProfileFormData{
-		Company: company,
-		Errors:  map[string]string{},
+		Company:         company,
+		RevenueAccounts: revenueAccounts,
+		Errors:          map[string]string{},
 	})
 }
 
@@ -36,33 +41,40 @@ func (h *Handler) UpdateCompanyProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	defaultRevenueAccountID, _ := strconv.Atoi(r.FormValue("default_revenue_account_id"))
 	company := &model.CompanyProfile{
-		Name:              strings.TrimSpace(r.FormValue("name")),
-		Tagline:           strings.TrimSpace(r.FormValue("tagline")),
-		Address:           strings.TrimSpace(r.FormValue("address")),
-		Phone:             strings.TrimSpace(r.FormValue("phone")),
-		Email:             strings.TrimSpace(r.FormValue("email")),
-		NPWP:              strings.TrimSpace(r.FormValue("npwp")),
-		BankName:          strings.TrimSpace(r.FormValue("bank_name")),
-		BankAccountNumber: strings.TrimSpace(r.FormValue("bank_account_number")),
-		BankAccountHolder: strings.TrimSpace(r.FormValue("bank_account_holder")),
-		InvoiceFooter:     strings.TrimSpace(r.FormValue("invoice_footer")),
+		Name:                         strings.TrimSpace(r.FormValue("name")),
+		Tagline:                      strings.TrimSpace(r.FormValue("tagline")),
+		Address:                      strings.TrimSpace(r.FormValue("address")),
+		Phone:                        strings.TrimSpace(r.FormValue("phone")),
+		Email:                        strings.TrimSpace(r.FormValue("email")),
+		NPWP:                         strings.TrimSpace(r.FormValue("npwp")),
+		BankName:                     strings.TrimSpace(r.FormValue("bank_name")),
+		BankAccountNumber:            strings.TrimSpace(r.FormValue("bank_account_number")),
+		BankAccountHolder:            strings.TrimSpace(r.FormValue("bank_account_holder")),
+		InvoiceFooter:                strings.TrimSpace(r.FormValue("invoice_footer")),
+		DefaultRevenueAccountID:      defaultRevenueAccountID,
+		RecurringDescriptionTemplate: strings.TrimSpace(r.FormValue("recurring_description_template")),
+	}
+
+	reRender := func(errs map[string]string) {
+		active := true
+		revenueAccounts, _ := model.ListAccounts(h.DB, model.AccountFilter{Type: "revenue", IsActive: &active})
+		h.render(w, r, "templates/settings/company.html", "Company Profile", companyProfileFormData{
+			Company:         company,
+			RevenueAccounts: revenueAccounts,
+			Errors:          errs,
+		})
 	}
 
 	if company.Name == "" {
-		h.render(w, r, "templates/settings/company.html", "Company Profile", companyProfileFormData{
-			Company: company,
-			Errors:  map[string]string{"name": "Company name is required"},
-		})
+		reRender(map[string]string{"name": "Company name is required"})
 		return
 	}
 
 	if err := model.UpdateCompanyProfile(h.DB, company); err != nil {
 		slog.Error("company_profile: update", "error", err)
-		h.render(w, r, "templates/settings/company.html", "Company Profile", companyProfileFormData{
-			Company: company,
-			Errors:  map[string]string{"general": "Failed to save company profile"},
-		})
+		reRender(map[string]string{"general": "Failed to save company profile"})
 		return
 	}
 

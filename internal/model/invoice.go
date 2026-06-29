@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -443,8 +444,8 @@ func (inv *Invoice) AmountDue() int {
 // Outcomes reported per customer by GenerateRecurringInvoices.
 const (
 	GeneratedInvoiceCreated          = "created"
-	GeneratedInvoiceSkippedNoHistory = "skipped_no_history"
 	GeneratedInvoiceSkippedThisMonth = "skipped_already_invoiced"
+	GeneratedInvoiceSkippedNoPrice   = "skipped_no_price"
 	GeneratedInvoiceFailed           = "failed"
 )
 
@@ -486,20 +487,52 @@ func (r *GenerateRecurringInvoicesResult) CreatedNumbers() []string {
 // DB-level lock.
 var recurringInvoiceMu sync.Mutex
 
-// GenerateRecurringInvoices creates a draft invoice for every active customer by
-// cloning the line items and tax of that customer's most recent non-cancelled
-// invoice (a cancelled/disputed invoice is never used as a template).
+// monthNameID returns the Indonesian month name for month m (1–12).
+func monthNameID(m int) string {
+	names := [...]string{
+		"Januari", "Februari", "Maret", "April", "Mei", "Juni",
+		"Juli", "Agustus", "September", "Oktober", "November", "Desember",
+	}
+	if m < 1 || m > 12 {
+		return ""
+	}
+	return names[m-1]
+}
+
+// GenerateRecurringInvoices creates a draft invoice for every active customer
+// whose contact has a non-zero price. Invoices are built from scratch using
+// the contact's price, the global default revenue account, and the global
+// recurring description template — no prior invoice is cloned.
 //
 // A customer is skipped when they already have an invoice dated in
-// invoiceDate's month (prevents double-billing on repeat runs) or have no
-// invoice to clone. Per-customer errors are recorded as "failed" items and do
-// not abort the batch. Generated invoices are drafts — no journal entry is
-// posted; notes are NOT copied (they are period-specific).
+// invoiceDate's month (prevents double-billing on repeat runs) or when their
+// contact price is 0. Per-customer errors are recorded as "failed" items and
+// do not abort the batch. Generated invoices are drafts.
 func GenerateRecurringInvoices(db *sql.DB, invoiceDate, dueDate string, userID int) (*GenerateRecurringInvoicesResult, error) {
 	if len(invoiceDate) < 7 {
 		return nil, fmt.Errorf("invalid invoice date: %q", invoiceDate)
 	}
 	monthPrefix := invoiceDate[:7] // YYYY-MM
+
+	profile, err := GetCompanyProfile(db)
+	if err != nil {
+		return nil, fmt.Errorf("load company profile: %w", err)
+	}
+	if profile.DefaultRevenueAccountID == 0 {
+		return nil, fmt.Errorf("set a default revenue account in Company Profile before generating recurring invoices")
+	}
+
+	// Derive month name and year from invoiceDate (format YYYY-MM-DD).
+	var invYear, invMonth int
+	fmt.Sscanf(invoiceDate[:7], "%d-%d", &invYear, &invMonth)
+	descTemplate := profile.RecurringDescriptionTemplate
+	if descTemplate == "" {
+		descTemplate = "Antar jemput {month} {year}"
+	}
+	description := strings.NewReplacer(
+		"{month}", monthNameID(invMonth),
+		"{year}", strconv.Itoa(invYear),
+	).Replace(descTemplate)
 
 	recurringInvoiceMu.Lock()
 	defer recurringInvoiceMu.Unlock()
@@ -514,6 +547,13 @@ func GenerateRecurringInvoices(db *sql.DB, invoiceDate, dueDate string, userID i
 
 	for _, c := range customers {
 		item := GeneratedInvoice{ContactID: c.ID, ContactName: c.Name}
+
+		if c.Price == 0 {
+			item.Result = GeneratedInvoiceSkippedNoPrice
+			result.Skipped++
+			result.Items = append(result.Items, item)
+			continue
+		}
 
 		var thisMonth int
 		if err := db.QueryRow(
@@ -532,54 +572,20 @@ func GenerateRecurringInvoices(db *sql.DB, invoiceDate, dueDate string, userID i
 			continue
 		}
 
-		// Clone the most recent non-cancelled invoice; never re-bill a cancelled one.
-		var latestID int
-		err := db.QueryRow(
-			"SELECT id FROM invoices WHERE contact_id = ? AND status != 'cancelled' ORDER BY invoice_date DESC, id DESC LIMIT 1",
-			c.ID,
-		).Scan(&latestID)
-		if errors.Is(err, sql.ErrNoRows) {
-			item.Result = GeneratedInvoiceSkippedNoHistory
-			result.Skipped++
-			result.Items = append(result.Items, item)
-			continue
-		}
-		if err != nil {
-			item.Result, item.Error = GeneratedInvoiceFailed, err.Error()
-			result.Failed++
-			result.Items = append(result.Items, item)
-			continue
-		}
-
-		latest, err := GetInvoice(db, latestID)
-		if err != nil {
-			item.Result, item.Error = GeneratedInvoiceFailed, err.Error()
-			result.Failed++
-			result.Items = append(result.Items, item)
-			continue
-		}
-		if len(latest.Lines) == 0 {
-			item.Result = GeneratedInvoiceSkippedNoHistory
-			result.Skipped++
-			result.Items = append(result.Items, item)
-			continue
-		}
-
-		lines := make([]InvoiceLine, 0, len(latest.Lines))
-		for _, l := range latest.Lines {
-			lines = append(lines, InvoiceLine{
-				Description: l.Description,
-				Quantity:    l.Quantity,
-				UnitPrice:   l.UnitPrice,
-				AccountID:   l.AccountID,
-			})
+		lines := []InvoiceLine{
+			{
+				Description: description,
+				Quantity:    100, // 1.00 × 100
+				UnitPrice:   c.Price,
+				AccountID:   profile.DefaultRevenueAccountID,
+			},
 		}
 
 		inv := &Invoice{
 			ContactID:   c.ID,
 			InvoiceDate: invoiceDate,
 			DueDate:     dueDate,
-			TaxAmount:   latest.TaxAmount,
+			TaxAmount:   0,
 			CreatedBy:   userID,
 		}
 

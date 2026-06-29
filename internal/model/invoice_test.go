@@ -260,33 +260,16 @@ func TestListInvoices(t *testing.T) {
 func TestGenerateRecurringInvoices(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 
-	var revenueID int
-	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
+	// Active customer with price set — should get a new invoice.
+	db.Exec("INSERT INTO contacts (name, contact_type, is_active, price) VALUES ('Active With Price', 'customer', 1, 5000000)")
+	var withPriceID int
+	db.QueryRow("SELECT id FROM contacts WHERE name = 'Active With Price'").Scan(&withPriceID)
 
-	// Active customer with a prior invoice in a past month — should be cloned.
-	db.Exec("INSERT INTO contacts (name, contact_type, is_active) VALUES ('Active With History', 'customer', 1)")
-	var withHistID int
-	db.QueryRow("SELECT id FROM contacts WHERE name = 'Active With History'").Scan(&withHistID)
-	if _, err := model.CreateInvoice(db, &model.Invoice{
-		ContactID: withHistID, InvoiceDate: "2020-01-15", DueDate: "2020-01-25", CreatedBy: 1,
-	}, []model.InvoiceLine{
-		{Description: "Monthly bus fee", Quantity: 100, UnitPrice: 5000000, AccountID: revenueID},
-	}); err != nil {
-		t.Fatalf("seed prior invoice: %v", err)
-	}
+	// Active customer with price = 0 — skipped (no price).
+	db.Exec("INSERT INTO contacts (name, contact_type, is_active, price) VALUES ('Active No Price', 'customer', 1, 0)")
 
-	// Active customer with no invoices — skipped (no history).
-	db.Exec("INSERT INTO contacts (name, contact_type, is_active) VALUES ('Active No History', 'customer', 1)")
-
-	// Inactive customer with a prior invoice — excluded from the batch entirely.
-	db.Exec("INSERT INTO contacts (name, contact_type, is_active) VALUES ('Inactive', 'customer', 0)")
-	var inactiveID int
-	db.QueryRow("SELECT id FROM contacts WHERE name = 'Inactive'").Scan(&inactiveID)
-	model.CreateInvoice(db, &model.Invoice{
-		ContactID: inactiveID, InvoiceDate: "2020-01-15", DueDate: "2020-01-25", CreatedBy: 1,
-	}, []model.InvoiceLine{
-		{Description: "Old", Quantity: 100, UnitPrice: 1000000, AccountID: revenueID},
-	})
+	// Inactive customer with price — excluded from the batch entirely.
+	db.Exec("INSERT INTO contacts (name, contact_type, is_active, price) VALUES ('Inactive With Price', 'customer', 0, 3000000)")
 
 	result, err := model.GenerateRecurringInvoices(db, "2026-06-03", "2026-06-13", 1)
 	if err != nil {
@@ -299,23 +282,23 @@ func TestGenerateRecurringInvoices(t *testing.T) {
 		t.Errorf("skipped: got %d want 1", result.Skipped)
 	}
 
-	// The cloned invoice mirrors the source totals, is dated this month, draft.
+	// The generated invoice uses the contact price, is dated this month, draft.
 	var newTotal int
 	var newStatus, newDue string
 	if err := db.QueryRow(
 		"SELECT total, status, due_date FROM invoices WHERE contact_id = ? AND substr(invoice_date,1,7) = '2026-06'",
-		withHistID,
+		withPriceID,
 	).Scan(&newTotal, &newStatus, &newDue); err != nil {
-		t.Fatalf("fetch cloned invoice: %v", err)
+		t.Fatalf("fetch generated invoice: %v", err)
 	}
 	if newTotal != 5000000 {
-		t.Errorf("cloned total: got %d want 5000000", newTotal)
+		t.Errorf("generated total: got %d want 5000000", newTotal)
 	}
 	if newStatus != "draft" {
-		t.Errorf("cloned status: got %q want draft", newStatus)
+		t.Errorf("generated status: got %q want draft", newStatus)
 	}
 	if newDue != "2026-06-13" {
-		t.Errorf("cloned due date: got %q want 2026-06-13", newDue)
+		t.Errorf("generated due date: got %q want 2026-06-13", newDue)
 	}
 
 	// Re-running in the same month must skip the already-invoiced customer.

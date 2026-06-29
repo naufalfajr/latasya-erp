@@ -25,6 +25,9 @@ type contactInput struct {
 	Email       string `json:"email"`
 	Address     string `json:"address"`
 	Notes       string `json:"notes"`
+	MapsLink    string `json:"maps_link"`
+	Class       string `json:"class"`
+	Price       int    `json:"price"`
 	IsActive    *bool  `json:"is_active"`
 }
 
@@ -37,6 +40,9 @@ func validateContactInput(inp *contactInput) map[string]string {
 		fields["contact_type"] = "required"
 	} else if inp.ContactType != "customer" && inp.ContactType != "supplier" && inp.ContactType != "both" {
 		fields["contact_type"] = "must be customer, supplier, or both"
+	}
+	if len(inp.Class) > 5 {
+		fields["class"] = "must be 5 characters or fewer"
 	}
 	return fields
 }
@@ -123,6 +129,9 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		Email:       inp.Email,
 		Address:     inp.Address,
 		Notes:       inp.Notes,
+		MapsLink:    inp.MapsLink,
+		Class:       inp.Class,
+		Price:       inp.Price,
 		IsActive:    isActive,
 	}
 
@@ -146,6 +155,8 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 				"contact_type": c.ContactType,
 				"email":        c.Email,
 				"phone":        c.Phone,
+				"class":        c.Class,
+				"price":        c.Price,
 				"is_active":    c.IsActive,
 			},
 		},
@@ -204,6 +215,9 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		Email:       inp.Email,
 		Address:     inp.Address,
 		Notes:       inp.Notes,
+		MapsLink:    inp.MapsLink,
+		Class:       inp.Class,
+		Price:       inp.Price,
 		IsActive:    isActive,
 	}
 
@@ -219,6 +233,9 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		"phone":        existing.Phone,
 		"address":      existing.Address,
 		"notes":        existing.Notes,
+		"maps_link":    existing.MapsLink,
+		"class":        existing.Class,
+		"price":        existing.Price,
 		"is_active":    existing.IsActive,
 	}
 	newFields := map[string]any{
@@ -228,10 +245,13 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		"phone":        c.Phone,
 		"address":      c.Address,
 		"notes":        c.Notes,
+		"maps_link":    c.MapsLink,
+		"class":        c.Class,
+		"price":        c.Price,
 		"is_active":    c.IsActive,
 	}
 	meta := audit.Diff(oldFields, newFields,
-		[]string{"name", "contact_type", "email", "phone", "address", "notes", "is_active"})
+		[]string{"name", "contact_type", "email", "phone", "address", "notes", "maps_link", "class", "price", "is_active"})
 	if meta != nil {
 		audit.Log(r.Context(), h.DB, audit.Event{
 			Action:      "contact.update",

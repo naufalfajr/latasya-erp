@@ -547,12 +547,9 @@ func TestGenerateRecurring(t *testing.T) {
 	ts, db := setupServer(t)
 	token := adminToken(t, db)
 	cid := seedContact(t, db)
-	rev := accountID(t, db, "4-1001")
 
-	body := defaultInvoiceBody(cid, rev)
-	body["invoice_date"] = "2020-01-10"
-	body["due_date"] = "2020-01-20"
-	createInvoice(t, ts, token, body)
+	// Give the contact a price so the generator picks it up.
+	db.Exec("UPDATE contacts SET price = 5000000 WHERE id = ?", cid)
 
 	t.Run("success", func(t *testing.T) {
 		resp := doRequest(t, ts, http.MethodPost, "/api/v1/invoices/generate-recurring", token, nil, nil)
