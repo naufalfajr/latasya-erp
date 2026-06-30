@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/model"
@@ -249,7 +250,7 @@ func validateContact(c *model.Contact) map[string]string {
 	if c.ContactType == "" {
 		errors["contact_type"] = "Contact type is required"
 	}
-	if len(c.Class) > 5 {
+	if utf8.RuneCountInString(c.Class) > 5 {
 		errors["class"] = "Class must be 5 characters or fewer"
 	}
 	return errors

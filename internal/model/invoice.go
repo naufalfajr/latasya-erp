@@ -10,6 +10,10 @@ import (
 	"sync"
 )
 
+// ErrNoDefaultRevenueAccount is returned by GenerateRecurringInvoices when
+// company_profile.default_revenue_account_id is not configured.
+var ErrNoDefaultRevenueAccount = errors.New("set a default revenue account in Company Profile before generating recurring invoices")
+
 type Invoice struct {
 	ID             int           `json:"id"`
 	InvoiceNumber  string        `json:"invoice_number"`
@@ -487,8 +491,8 @@ func (r *GenerateRecurringInvoicesResult) CreatedNumbers() []string {
 // DB-level lock.
 var recurringInvoiceMu sync.Mutex
 
-// monthNameID returns the Indonesian month name for month m (1–12).
-func monthNameID(m int) string {
+// MonthNameID returns the Indonesian month name for month m (1–12).
+func MonthNameID(m int) string {
 	names := [...]string{
 		"Januari", "Februari", "Maret", "April", "Mei", "Juni",
 		"Juli", "Agustus", "September", "Oktober", "November", "Desember",
@@ -519,18 +523,20 @@ func GenerateRecurringInvoices(db *sql.DB, invoiceDate, dueDate string, userID i
 		return nil, fmt.Errorf("load company profile: %w", err)
 	}
 	if profile.DefaultRevenueAccountID == 0 {
-		return nil, fmt.Errorf("set a default revenue account in Company Profile before generating recurring invoices")
+		return nil, ErrNoDefaultRevenueAccount
 	}
 
 	// Derive month name and year from invoiceDate (format YYYY-MM-DD).
 	var invYear, invMonth int
-	fmt.Sscanf(invoiceDate[:7], "%d-%d", &invYear, &invMonth)
+	if n, _ := fmt.Sscanf(invoiceDate[:7], "%d-%d", &invYear, &invMonth); n != 2 {
+		return nil, fmt.Errorf("invalid invoice date %q", invoiceDate)
+	}
 	descTemplate := profile.RecurringDescriptionTemplate
 	if descTemplate == "" {
 		descTemplate = "Antar jemput {month} {year}"
 	}
 	description := strings.NewReplacer(
-		"{month}", monthNameID(invMonth),
+		"{month}", MonthNameID(invMonth),
 		"{year}", strconv.Itoa(invYear),
 	).Replace(descTemplate)
 

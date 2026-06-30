@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"unicode/utf8"
 
 	v1 "github.com/naufal/latasya-erp/internal/api/v1"
 	"github.com/naufal/latasya-erp/internal/audit"
@@ -41,7 +42,7 @@ func validateContactInput(inp *contactInput) map[string]string {
 	} else if inp.ContactType != "customer" && inp.ContactType != "supplier" && inp.ContactType != "both" {
 		fields["contact_type"] = "must be customer, supplier, or both"
 	}
-	if len(inp.Class) > 5 {
+	if utf8.RuneCountInString(inp.Class) > 5 {
 		fields["class"] = "must be 5 characters or fewer"
 	}
 	return fields

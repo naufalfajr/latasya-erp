@@ -166,7 +166,7 @@ function prefillFirstLine(price) {
     if (qtyInput && (!qtyInput.value || parseFloat(qtyInput.value) === 0)) qtyInput.value = '1';
 
     var priceInput = firstRow.querySelector('[name="line_unit_price"]');
-    if (priceInput) priceInput.value = price;
+    if (priceInput && (!priceInput.value || parseFloat(priceInput.value) === 0)) priceInput.value = price;
 
     calcLineAmount(firstRow);
 }
