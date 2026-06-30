@@ -3,6 +3,8 @@ package handler
 import (
 	"net/http"
 	"strconv"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/model"
@@ -56,6 +58,9 @@ func (h *Handler) CreateContact(w http.ResponseWriter, r *http.Request) {
 		Email:       r.FormValue("email"),
 		Address:     r.FormValue("address"),
 		Notes:       r.FormValue("notes"),
+		MapsLink:    strings.TrimSpace(r.FormValue("maps_link")),
+		Class:       strings.TrimSpace(r.FormValue("class")),
+		Price:       parseIDR(r.FormValue("price")),
 		IsActive:    r.FormValue("is_active") == "on",
 	}
 
@@ -86,6 +91,8 @@ func (h *Handler) CreateContact(w http.ResponseWriter, r *http.Request) {
 				"contact_type": c.ContactType,
 				"email":        c.Email,
 				"phone":        c.Phone,
+				"class":        c.Class,
+				"price":        c.Price,
 				"is_active":    c.IsActive,
 			},
 		},
@@ -135,6 +142,9 @@ func (h *Handler) UpdateContact(w http.ResponseWriter, r *http.Request) {
 		Email:       r.FormValue("email"),
 		Address:     r.FormValue("address"),
 		Notes:       r.FormValue("notes"),
+		MapsLink:    strings.TrimSpace(r.FormValue("maps_link")),
+		Class:       strings.TrimSpace(r.FormValue("class")),
+		Price:       parseIDR(r.FormValue("price")),
 		IsActive:    r.FormValue("is_active") == "on",
 	}
 
@@ -160,6 +170,9 @@ func (h *Handler) UpdateContact(w http.ResponseWriter, r *http.Request) {
 		"phone":        existing.Phone,
 		"address":      existing.Address,
 		"notes":        existing.Notes,
+		"maps_link":    existing.MapsLink,
+		"class":        existing.Class,
+		"price":        existing.Price,
 		"is_active":    existing.IsActive,
 	}
 	newFields := map[string]any{
@@ -169,10 +182,13 @@ func (h *Handler) UpdateContact(w http.ResponseWriter, r *http.Request) {
 		"phone":        c.Phone,
 		"address":      c.Address,
 		"notes":        c.Notes,
+		"maps_link":    c.MapsLink,
+		"class":        c.Class,
+		"price":        c.Price,
 		"is_active":    c.IsActive,
 	}
 	metadata := audit.Diff(oldFields, newFields,
-		[]string{"name", "contact_type", "email", "phone", "address", "notes", "is_active"})
+		[]string{"name", "contact_type", "email", "phone", "address", "notes", "maps_link", "class", "price", "is_active"})
 	if metadata != nil {
 		audit.Log(r.Context(), h.DB, audit.Event{
 			Action:      "contact.update",
@@ -233,6 +249,9 @@ func validateContact(c *model.Contact) map[string]string {
 	}
 	if c.ContactType == "" {
 		errors["contact_type"] = "Contact type is required"
+	}
+	if utf8.RuneCountInString(c.Class) > 5 {
+		errors["class"] = "Class must be 5 characters or fewer"
 	}
 	return errors
 }

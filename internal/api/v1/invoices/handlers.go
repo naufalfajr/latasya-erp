@@ -453,6 +453,10 @@ func (h *Handler) GenerateRecurring(w http.ResponseWriter, r *http.Request) {
 
 	result, err := model.GenerateRecurringInvoices(h.DB, invoiceDate, dueDate, user.ID)
 	if err != nil {
+		if errors.Is(err, model.ErrNoDefaultRevenueAccount) {
+			v1.WriteError(w, r, http.StatusUnprocessableEntity, v1.CodeValidationFailed, err.Error(), nil)
+			return
+		}
 		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to generate recurring invoices", nil)
 		return
 	}

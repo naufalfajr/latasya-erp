@@ -36,6 +36,7 @@
             <tr>
                 <th>Name</th>
                 <th>Type</th>
+                <th>Class</th>
                 <th>Phone</th>
                 <th class="hidden sm:table-cell">Email</th>
                 <th class="hidden md:table-cell">Address</th>
@@ -52,6 +53,7 @@
                     {{if eq .ContactType "customer"}}badge-success
                     {{else if eq .ContactType "supplier"}}badge-warning
                     {{else}}badge-info{{end}}">{{.ContactType}}</span></td>
+                <td class="text-sm">{{.Class}}</td>
                 <td class="text-sm">{{.Phone}}</td>
                 <td class="hidden sm:table-cell text-sm">{{.Email}}</td>
                 <td class="hidden md:table-cell text-sm opacity-60">{{.Address}}</td>
@@ -75,7 +77,7 @@
             </tr>
             {{else}}
             <tr>
-                <td colspan="{{if $.User.HasCapability "contacts.manage"}}8{{else}}7{{end}}" class="text-center py-8 opacity-60">No contacts found. Add your first contact.</td>
+                <td colspan="{{if $.User.HasCapability "contacts.manage"}}9{{else}}8{{end}}" class="text-center py-8 opacity-60">No contacts found. Add your first contact.</td>
             </tr>
             {{end}}
         </tbody>

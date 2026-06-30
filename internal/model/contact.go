@@ -13,6 +13,9 @@ type Contact struct {
 	Email       string `json:"email"`
 	Address     string `json:"address"`
 	Notes       string `json:"notes"`
+	MapsLink    string `json:"maps_link"`
+	Class       string `json:"class"`
+	Price       int    `json:"price"`
 	IsActive    bool   `json:"is_active"`
 	CreatedAt   string `json:"created_at"`
 	UpdatedAt   string `json:"updated_at"`
@@ -26,7 +29,7 @@ type ContactFilter struct {
 
 func ListContacts(db *sql.DB, f ContactFilter) ([]Contact, error) {
 	query := `SELECT id, name, contact_type, COALESCE(phone,''), COALESCE(email,''),
-		COALESCE(address,''), COALESCE(notes,''), is_active, created_at, updated_at
+		COALESCE(address,''), COALESCE(notes,''), maps_link, class, price, is_active, created_at, updated_at
 		FROM contacts WHERE 1=1`
 	var args []any
 
@@ -59,7 +62,7 @@ func ListContacts(db *sql.DB, f ContactFilter) ([]Contact, error) {
 	for rows.Next() {
 		var c Contact
 		err := rows.Scan(&c.ID, &c.Name, &c.ContactType, &c.Phone, &c.Email,
-			&c.Address, &c.Notes, &c.IsActive, &c.CreatedAt, &c.UpdatedAt)
+			&c.Address, &c.Notes, &c.MapsLink, &c.Class, &c.Price, &c.IsActive, &c.CreatedAt, &c.UpdatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("scan contact: %w", err)
 		}
@@ -72,10 +75,10 @@ func GetContact(db *sql.DB, id int) (*Contact, error) {
 	c := &Contact{}
 	err := db.QueryRow(
 		`SELECT id, name, contact_type, COALESCE(phone,''), COALESCE(email,''),
-		COALESCE(address,''), COALESCE(notes,''), is_active, created_at, updated_at
+		COALESCE(address,''), COALESCE(notes,''), maps_link, class, price, is_active, created_at, updated_at
 		FROM contacts WHERE id = ?`, id,
 	).Scan(&c.ID, &c.Name, &c.ContactType, &c.Phone, &c.Email,
-		&c.Address, &c.Notes, &c.IsActive, &c.CreatedAt, &c.UpdatedAt)
+		&c.Address, &c.Notes, &c.MapsLink, &c.Class, &c.Price, &c.IsActive, &c.CreatedAt, &c.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("get contact: %w", err)
 	}
@@ -84,8 +87,8 @@ func GetContact(db *sql.DB, id int) (*Contact, error) {
 
 func CreateContact(db *sql.DB, c *Contact) error {
 	_, err := db.Exec(
-		"INSERT INTO contacts (name, contact_type, phone, email, address, notes, is_active) VALUES (?, ?, ?, ?, ?, ?, ?)",
-		c.Name, c.ContactType, c.Phone, c.Email, c.Address, c.Notes, c.IsActive,
+		"INSERT INTO contacts (name, contact_type, phone, email, address, notes, maps_link, class, price, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		c.Name, c.ContactType, c.Phone, c.Email, c.Address, c.Notes, c.MapsLink, c.Class, c.Price, c.IsActive,
 	)
 	if err != nil {
 		return fmt.Errorf("create contact: %w", err)
@@ -95,8 +98,8 @@ func CreateContact(db *sql.DB, c *Contact) error {
 
 func UpdateContact(db *sql.DB, c *Contact) error {
 	_, err := db.Exec(
-		"UPDATE contacts SET name=?, contact_type=?, phone=?, email=?, address=?, notes=?, is_active=?, updated_at=datetime('now') WHERE id=?",
-		c.Name, c.ContactType, c.Phone, c.Email, c.Address, c.Notes, c.IsActive, c.ID,
+		"UPDATE contacts SET name=?, contact_type=?, phone=?, email=?, address=?, notes=?, maps_link=?, class=?, price=?, is_active=?, updated_at=datetime('now') WHERE id=?",
+		c.Name, c.ContactType, c.Phone, c.Email, c.Address, c.Notes, c.MapsLink, c.Class, c.Price, c.IsActive, c.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("update contact: %w", err)

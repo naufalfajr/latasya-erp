@@ -20,11 +20,11 @@
                 <!-- Customer -->
                 <div class="flex flex-col gap-1">
                     <label class="label">Customer *</label>
-                    <select name="contact_id" class="select {{if index $data.Errors "contact_id"}}select-error{{end}}" required>
+                    <select id="contact_id" name="contact_id" class="select {{if index $data.Errors "contact_id"}}select-error{{end}}" required>
                         <option value="">Select customer</option>
                         {{$selContact := $data.Invoice.ContactID}}
                         {{range $data.Contacts}}
-                        <option value="{{.ID}}" {{if eq .ID $selContact}}selected{{end}}>{{.Name}}</option>
+                        <option value="{{.ID}}" data-price="{{.Price}}" {{if eq .ID $selContact}}selected{{end}}>{{.Name}}</option>
                         {{end}}
                     </select>
                     {{if index $data.Errors "contact_id"}}
@@ -110,7 +110,17 @@
     </form>
 </div>
 
+<div id="invoice-form-meta"
+    data-default-account="{{$data.DefaultRevenueAccountID}}"
+    data-desc-template="{{if $data.RecurringDescriptionTemplate}}{{$data.RecurringDescriptionTemplate}}{{else}}Antar jemput {month} {year}{{end}}"
+    hidden></div>
+
 <script>
+var _meta = document.getElementById('invoice-form-meta').dataset;
+var _defaultAccountID = parseInt(_meta.defaultAccount || '0', 10);
+var _descTemplate = _meta.descTemplate || 'Antar jemput {month} {year}';
+var _monthsID = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
+
 function calcLineAmount(row) {
     var qty = parseFloat(row.querySelector('[name="line_quantity"]').value || '1');
     var price = parseInt(row.querySelector('[name="line_unit_price"]').value || '0');
@@ -123,6 +133,49 @@ document.addEventListener('input', function(e) {
     }
 });
 function removeInvLine(btn) { btn.closest('tr').remove(); }
+
+function prefillFirstLine(price) {
+    var tbody = document.getElementById('inv-lines-body');
+    if (!tbody) return;
+    var firstRow = tbody.querySelector('tr');
+    if (!firstRow) return;
+
+    var dateInput = document.querySelector('[name="invoice_date"]');
+    var dateVal = dateInput ? dateInput.value : '';
+    var month = '', year = '';
+    if (dateVal && dateVal.length >= 7) {
+        var parts = dateVal.split('-');
+        year = parts[0];
+        month = _monthsID[parseInt(parts[1], 10) - 1] || '';
+    } else {
+        var now = new Date();
+        year = now.getFullYear().toString();
+        month = _monthsID[now.getMonth()];
+    }
+    var desc = _descTemplate.replace('{month}', month).replace('{year}', year);
+
+    var descInput = firstRow.querySelector('[name="line_description"]');
+    if (descInput && !descInput.value) descInput.value = desc;
+
+    var acctSelect = firstRow.querySelector('[name="line_account_id"]');
+    if (acctSelect && !acctSelect.value && _defaultAccountID) {
+        acctSelect.value = _defaultAccountID;
+    }
+
+    var qtyInput = firstRow.querySelector('[name="line_quantity"]');
+    if (qtyInput && (!qtyInput.value || parseFloat(qtyInput.value) === 0)) qtyInput.value = '1';
+
+    var priceInput = firstRow.querySelector('[name="line_unit_price"]');
+    if (priceInput && (!priceInput.value || parseFloat(priceInput.value) === 0)) priceInput.value = price;
+
+    calcLineAmount(firstRow);
+}
+
+document.getElementById('contact_id').addEventListener('change', function() {
+    var opt = this.options[this.selectedIndex];
+    var price = opt ? parseInt(opt.dataset.price || '0', 10) : 0;
+    prefillFirstLine(price);
+});
 </script>
 {{end}}
 

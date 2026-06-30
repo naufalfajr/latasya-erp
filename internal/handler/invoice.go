@@ -13,13 +13,15 @@ import (
 )
 
 type invoiceFormData struct {
-	Invoice         *model.Invoice
-	Lines           []model.InvoiceLine
-	Contacts        []model.Contact
-	RevenueAccounts []model.Account
-	AssetAccounts   []model.Account
-	Errors          map[string]string
-	IsEdit          bool
+	Invoice                      *model.Invoice
+	Lines                        []model.InvoiceLine
+	Contacts                     []model.Contact
+	RevenueAccounts              []model.Account
+	AssetAccounts                []model.Account
+	DefaultRevenueAccountID      int
+	RecurringDescriptionTemplate string
+	Errors                       map[string]string
+	IsEdit                       bool
 }
 
 func (h *Handler) ListInvoices(w http.ResponseWriter, r *http.Request) {
@@ -53,7 +55,7 @@ func (h *Handler) ListInvoices(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) NewInvoice(w http.ResponseWriter, r *http.Request) {
 	fd := h.newInvoiceFormData()
 	fd.Invoice = &model.Invoice{}
-	fd.Lines = []model.InvoiceLine{{Quantity: 100}, {Quantity: 100}} // 2 empty lines, qty=1.00
+	fd.Lines = []model.InvoiceLine{{Quantity: 100}} // 1 empty line, qty=1.00
 	h.render(w, r, "templates/invoices/form.html", "New Invoice", fd, "templates/invoices/line_partial.html")
 }
 
@@ -637,11 +639,17 @@ func (h *Handler) newInvoiceFormData() invoiceFormData {
 	contacts, _ := model.ListContacts(h.DB, model.ContactFilter{Type: "customer", IsActive: &active})
 	revenueAccounts, _ := model.ListAccounts(h.DB, model.AccountFilter{Type: "revenue", IsActive: &active})
 	assetAccounts, _ := model.ListAccounts(h.DB, model.AccountFilter{Type: "asset", IsActive: &active})
+	profile, _ := model.GetCompanyProfile(h.DB)
 
-	return invoiceFormData{
+	fd := invoiceFormData{
 		Contacts:        contacts,
 		RevenueAccounts: revenueAccounts,
 		AssetAccounts:   assetAccounts,
 		Errors:          make(map[string]string),
 	}
+	if profile != nil {
+		fd.DefaultRevenueAccountID = profile.DefaultRevenueAccountID
+		fd.RecurringDescriptionTemplate = profile.RecurringDescriptionTemplate
+	}
+	return fd
 }
