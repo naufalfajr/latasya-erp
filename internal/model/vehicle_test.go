@@ -38,7 +38,7 @@ func TestListRouteCapacity(t *testing.T) {
 	}
 	for _, c := range capacities {
 		if c.RouteName == "West" {
-			if c.VehicleCode != "LA001" || c.Capacity != 25 || c.Used != 1 {
+			if c.VehicleCode != "LA001" || c.Capacity != 14 || c.Used != 1 {
 				t.Fatalf("unexpected west capacity: %+v", c)
 			}
 			return

@@ -34,7 +34,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_vehicle_route_one_active_route ON vehicle_
 CREATE UNIQUE INDEX IF NOT EXISTS idx_vehicle_route_one_active_vehicle ON vehicle_route_assignments(vehicle_id) WHERE ends_on IS NULL;
 
 INSERT INTO routes (name) VALUES ('West'), ('East');
-INSERT INTO vehicles (code, capacity) VALUES ('LA001', 25), ('LA002', 25);
+INSERT INTO vehicles (code, capacity) VALUES ('LA001', 14), ('LA002', 14);
 INSERT INTO vehicle_route_assignments (vehicle_id, route_id, starts_on)
 SELECT v.id, r.id, date('now')
 FROM vehicles v
