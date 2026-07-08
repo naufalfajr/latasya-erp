@@ -70,6 +70,17 @@
                     <span class="text-xs text-error">{{index $data.Errors "payment_account"}}</span>
                     {{end}}
                 </div>
+
+                <!-- Vehicle -->
+                <div class="flex flex-col gap-1">
+                    <label class="label">Vehicle</label>
+                    <select name="vehicle_id" class="select">
+                        <option value="">No vehicle</option>
+                        {{range $data.Vehicles}}
+                        <option value="{{.ID}}" {{if eq .ID $data.VehicleID}}selected{{end}}>{{.Code}}</option>
+                        {{end}}
+                    </select>
+                </div>
             </div>
 
             <!-- Description -->

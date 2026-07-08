@@ -15,8 +15,10 @@ type expenseFormData struct {
 	Amount          int
 	ExpenseAccount  int
 	PaymentAccount  int
+	VehicleID       int
 	ExpenseAccounts []model.Account
 	PaymentAccounts []model.Account
+	Vehicles        []model.Vehicle
 	Errors          map[string]string
 	IsEdit          bool
 }
@@ -59,11 +61,13 @@ func (h *Handler) CreateExpense(w http.ResponseWriter, r *http.Request) {
 	amount := parseIDR(r.FormValue("amount"))
 	expenseAccountID, _ := strconv.Atoi(r.FormValue("expense_account"))
 	paymentAccountID, _ := strconv.Atoi(r.FormValue("payment_account"))
+	vehicleID := parseOptionalInt(r.FormValue("vehicle_id"))
 
 	je := &model.JournalEntry{
 		EntryDate:   r.FormValue("entry_date"),
 		Description: r.FormValue("description"),
 		SourceType:  "expense",
+		VehicleID:   vehicleID,
 		IsPosted:    true,
 		CreatedBy:   user.ID,
 	}
@@ -91,6 +95,7 @@ func (h *Handler) CreateExpense(w http.ResponseWriter, r *http.Request) {
 		fd.Amount = amount
 		fd.ExpenseAccount = expenseAccountID
 		fd.PaymentAccount = paymentAccountID
+		fd.VehicleID = vehicleID
 		fd.Errors = errors
 		h.render(w, r, "templates/expenses/form.html", "Record Expense", fd)
 		return
@@ -109,6 +114,7 @@ func (h *Handler) CreateExpense(w http.ResponseWriter, r *http.Request) {
 		fd.Amount = amount
 		fd.ExpenseAccount = expenseAccountID
 		fd.PaymentAccount = paymentAccountID
+		fd.VehicleID = vehicleID
 		fd.Errors = map[string]string{"general": err.Error()}
 		h.render(w, r, "templates/expenses/form.html", "Record Expense", fd)
 		return
@@ -126,6 +132,7 @@ func (h *Handler) CreateExpense(w http.ResponseWriter, r *http.Request) {
 				"amount":          amount,
 				"expense_account": expenseAccountID,
 				"payment_account": paymentAccountID,
+				"vehicle_id":      vehicleID,
 			},
 		},
 	})
@@ -149,6 +156,7 @@ func (h *Handler) EditExpense(w http.ResponseWriter, r *http.Request) {
 
 	fd := h.newExpenseFormData()
 	fd.Entry = je
+	fd.VehicleID = je.VehicleID
 	fd.IsEdit = true
 
 	for _, l := range je.Lines {
@@ -181,12 +189,14 @@ func (h *Handler) UpdateExpense(w http.ResponseWriter, r *http.Request) {
 	amount := parseIDR(r.FormValue("amount"))
 	expenseAccountID, _ := strconv.Atoi(r.FormValue("expense_account"))
 	paymentAccountID, _ := strconv.Atoi(r.FormValue("payment_account"))
+	vehicleID := parseOptionalInt(r.FormValue("vehicle_id"))
 
 	je := &model.JournalEntry{
 		ID:          id,
 		EntryDate:   r.FormValue("entry_date"),
 		Description: r.FormValue("description"),
 		SourceType:  "expense",
+		VehicleID:   vehicleID,
 		IsPosted:    true,
 		CreatedBy:   user.ID,
 	}
@@ -214,6 +224,7 @@ func (h *Handler) UpdateExpense(w http.ResponseWriter, r *http.Request) {
 		fd.Amount = amount
 		fd.ExpenseAccount = expenseAccountID
 		fd.PaymentAccount = paymentAccountID
+		fd.VehicleID = vehicleID
 		fd.Errors = errors
 		fd.IsEdit = true
 		h.render(w, r, "templates/expenses/form.html", "Edit Expense", fd)
@@ -231,6 +242,7 @@ func (h *Handler) UpdateExpense(w http.ResponseWriter, r *http.Request) {
 		fd.Amount = amount
 		fd.ExpenseAccount = expenseAccountID
 		fd.PaymentAccount = paymentAccountID
+		fd.VehicleID = vehicleID
 		fd.Errors = map[string]string{"general": err.Error()}
 		fd.IsEdit = true
 		h.render(w, r, "templates/expenses/form.html", "Edit Expense", fd)
@@ -244,6 +256,7 @@ func (h *Handler) UpdateExpense(w http.ResponseWriter, r *http.Request) {
 		"amount":          oldAmount,
 		"expense_account": oldExpenseAcct,
 		"payment_account": oldPaymentAcct,
+		"vehicle_id":      oldJE.VehicleID,
 	}
 	newFields := map[string]any{
 		"entry_date":      je.EntryDate,
@@ -251,9 +264,10 @@ func (h *Handler) UpdateExpense(w http.ResponseWriter, r *http.Request) {
 		"amount":          amount,
 		"expense_account": expenseAccountID,
 		"payment_account": paymentAccountID,
+		"vehicle_id":      vehicleID,
 	}
 	metadata := audit.Diff(oldFields, newFields,
-		[]string{"entry_date", "description", "amount", "expense_account", "payment_account"})
+		[]string{"entry_date", "description", "amount", "expense_account", "payment_account", "vehicle_id"})
 	if metadata != nil {
 		audit.Log(r.Context(), h.DB, audit.Event{
 			Action:      "expense.update",
@@ -297,6 +311,7 @@ func (h *Handler) DeleteExpense(w http.ResponseWriter, r *http.Request) {
 					"amount":          amount,
 					"expense_account": expenseAcct,
 					"payment_account": paymentAcct,
+					"vehicle_id":      existing.VehicleID,
 				},
 			},
 		})
@@ -315,11 +330,13 @@ func (h *Handler) newExpenseFormData() expenseFormData {
 	active := true
 	expenseAccounts, _ := model.ListAccounts(h.DB, model.AccountFilter{Type: model.AccountTypeExpense, IsActive: &active})
 	paymentAccounts, _ := model.ListAccounts(h.DB, model.AccountFilter{Type: "asset", IsActive: &active})
+	vehicles, _ := model.ListVehicles(h.DB)
 
 	return expenseFormData{
 		Entry:           &model.JournalEntry{},
 		ExpenseAccounts: expenseAccounts,
 		PaymentAccounts: paymentAccounts,
+		Vehicles:        vehicles,
 		Errors:          make(map[string]string),
 	}
 }
