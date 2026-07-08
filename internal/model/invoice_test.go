@@ -260,29 +260,29 @@ func TestListInvoices(t *testing.T) {
 func TestGenerateRecurringInvoices(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 
-	// Active customer with price set — should get a new invoice.
-	db.Exec("INSERT INTO contacts (name, contact_type, is_active, price) VALUES ('Active With Price', 'customer', 1, 5000000)")
+	// Active customer with distance pricing — should get a new invoice.
+	db.Exec("INSERT INTO contacts (name, contact_type, is_active, distance_km, has_sibling_discount, is_return_only) VALUES ('Active With Price', 'customer', 1, 8, 1, 1)")
 	var withPriceID int
 	db.QueryRow("SELECT id FROM contacts WHERE name = 'Active With Price'").Scan(&withPriceID)
 
-	// Active customer with price = 0 — skipped (no price).
-	db.Exec("INSERT INTO contacts (name, contact_type, is_active, price) VALUES ('Active No Price', 'customer', 1, 0)")
+	// Active customer at 0 km still uses the 0–3 km base tier.
+	db.Exec("INSERT INTO contacts (name, contact_type, is_active, distance_km) VALUES ('Active Short Distance', 'customer', 1, 0)")
 
-	// Inactive customer with price — excluded from the batch entirely.
-	db.Exec("INSERT INTO contacts (name, contact_type, is_active, price) VALUES ('Inactive With Price', 'customer', 0, 3000000)")
+	// Inactive customer with distance — excluded from the batch entirely.
+	db.Exec("INSERT INTO contacts (name, contact_type, is_active, distance_km) VALUES ('Inactive With Price', 'customer', 0, 12)")
 
 	result, err := model.GenerateRecurringInvoices(db, "2026-06-03", "2026-06-13", 1)
 	if err != nil {
 		t.Fatalf("generate: %v", err)
 	}
-	if result.Created != 1 {
-		t.Errorf("created: got %d want 1", result.Created)
+	if result.Created != 2 {
+		t.Errorf("created: got %d want 2", result.Created)
 	}
-	if result.Skipped != 1 {
-		t.Errorf("skipped: got %d want 1", result.Skipped)
+	if result.Skipped != 0 {
+		t.Errorf("skipped: got %d want 0", result.Skipped)
 	}
 
-	// The generated invoice uses the contact price, is dated this month, draft.
+	// The generated invoice uses the contact price formula, is dated this month, draft.
 	var newTotal int
 	var newStatus, newDue string
 	if err := db.QueryRow(
@@ -291,8 +291,8 @@ func TestGenerateRecurringInvoices(t *testing.T) {
 	).Scan(&newTotal, &newStatus, &newDue); err != nil {
 		t.Fatalf("fetch generated invoice: %v", err)
 	}
-	if newTotal != 5000000 {
-		t.Errorf("generated total: got %d want 5000000", newTotal)
+	if newTotal != 350000 {
+		t.Errorf("generated total: got %d want 350000", newTotal)
 	}
 	if newStatus != "draft" {
 		t.Errorf("generated status: got %q want draft", newStatus)
