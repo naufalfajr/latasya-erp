@@ -56,6 +56,33 @@ func TestCreateJournalEntry_Balanced(t *testing.T) {
 	}
 }
 
+func TestJournalEntryVehicle(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+
+	var cashID, expenseID, vehicleID int
+	db.QueryRow("SELECT id FROM accounts WHERE code = '1-1001'").Scan(&cashID)
+	db.QueryRow("SELECT id FROM accounts WHERE code = '5-1001'").Scan(&expenseID)
+	db.QueryRow("SELECT id FROM vehicles WHERE code = 'LA001'").Scan(&vehicleID)
+
+	entryID, err := model.CreateJournalEntry(db, &model.JournalEntry{
+		EntryDate: "2026-04-04", Description: "Fuel", SourceType: model.SourceExpense, VehicleID: vehicleID, IsPosted: true, CreatedBy: 1,
+	}, []model.JournalLine{
+		{AccountID: expenseID, Debit: 100000, Credit: 0},
+		{AccountID: cashID, Debit: 0, Credit: 100000},
+	})
+	if err != nil {
+		t.Fatalf("create journal entry: %v", err)
+	}
+
+	entry, err := model.GetJournalEntry(db, entryID)
+	if err != nil {
+		t.Fatalf("get journal entry: %v", err)
+	}
+	if entry.VehicleID != vehicleID || entry.VehicleCode != "LA001" {
+		t.Fatalf("expected LA001 vehicle, got id=%d code=%q", entry.VehicleID, entry.VehicleCode)
+	}
+}
+
 func TestCreateJournalEntry_Unbalanced(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 
