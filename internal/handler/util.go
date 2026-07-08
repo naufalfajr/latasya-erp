@@ -17,6 +17,11 @@ func parseIDR(s string) int {
 	return n
 }
 
+func parseOptionalInt(s string) int {
+	v, _ := strconv.Atoi(s)
+	return v
+}
+
 // parseQuantity parses a decimal quantity string ("1", "1.5", "0.25") into the
 // internal fixed-point integer representation (×100). "1" → 100, "1.5" → 150,
 // "0.25" → 25. Returns 0 for empty/invalid input so the caller can apply a
