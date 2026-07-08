@@ -16,29 +16,34 @@ type Contact struct {
 	MapsLink    string `json:"maps_link"`
 	Class       string `json:"class"`
 	Price       int    `json:"price"`
+	RouteID     int    `json:"route_id"`
 	IsActive    bool   `json:"is_active"`
 	CreatedAt   string `json:"created_at"`
 	UpdatedAt   string `json:"updated_at"`
+	RouteName   string `json:"route_name,omitempty"`
 }
 
 type ContactFilter struct {
 	Type     string // customer, supplier, both
 	IsActive *bool
 	Search   string
+	Sort     string // name, class, status
+	Order    string // asc, desc
 }
 
 func ListContacts(db *sql.DB, f ContactFilter) ([]Contact, error) {
-	query := `SELECT id, name, contact_type, COALESCE(phone,''), COALESCE(email,''),
-		COALESCE(address,''), COALESCE(notes,''), maps_link, class, price, is_active, created_at, updated_at
-		FROM contacts WHERE 1=1`
+	query := `SELECT c.id, c.name, c.contact_type, COALESCE(c.phone,''), COALESCE(c.email,''),
+		COALESCE(c.address,''), COALESCE(c.notes,''), c.maps_link, c.class, c.price, COALESCE(c.route_id, 0), c.is_active, c.created_at, c.updated_at,
+		COALESCE(r.name, '')
+		FROM contacts c LEFT JOIN routes r ON r.id = c.route_id WHERE 1=1`
 	var args []any
 
 	if f.Type != "" {
-		query += " AND (contact_type = ? OR contact_type = 'both')"
+		query += " AND (c.contact_type = ? OR c.contact_type = 'both')"
 		args = append(args, f.Type)
 	}
 	if f.IsActive != nil {
-		query += " AND is_active = ?"
+		query += " AND c.is_active = ?"
 		if *f.IsActive {
 			args = append(args, 1)
 		} else {
@@ -46,11 +51,22 @@ func ListContacts(db *sql.DB, f ContactFilter) ([]Contact, error) {
 		}
 	}
 	if f.Search != "" {
-		query += " AND (name LIKE ? OR phone LIKE ? OR email LIKE ?)"
+		query += " AND (c.name LIKE ? OR c.phone LIKE ? OR c.email LIKE ?)"
 		s := "%" + f.Search + "%"
 		args = append(args, s, s, s)
 	}
-	query += " ORDER BY name"
+	column := "name"
+	switch f.Sort {
+	case "class":
+		column = "class"
+	case "status":
+		column = "is_active"
+	}
+	direction := "ASC"
+	if f.Order == "desc" {
+		direction = "DESC"
+	}
+	query += " ORDER BY c." + column + " " + direction + ", c.name ASC"
 
 	rows, err := db.Query(query, args...)
 	if err != nil {
@@ -62,7 +78,7 @@ func ListContacts(db *sql.DB, f ContactFilter) ([]Contact, error) {
 	for rows.Next() {
 		var c Contact
 		err := rows.Scan(&c.ID, &c.Name, &c.ContactType, &c.Phone, &c.Email,
-			&c.Address, &c.Notes, &c.MapsLink, &c.Class, &c.Price, &c.IsActive, &c.CreatedAt, &c.UpdatedAt)
+			&c.Address, &c.Notes, &c.MapsLink, &c.Class, &c.Price, &c.RouteID, &c.IsActive, &c.CreatedAt, &c.UpdatedAt, &c.RouteName)
 		if err != nil {
 			return nil, fmt.Errorf("scan contact: %w", err)
 		}
@@ -75,10 +91,10 @@ func GetContact(db *sql.DB, id int) (*Contact, error) {
 	c := &Contact{}
 	err := db.QueryRow(
 		`SELECT id, name, contact_type, COALESCE(phone,''), COALESCE(email,''),
-		COALESCE(address,''), COALESCE(notes,''), maps_link, class, price, is_active, created_at, updated_at
+		COALESCE(address,''), COALESCE(notes,''), maps_link, class, price, COALESCE(route_id, 0), is_active, created_at, updated_at
 		FROM contacts WHERE id = ?`, id,
 	).Scan(&c.ID, &c.Name, &c.ContactType, &c.Phone, &c.Email,
-		&c.Address, &c.Notes, &c.MapsLink, &c.Class, &c.Price, &c.IsActive, &c.CreatedAt, &c.UpdatedAt)
+		&c.Address, &c.Notes, &c.MapsLink, &c.Class, &c.Price, &c.RouteID, &c.IsActive, &c.CreatedAt, &c.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("get contact: %w", err)
 	}
@@ -87,8 +103,8 @@ func GetContact(db *sql.DB, id int) (*Contact, error) {
 
 func CreateContact(db *sql.DB, c *Contact) error {
 	_, err := db.Exec(
-		"INSERT INTO contacts (name, contact_type, phone, email, address, notes, maps_link, class, price, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		c.Name, c.ContactType, c.Phone, c.Email, c.Address, c.Notes, c.MapsLink, c.Class, c.Price, c.IsActive,
+		"INSERT INTO contacts (name, contact_type, phone, email, address, notes, maps_link, class, price, route_id, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		c.Name, c.ContactType, c.Phone, c.Email, c.Address, c.Notes, c.MapsLink, c.Class, c.Price, nullInt(c.RouteID), c.IsActive,
 	)
 	if err != nil {
 		return fmt.Errorf("create contact: %w", err)
@@ -98,8 +114,8 @@ func CreateContact(db *sql.DB, c *Contact) error {
 
 func UpdateContact(db *sql.DB, c *Contact) error {
 	_, err := db.Exec(
-		"UPDATE contacts SET name=?, contact_type=?, phone=?, email=?, address=?, notes=?, maps_link=?, class=?, price=?, is_active=?, updated_at=datetime('now') WHERE id=?",
-		c.Name, c.ContactType, c.Phone, c.Email, c.Address, c.Notes, c.MapsLink, c.Class, c.Price, c.IsActive, c.ID,
+		"UPDATE contacts SET name=?, contact_type=?, phone=?, email=?, address=?, notes=?, maps_link=?, class=?, price=?, route_id=?, is_active=?, updated_at=datetime('now') WHERE id=?",
+		c.Name, c.ContactType, c.Phone, c.Email, c.Address, c.Notes, c.MapsLink, c.Class, c.Price, nullInt(c.RouteID), c.IsActive, c.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("update contact: %w", err)
