@@ -524,7 +524,7 @@ components:
                 description: Present only when result is "created".
               result:
                 type: string
-                enum: [created, skipped_no_price, skipped_already_invoiced, failed]
+                enum: [created, skipped_already_invoiced, failed]
               error:
                 type: string
                 description: Present only when result is "failed".
