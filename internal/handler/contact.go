@@ -11,35 +11,64 @@ import (
 )
 
 type contactPageData struct {
-	Contacts []model.Contact
-	Filter   string
-	Search   string
+	Contacts      []model.Contact
+	RouteCapacity []model.RouteCapacity
+	Filter        string
+	Search        string
+	Sort          string
+	Order         string
+	SortURLs      map[string]string
 }
 
 func (h *Handler) ListContacts(w http.ResponseWriter, r *http.Request) {
 	filterType := r.URL.Query().Get("type")
 	search := r.URL.Query().Get("search")
+	sort := r.URL.Query().Get("sort")
+	order := r.URL.Query().Get("order")
 
 	// Show both active and inactive contacts so the status column is meaningful
 	// and inactive contacts remain reachable for reactivation via the edit page.
 	contacts, err := model.ListContacts(h.DB, model.ContactFilter{
 		Type:   filterType,
 		Search: search,
+		Sort:   sort,
+		Order:  order,
 	})
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
+	capacity, _ := model.ListRouteCapacity(h.DB)
 	h.render(w, r, "templates/contacts/index.html", "Contacts", contactPageData{
-		Contacts: contacts,
-		Filter:   filterType,
-		Search:   search,
+		Contacts:      contacts,
+		RouteCapacity: capacity,
+		Filter:        filterType,
+		Search:        search,
+		Sort:          sort,
+		Order:         order,
+		SortURLs:      contactSortURLs(r, sort, order),
 	})
+}
+
+func contactSortURLs(r *http.Request, sort, order string) map[string]string {
+	urls := make(map[string]string, 3)
+	for _, column := range []string{"name", "class", "status"} {
+		q := r.URL.Query()
+		q.Set("sort", column)
+		if sort == column && order != "desc" {
+			q.Set("order", "desc")
+		} else {
+			q.Set("order", "asc")
+		}
+		urls[column] = "/contacts?" + q.Encode()
+	}
+	return urls
 }
 
 type contactFormData struct {
 	Contact *model.Contact
+	Routes  []model.Route
 	Errors  map[string]string
 	IsEdit  bool
 }
@@ -47,6 +76,7 @@ type contactFormData struct {
 func (h *Handler) NewContact(w http.ResponseWriter, r *http.Request) {
 	h.render(w, r, "templates/contacts/form.html", "New Contact", contactFormData{
 		Contact: &model.Contact{IsActive: true},
+		Routes:  h.contactRoutes(),
 	})
 }
 
@@ -61,6 +91,7 @@ func (h *Handler) CreateContact(w http.ResponseWriter, r *http.Request) {
 		MapsLink:    strings.TrimSpace(r.FormValue("maps_link")),
 		Class:       strings.TrimSpace(r.FormValue("class")),
 		Price:       parseIDR(r.FormValue("price")),
+		RouteID:     parseOptionalInt(r.FormValue("route_id")),
 		IsActive:    r.FormValue("is_active") == "on",
 	}
 
@@ -68,6 +99,7 @@ func (h *Handler) CreateContact(w http.ResponseWriter, r *http.Request) {
 	if len(errors) > 0 {
 		h.render(w, r, "templates/contacts/form.html", "New Contact", contactFormData{
 			Contact: c,
+			Routes:  h.contactRoutes(),
 			Errors:  errors,
 		})
 		return
@@ -117,6 +149,7 @@ func (h *Handler) EditContact(w http.ResponseWriter, r *http.Request) {
 
 	h.render(w, r, "templates/contacts/form.html", "Edit Contact", contactFormData{
 		Contact: contact,
+		Routes:  h.contactRoutes(),
 		IsEdit:  true,
 	})
 }
@@ -145,6 +178,7 @@ func (h *Handler) UpdateContact(w http.ResponseWriter, r *http.Request) {
 		MapsLink:    strings.TrimSpace(r.FormValue("maps_link")),
 		Class:       strings.TrimSpace(r.FormValue("class")),
 		Price:       parseIDR(r.FormValue("price")),
+		RouteID:     parseOptionalInt(r.FormValue("route_id")),
 		IsActive:    r.FormValue("is_active") == "on",
 	}
 
@@ -152,6 +186,7 @@ func (h *Handler) UpdateContact(w http.ResponseWriter, r *http.Request) {
 	if len(errors) > 0 {
 		h.render(w, r, "templates/contacts/form.html", "Edit Contact", contactFormData{
 			Contact: c,
+			Routes:  h.contactRoutes(),
 			Errors:  errors,
 			IsEdit:  true,
 		})
@@ -173,6 +208,7 @@ func (h *Handler) UpdateContact(w http.ResponseWriter, r *http.Request) {
 		"maps_link":    existing.MapsLink,
 		"class":        existing.Class,
 		"price":        existing.Price,
+		"route_id":     existing.RouteID,
 		"is_active":    existing.IsActive,
 	}
 	newFields := map[string]any{
@@ -185,10 +221,11 @@ func (h *Handler) UpdateContact(w http.ResponseWriter, r *http.Request) {
 		"maps_link":    c.MapsLink,
 		"class":        c.Class,
 		"price":        c.Price,
+		"route_id":     c.RouteID,
 		"is_active":    c.IsActive,
 	}
 	metadata := audit.Diff(oldFields, newFields,
-		[]string{"name", "contact_type", "email", "phone", "address", "notes", "maps_link", "class", "price", "is_active"})
+		[]string{"name", "contact_type", "email", "phone", "address", "notes", "maps_link", "class", "price", "route_id", "is_active"})
 	if metadata != nil {
 		audit.Log(r.Context(), h.DB, audit.Event{
 			Action:      "contact.update",
@@ -240,6 +277,11 @@ func (h *Handler) DeleteContact(w http.ResponseWriter, r *http.Request) {
 
 	h.setFlash(w, "Contact deleted successfully")
 	http.Redirect(w, r, "/contacts", http.StatusSeeOther)
+}
+
+func (h *Handler) contactRoutes() []model.Route {
+	routes, _ := model.ListRoutes(h.DB)
+	return routes
 }
 
 func validateContact(c *model.Contact) map[string]string {
