@@ -158,3 +158,54 @@ func TestListContacts_FilterActive(t *testing.T) {
 		}
 	}
 }
+
+func TestListContacts_Sort(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+
+	model.CreateContact(db, &model.Contact{Name: "B", ContactType: "customer", Class: "2", IsActive: true})
+	model.CreateContact(db, &model.Contact{Name: "A", ContactType: "customer", Class: "1", IsActive: false})
+
+	contacts, err := model.ListContacts(db, model.ContactFilter{Sort: "name", Order: "desc"})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if contacts[0].Name != "B" {
+		t.Fatalf("expected B first by name desc, got %s", contacts[0].Name)
+	}
+
+	contacts, err = model.ListContacts(db, model.ContactFilter{Sort: "class", Order: "asc"})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if contacts[0].Class != "1" {
+		t.Fatalf("expected class 1 first, got %s", contacts[0].Class)
+	}
+
+	contacts, err = model.ListContacts(db, model.ContactFilter{Sort: "status", Order: "desc"})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if !contacts[0].IsActive {
+		t.Fatal("expected active contact first by status desc")
+	}
+}
+
+func TestContactRoute(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+
+	var routeID int
+	if err := db.QueryRow("SELECT id FROM routes WHERE name = 'East'").Scan(&routeID); err != nil {
+		t.Fatalf("get route: %v", err)
+	}
+
+	if err := model.CreateContact(db, &model.Contact{Name: "Routed", ContactType: "customer", RouteID: routeID, IsActive: true}); err != nil {
+		t.Fatalf("create contact: %v", err)
+	}
+	contacts, err := model.ListContacts(db, model.ContactFilter{Search: "Routed"})
+	if err != nil {
+		t.Fatalf("list contacts: %v", err)
+	}
+	if contacts[0].RouteID != routeID || contacts[0].RouteName != "East" {
+		t.Fatalf("expected east route, got id=%d name=%q", contacts[0].RouteID, contacts[0].RouteName)
+	}
+}

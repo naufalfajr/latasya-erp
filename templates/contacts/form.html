@@ -71,6 +71,17 @@
                         class="input font-mono"
                         min="0" value="{{if gt $data.Contact.Price 0}}{{$data.Contact.Price}}{{end}}">
                 </div>
+
+                <!-- Route -->
+                <div class="flex flex-col gap-1">
+                    <label class="label" for="route_id">Route</label>
+                    <select id="route_id" name="route_id" class="select">
+                        <option value="">No route</option>
+                        {{range $data.Routes}}
+                        <option value="{{.ID}}" {{if eq .ID $data.Contact.RouteID}}selected{{end}}>{{.Name}}</option>
+                        {{end}}
+                    </select>
+                </div>
             </div>
 
             <!-- Maps Link -->

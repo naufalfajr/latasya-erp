@@ -15,6 +15,7 @@ type JournalEntry struct {
 	SourceType  string `json:"source_type"`
 	SourceID    *int   `json:"source_id"`
 	IsPosted    bool   `json:"is_posted"`
+	VehicleID   int    `json:"vehicle_id,omitempty"`
 	CreatedBy   int    `json:"created_by"`
 	CreatedAt   string `json:"created_at"`
 	UpdatedAt   string `json:"updated_at"`
@@ -26,6 +27,7 @@ type JournalEntry struct {
 	// AccountSummary is the category account ("code name") shown on the
 	// income/expense list pages. Empty for callers that don't request it.
 	AccountSummary string `json:"account_summary,omitempty"`
+	VehicleCode    string `json:"vehicle_code,omitempty"`
 }
 
 // MarshalJSON serializes IDR-valued totals as strings to match the API
@@ -152,9 +154,9 @@ func CreateJournalEntry(db *sql.DB, je *JournalEntry, lines []JournalLine) (int,
 	defer tx.Rollback()
 
 	result, err := tx.Exec(
-		`INSERT INTO journal_entries (entry_date, reference, description, source_type, source_id, is_posted, created_by)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		je.EntryDate, je.Reference, je.Description, je.SourceType, je.SourceID, je.IsPosted, je.CreatedBy,
+		`INSERT INTO journal_entries (entry_date, reference, description, source_type, source_id, is_posted, vehicle_id, created_by)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		je.EntryDate, je.Reference, je.Description, je.SourceType, je.SourceID, je.IsPosted, nullInt(je.VehicleID), je.CreatedBy,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("insert journal entry: %w", err)
@@ -184,14 +186,15 @@ func GetJournalEntry(db *sql.DB, id int) (*JournalEntry, error) {
 	je := &JournalEntry{}
 	err := db.QueryRow(
 		`SELECT je.id, je.entry_date, COALESCE(je.reference,''), je.description,
-			COALESCE(je.source_type,''), je.source_id, je.is_posted, je.created_by,
-			je.created_at, je.updated_at, u.full_name
+			COALESCE(je.source_type,''), je.source_id, je.is_posted, COALESCE(je.vehicle_id, 0), je.created_by,
+			je.created_at, je.updated_at, u.full_name, COALESCE(v.code, '')
 		 FROM journal_entries je
 		 JOIN users u ON u.id = je.created_by
+		 LEFT JOIN vehicles v ON v.id = je.vehicle_id
 		 WHERE je.id = ?`, id,
 	).Scan(&je.ID, &je.EntryDate, &je.Reference, &je.Description,
-		&je.SourceType, &je.SourceID, &je.IsPosted, &je.CreatedBy,
-		&je.CreatedAt, &je.UpdatedAt, &je.CreatedByName)
+		&je.SourceType, &je.SourceID, &je.IsPosted, &je.VehicleID, &je.CreatedBy,
+		&je.CreatedAt, &je.UpdatedAt, &je.CreatedByName, &je.VehicleCode)
 	if err != nil {
 		return nil, fmt.Errorf("get journal entry: %w", err)
 	}
@@ -257,13 +260,15 @@ func ListJournalEntries(db *sql.DB, f JournalFilter) ([]JournalEntry, error) {
 
 	where, args := journalWhere(f)
 	query := `SELECT je.id, je.entry_date, COALESCE(je.reference,''), je.description,
-			COALESCE(je.source_type,''), je.source_id, je.is_posted, je.created_by,
+			COALESCE(je.source_type,''), je.source_id, je.is_posted, COALESCE(je.vehicle_id, 0), je.created_by,
 			je.created_at, je.updated_at, u.full_name,
 			COALESCE((SELECT SUM(debit) FROM journal_lines WHERE entry_id = je.id), 0),
 			COALESCE((SELECT SUM(credit) FROM journal_lines WHERE entry_id = je.id), 0),
-			` + accountExpr + `
+			` + accountExpr + `,
+			COALESCE(v.code, '')
 		 FROM journal_entries je
 		 JOIN users u ON u.id = je.created_by
+		 LEFT JOIN vehicles v ON v.id = je.vehicle_id
 		 WHERE 1=1` + where + ` ORDER BY je.entry_date DESC, je.id DESC`
 	if f.Limit > 0 {
 		query += " LIMIT ? OFFSET ?"
@@ -280,9 +285,9 @@ func ListJournalEntries(db *sql.DB, f JournalFilter) ([]JournalEntry, error) {
 	for rows.Next() {
 		var je JournalEntry
 		err := rows.Scan(&je.ID, &je.EntryDate, &je.Reference, &je.Description,
-			&je.SourceType, &je.SourceID, &je.IsPosted, &je.CreatedBy,
+			&je.SourceType, &je.SourceID, &je.IsPosted, &je.VehicleID, &je.CreatedBy,
 			&je.CreatedAt, &je.UpdatedAt, &je.CreatedByName,
-			&je.TotalDebit, &je.TotalCredit, &je.AccountSummary)
+			&je.TotalDebit, &je.TotalCredit, &je.AccountSummary, &je.VehicleCode)
 		if err != nil {
 			return nil, fmt.Errorf("scan journal entry: %w", err)
 		}
@@ -312,8 +317,8 @@ func UpdateJournalEntry(db *sql.DB, je *JournalEntry, lines []JournalLine) error
 	defer tx.Rollback()
 
 	_, err = tx.Exec(
-		`UPDATE journal_entries SET entry_date=?, description=?, updated_at=datetime('now') WHERE id=?`,
-		je.EntryDate, je.Description, je.ID,
+		`UPDATE journal_entries SET entry_date=?, description=?, vehicle_id=?, updated_at=datetime('now') WHERE id=?`,
+		je.EntryDate, je.Description, nullInt(je.VehicleID), je.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("update journal entry: %w", err)

@@ -18,6 +18,7 @@
                 <th>Reference</th>
                 <th>Description</th>
                 <th>Account</th>
+                <th>Vehicle</th>
                 <th class="text-right">Amount</th>
                 <th>Actions</th>
             </tr>
@@ -29,6 +30,7 @@
                 <td><span class="font-mono text-sm">{{.Reference}}</span></td>
                 <td>{{.Description}}</td>
                 <td><span class="font-mono text-xs">{{.AccountSummary}}</span></td>
+                <td><span class="font-mono text-xs">{{.VehicleCode}}</span></td>
                 <td class="text-right font-mono text-error">{{formatIDR .TotalDebit}}</td>
                 <td>
                     <div class="flex gap-1">
@@ -46,7 +48,7 @@
             </tr>
             {{else}}
             <tr>
-                <td colspan="6" class="text-center py-8 opacity-60">No expenses recorded yet</td>
+                <td colspan="7" class="text-center py-8 opacity-60">No expenses recorded yet</td>
             </tr>
             {{end}}
         </tbody>
