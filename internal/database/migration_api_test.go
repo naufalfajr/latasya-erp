@@ -51,3 +51,42 @@ func TestMigration_APITokensSchema(t *testing.T) {
 		t.Fatalf("idx_api_tokens_hash index not found: err=%v count=%d", err, count)
 	}
 }
+
+func TestMigration_ContactDistancePricingSchema(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+
+	rows, err := db.Query(`PRAGMA table_info(contacts)`)
+	if err != nil {
+		t.Fatalf("PRAGMA table_info: %v", err)
+	}
+	defer rows.Close()
+
+	columns := map[string]bool{}
+	for rows.Next() {
+		var cid int
+		var name, typ string
+		var notNull, pk int
+		var dflt any
+		if err := rows.Scan(&cid, &name, &typ, &notNull, &dflt, &pk); err != nil {
+			t.Fatal(err)
+		}
+		columns[name] = true
+	}
+
+	for _, name := range []string{"distance_km", "has_sibling_discount", "is_return_only"} {
+		if !columns[name] {
+			t.Fatalf("%s column not found in contacts", name)
+		}
+	}
+	if columns["price"] {
+		t.Fatal("price column should not exist in contacts")
+	}
+
+	for _, name := range []string{"idx_contacts_type_active", "idx_contacts_route_id"} {
+		var count int
+		err := db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name=?`, name).Scan(&count)
+		if err != nil || count != 1 {
+			t.Fatalf("%s index not found: err=%v count=%d", name, err, count)
+		}
+	}
+}
