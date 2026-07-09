@@ -28,13 +28,13 @@ type Contact struct {
 func ContactPrice(distanceKm float64, hasSiblingDiscount, isReturnOnly bool) int {
 	price := 550000
 	switch {
-	case distanceKm <= 3:
+	case distanceKm < 4:
 		price = 350000
-	case distanceKm <= 6:
+	case distanceKm < 7:
 		price = 400000
-	case distanceKm <= 9:
+	case distanceKm < 10:
 		price = 450000
-	case distanceKm <= 12:
+	case distanceKm < 13:
 		price = 500000
 	}
 	if hasSiblingDiscount {
