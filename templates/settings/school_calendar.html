@@ -1,0 +1,167 @@
+{{template "base" .}}
+{{define "content"}}
+{{$data := .Data}}
+{{$conn := $data.GoogleConnection}}
+<div class="flex flex-col gap-2 mb-6">
+    <h1 class="text-2xl font-bold">School Calendar</h1>
+    <p class="text-sm opacity-60">Manage no-school days used by recurring invoice adjustments. School days are Monday through Saturday.</p>
+</div>
+
+{{if $data.Errors.general}}
+<div class="alert alert-error mb-4">{{$data.Errors.general}}</div>
+{{end}}
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+    <form method="GET" action="/settings/school-calendar" class="card bg-base-100 shadow lg:col-span-2">
+        <div class="card-body">
+            <h2 class="card-title">Month Preview</h2>
+            <div class="form-control max-w-xs">
+                <label class="label" for="month"><span class="label-text">Month</span></label>
+                <input id="month" name="month" type="month" value="{{$data.Month}}" class="input input-bordered">
+            </div>
+            <div class="card-actions justify-end">
+                <button type="submit" class="btn btn-primary btn-sm">Preview</button>
+            </div>
+        </div>
+    </form>
+    <div class="stats stats-vertical bg-base-100 shadow">
+        <div class="stat">
+            <div class="stat-title">Effective School Days</div>
+            <div class="stat-value text-primary">{{$data.EffectiveSchoolDays}}</div>
+            <div class="stat-desc">Monday-Saturday after closures</div>
+        </div>
+        <div class="stat">
+            <div class="stat-title">Invoice Multiplier</div>
+            <div class="stat-value text-secondary">{{$data.MultiplierPercent}}%</div>
+            <div class="stat-desc">Applied when recurring invoices are generated</div>
+        </div>
+    </div>
+</div>
+
+<div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+    <div class="xl:col-span-2 flex flex-col gap-4">
+        <form method="POST" action="/settings/school-calendar/closures?month={{$data.Month}}" class="card bg-base-100 shadow">
+            {{template "csrf" $}}
+            <div class="card-body">
+                <h2 class="card-title">Add Manual Closure</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div class="form-control md:col-span-3">
+                        <label class="label" for="title"><span class="label-text">Title <span class="text-error">*</span></span></label>
+                        <input id="title" name="title" type="text" value="{{$data.ManualClosure.Title}}" class="input input-bordered {{if $data.Errors.title}}input-error{{end}}" placeholder="Midterm break" required>
+                        {{if $data.Errors.title}}<span class="text-error text-sm mt-1">{{$data.Errors.title}}</span>{{end}}
+                    </div>
+                    <div class="form-control">
+                        <label class="label" for="start_date"><span class="label-text">Start date <span class="text-error">*</span></span></label>
+                        <input id="start_date" name="start_date" type="date" value="{{$data.ManualClosure.StartDate}}" class="input input-bordered {{if $data.Errors.start_date}}input-error{{end}}" required>
+                        {{if $data.Errors.start_date}}<span class="text-error text-sm mt-1">{{$data.Errors.start_date}}</span>{{end}}
+                    </div>
+                    <div class="form-control">
+                        <label class="label" for="end_date"><span class="label-text">End date <span class="text-error">*</span></span></label>
+                        <input id="end_date" name="end_date" type="date" value="{{$data.ManualClosure.EndDate}}" class="input input-bordered {{if $data.Errors.end_date}}input-error{{end}}" required>
+                        {{if $data.Errors.end_date}}<span class="text-error text-sm mt-1">{{$data.Errors.end_date}}</span>{{end}}
+                    </div>
+                </div>
+                <div class="card-actions justify-end">
+                    <button type="submit" class="btn btn-primary btn-sm">Add closure</button>
+                </div>
+            </div>
+        </form>
+
+        <div class="card bg-base-100 shadow">
+            <div class="card-body">
+                <h2 class="card-title">Closures for {{$data.Month}}</h2>
+                <div class="overflow-x-auto">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Title</th>
+                                <th>Dates</th>
+                                <th>Source</th>
+                                <th class="text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {{range $data.Closures}}
+                            <tr>
+                                <td class="font-semibold">{{.Title}}</td>
+                                <td class="text-sm">{{formatDate .StartDate}} to {{formatDate .EndDate}}</td>
+                                <td>
+                                    <span class="badge badge-sm {{if eq .Source "manual"}}badge-info{{else}}badge-success{{end}}">{{.Source}}</span>
+                                </td>
+                                <td class="text-right">
+                                    <form method="POST" action="/settings/school-calendar/closures/{{.ID}}/delete?month={{$data.Month}}" class="inline" onsubmit="return confirm('Delete this closure?')">
+                                        {{template "csrf" $}}
+                                        <button type="submit" class="btn btn-ghost btn-xs text-error">Delete</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {{else}}
+                            <tr>
+                                <td colspan="4" class="text-center py-8 opacity-60">No closures for this month.</td>
+                            </tr>
+                            {{end}}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card bg-base-100 shadow h-fit">
+        <div class="card-body">
+            <h2 class="card-title">Google Calendar</h2>
+            {{if not $data.GoogleConfigEnabled}}
+            <div class="alert alert-warning text-sm">Google OAuth is not configured on the server.</div>
+            {{end}}
+            <p class="text-sm opacity-60">Paste the private school closure calendar ID, then connect Google to sync events into local closures.</p>
+
+            <form method="POST" action="/settings/school-calendar/google-calendar-id?month={{$data.Month}}" class="flex flex-col gap-3">
+                {{template "csrf" $}}
+                <div class="form-control">
+                    <label class="label" for="calendar_id"><span class="label-text">Private calendar ID</span></label>
+                    <input id="calendar_id" name="calendar_id" type="text" value="{{$data.GoogleCalendarID}}" class="input input-bordered" placeholder="school@example.com">
+                </div>
+                <button type="submit" class="btn btn-primary btn-sm">Save calendar ID</button>
+            </form>
+
+            <div class="divider">Connection</div>
+            <div class="flex flex-wrap gap-2">
+                {{if $data.GoogleConnectionActive}}
+                <span class="badge badge-success">Connected</span>
+                {{else}}
+                <span class="badge badge-ghost">Not connected</span>
+                {{end}}
+                {{if $data.GoogleCalendarIDSaved}}
+                <span class="badge badge-info">Calendar ID saved</span>
+                {{else}}
+                <span class="badge badge-warning">Calendar ID missing</span>
+                {{end}}
+            </div>
+
+            <div class="flex flex-col gap-2">
+                <form method="POST" action="/integrations/google-calendar/connect?month={{$data.Month}}">
+                    {{template "csrf" $}}
+                    <button type="submit" class="btn btn-secondary btn-sm w-full" {{if not $data.GoogleConfigEnabled}}disabled{{end}}>{{if $data.GoogleConnectionActive}}Reconnect Google{{else}}Connect Google{{end}}</button>
+                </form>
+                <form method="POST" action="/integrations/google-calendar/sync?month={{$data.Month}}">
+                    {{template "csrf" $}}
+                    <button type="submit" class="btn btn-primary btn-sm w-full" {{if or (not $data.GoogleConfigEnabled) (not $data.GoogleConnectionActive) (not $data.GoogleCalendarIDSaved)}}disabled{{end}}>Sync now</button>
+                </form>
+                <form method="POST" action="/integrations/google-calendar/disconnect?month={{$data.Month}}" onsubmit="return confirm('Disconnect Google Calendar and remove synced Google closures? Manual closures stay.')">
+                    {{template "csrf" $}}
+                    <button type="submit" class="btn btn-error btn-sm w-full" {{if not $data.GoogleConnectionActive}}disabled{{end}}>Disconnect</button>
+                </form>
+            </div>
+
+            {{if $conn}}
+            <div class="divider">Last Sync</div>
+            <div class="text-sm space-y-1">
+                <p><span class="font-semibold">Status:</span> {{if $conn.LastSyncStatus}}{{$conn.LastSyncStatus}}{{else}}<span class="opacity-60">Never synced</span>{{end}}</p>
+                <p><span class="font-semibold">Time:</span> {{if $conn.LastSyncAt}}{{$conn.LastSyncAt}}{{else}}<span class="opacity-60">None</span>{{end}}</p>
+                {{if $conn.LastSyncError}}<div class="alert alert-error text-sm mt-2">{{$conn.LastSyncError}}</div>{{end}}
+            </div>
+            {{end}}
+        </div>
+    </div>
+</div>
+{{end}}

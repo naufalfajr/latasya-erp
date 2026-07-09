@@ -31,6 +31,7 @@
     <li><a href="/accounts" class="{{if eq .Path "/accounts"}}active{{end}}">Chart of Accounts</a></li>
     {{if .User.IsAdmin}}
     <li><a href="/settings/company" class="{{if eq .Path "/settings/company"}}active{{end}}">Company Profile</a></li>
+    <li><a href="/settings/school-calendar" class="{{if eq .Path "/settings/school-calendar"}}active{{end}}">School Calendar</a></li>
     {{end}}
     {{if .User.HasCapability "users.manage"}}
     <li><a href="/users" class="{{if eq .Path "/users"}}active{{end}}">Users</a></li>

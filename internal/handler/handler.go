@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/naufal/latasya-erp/internal/auth"
+	"github.com/naufal/latasya-erp/internal/googlecalendar"
 	"github.com/naufal/latasya-erp/internal/model"
 )
 
@@ -17,6 +18,8 @@ type Handler struct {
 	TemplateFS embed.FS
 	FuncMap    template.FuncMap
 	DevMode    bool
+
+	GoogleCalendarConfig googlecalendar.Config
 
 	mu    sync.RWMutex
 	cache map[string]*template.Template
