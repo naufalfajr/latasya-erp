@@ -203,7 +203,7 @@ func TestCreateContact(t *testing.T) {
 			"contact_type":         "customer",
 			"phone":                "081234567890",
 			"email":                "new@example.com",
-			"distance_km":          7,
+			"distance_km":          7.5,
 			"has_sibling_discount": true,
 			"is_return_only":       true,
 		}
@@ -223,7 +223,7 @@ func TestCreateContact(t *testing.T) {
 		if c.ID == 0 {
 			t.Errorf("id: got 0, want non-zero")
 		}
-		if c.DistanceKm != 7 || !c.HasSiblingDiscount || !c.IsReturnOnly {
+		if c.DistanceKm != 7.5 || !c.HasSiblingDiscount || !c.IsReturnOnly {
 			t.Fatalf("pricing fields: got %+v", c)
 		}
 	})
@@ -277,7 +277,7 @@ func TestUpdateContact(t *testing.T) {
 		body := map[string]any{
 			"name":                 "New Name",
 			"contact_type":         "supplier",
-			"distance_km":          11,
+			"distance_km":          11.4,
 			"has_sibling_discount": true,
 		}
 		resp := doRequest(t, ts, http.MethodPut, fmt.Sprintf("/api/v1/contacts/%d", id), token, body)
@@ -293,7 +293,7 @@ func TestUpdateContact(t *testing.T) {
 		if c.Name != "New Name" {
 			t.Errorf("name: got %q, want %q", c.Name, "New Name")
 		}
-		if c.DistanceKm != 11 || !c.HasSiblingDiscount {
+		if c.DistanceKm != 11.4 || !c.HasSiblingDiscount {
 			t.Fatalf("pricing fields: got %+v", c)
 		}
 	})
