@@ -53,7 +53,6 @@
                 <th><a class="link link-hover" href="{{index $data.SortURLs "class"}}">Class{{if eq $data.Sort "class"}} {{if eq $data.Order "desc"}}↓{{else}}↑{{end}}{{end}}</a></th>
                 <th>Route</th>
                 <th>Phone</th>
-                <th class="hidden sm:table-cell">Email</th>
                 <th class="hidden md:table-cell">Address</th>
                 <th class="hidden md:table-cell">Notes</th>
                 <th><a class="link link-hover" href="{{index $data.SortURLs "status"}}">Status{{if eq $data.Sort "status"}} {{if eq $data.Order "desc"}}↓{{else}}↑{{end}}{{end}}</a></th>
@@ -71,7 +70,6 @@
                 <td class="text-sm">{{.Class}}</td>
                 <td class="text-sm">{{.RouteName}}</td>
                 <td class="text-sm">{{.Phone}}</td>
-                <td class="hidden sm:table-cell text-sm">{{.Email}}</td>
                 <td class="hidden md:table-cell text-sm opacity-60">{{.Address}}</td>
                 <td class="hidden md:table-cell text-sm opacity-60">{{.Notes}}</td>
                 <td>
@@ -93,7 +91,7 @@
             </tr>
             {{else}}
             <tr>
-                <td colspan="{{if $.User.HasCapability "contacts.manage"}}10{{else}}9{{end}}" class="text-center py-8 opacity-60">No contacts found. Add your first contact.</td>
+                <td colspan="{{if $.User.HasCapability "contacts.manage"}}9{{else}}8{{end}}" class="text-center py-8 opacity-60">No contacts found. Add your first contact.</td>
             </tr>
             {{end}}
         </tbody>
