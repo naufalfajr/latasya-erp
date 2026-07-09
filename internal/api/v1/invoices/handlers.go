@@ -437,9 +437,9 @@ func (h *Handler) Send(w http.ResponseWriter, r *http.Request) {
 }
 
 // GenerateRecurring handles POST /api/v1/invoices/generate-recurring. It
-// creates a draft invoice for every active customer by cloning each one's most
-// recent invoice. Requires invoices.manage. Invoice date is today, due date is
-// today + 10 days. Idempotency-Key is supported.
+// creates a draft invoice for every active customer from current contact pricing.
+// Requires invoices.manage. Invoice date is today, due date is today + 10 days.
+// Idempotency-Key is supported.
 func (h *Handler) GenerateRecurring(w http.ResponseWriter, r *http.Request) {
 	if !v1.HasEffectiveCapability(r.Context(), model.CapInvoicesManage) {
 		v1.WriteError(w, r, http.StatusForbidden, v1.CodeForbidden, "invoices.manage capability required", nil)
@@ -465,12 +465,14 @@ func (h *Handler) GenerateRecurring(w http.ResponseWriter, r *http.Request) {
 		Action:     "invoice.generate_recurring",
 		TargetType: "invoice",
 		Metadata: map[string]any{
-			"invoice_date":     invoiceDate,
-			"due_date":         dueDate,
-			"created":          result.Created,
-			"skipped":          result.Skipped,
-			"failed":           result.Failed,
-			"created_invoices": result.CreatedNumbers(),
+			"invoice_date":       invoiceDate,
+			"due_date":           dueDate,
+			"effective_days":     result.EffectiveDays,
+			"multiplier_percent": result.MultiplierPercent,
+			"created":            result.Created,
+			"skipped":            result.Skipped,
+			"failed":             result.Failed,
+			"created_invoices":   result.CreatedNumbers(),
 		},
 	})
 

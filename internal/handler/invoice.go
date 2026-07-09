@@ -143,12 +143,14 @@ func (h *Handler) GenerateRecurringInvoices(w http.ResponseWriter, r *http.Reque
 		Action:     "invoice.generate_recurring",
 		TargetType: "invoice",
 		Metadata: map[string]any{
-			"invoice_date":     invoiceDate,
-			"due_date":         dueDate,
-			"created":          result.Created,
-			"skipped":          result.Skipped,
-			"failed":           result.Failed,
-			"created_invoices": result.CreatedNumbers(),
+			"invoice_date":       invoiceDate,
+			"due_date":           dueDate,
+			"effective_days":     result.EffectiveDays,
+			"multiplier_percent": result.MultiplierPercent,
+			"created":            result.Created,
+			"skipped":            result.Skipped,
+			"failed":             result.Failed,
+			"created_invoices":   result.CreatedNumbers(),
 		},
 	})
 
