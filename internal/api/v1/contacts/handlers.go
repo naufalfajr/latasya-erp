@@ -20,18 +20,18 @@ type Handler struct {
 
 // contactInput is the JSON request body for Create and Update.
 type contactInput struct {
-	Name               string `json:"name"`
-	ContactType        string `json:"contact_type"`
-	Phone              string `json:"phone"`
-	Email              string `json:"email"`
-	Address            string `json:"address"`
-	Notes              string `json:"notes"`
-	MapsLink           string `json:"maps_link"`
-	Class              string `json:"class"`
-	DistanceKm         int    `json:"distance_km"`
-	HasSiblingDiscount bool   `json:"has_sibling_discount"`
-	IsReturnOnly       bool   `json:"is_return_only"`
-	IsActive           *bool  `json:"is_active"`
+	Name               string  `json:"name"`
+	ContactType        string  `json:"contact_type"`
+	Phone              string  `json:"phone"`
+	Email              string  `json:"email"`
+	Address            string  `json:"address"`
+	Notes              string  `json:"notes"`
+	MapsLink           string  `json:"maps_link"`
+	Class              string  `json:"class"`
+	DistanceKm         float64 `json:"distance_km"`
+	HasSiblingDiscount bool    `json:"has_sibling_discount"`
+	IsReturnOnly       bool    `json:"is_return_only"`
+	IsActive           *bool   `json:"is_active"`
 }
 
 func validateContactInput(inp *contactInput) map[string]string {

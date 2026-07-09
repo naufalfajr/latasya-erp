@@ -22,6 +22,12 @@ func parseOptionalInt(s string) int {
 	return v
 }
 
+func parseOptionalFloat(s string) float64 {
+	s = strings.ReplaceAll(strings.TrimSpace(s), ",", ".")
+	v, _ := strconv.ParseFloat(s, 64)
+	return v
+}
+
 // parseQuantity parses a decimal quantity string ("1", "1.5", "0.25") into the
 // internal fixed-point integer representation (×100). "1" → 100, "1.5" → 150,
 // "0.25" → 25. Returns 0 for empty/invalid input so the caller can apply a
