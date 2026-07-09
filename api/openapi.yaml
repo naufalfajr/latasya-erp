@@ -495,7 +495,7 @@ components:
 
     GenerateRecurringResult:
       type: object
-      required: [created, skipped, failed, items]
+      required: [created, skipped, failed, effective_days, multiplier_percent, items]
       properties:
         created:
           type: integer
@@ -506,6 +506,13 @@ components:
         failed:
           type: integer
           description: Number of customers whose invoice could not be created.
+        effective_days:
+          type: integer
+          description: Monday-Saturday school days in the invoice month after closures.
+        multiplier_percent:
+          type: integer
+          enum: [75, 85, 100]
+          description: Price multiplier applied to recurring invoice line prices.
         items:
           type: array
           items:
@@ -1212,6 +1219,62 @@ components:
             - $ref: '#/components/schemas/Instant'
           nullable: true
           description: Optional expiry. Null means no expiry.
+
+    SchoolClosure:
+      type: object
+      required: [id, source, title, start_date, end_date]
+      properties:
+        id:
+          type: integer
+        source:
+          type: string
+          enum: [manual, google]
+        title:
+          type: string
+        start_date:
+          $ref: '#/components/schemas/BusinessDate'
+        end_date:
+          $ref: '#/components/schemas/BusinessDate'
+        google_event_id:
+          type: string
+        created_at:
+          $ref: '#/components/schemas/Instant'
+        updated_at:
+          $ref: '#/components/schemas/Instant'
+    SchoolClosureInput:
+      type: object
+      required: [title, start_date, end_date]
+      properties:
+        title:
+          type: string
+        start_date:
+          $ref: '#/components/schemas/BusinessDate'
+        end_date:
+          $ref: '#/components/schemas/BusinessDate'
+    EffectiveSchoolDays:
+      type: object
+      required: [month, effective_days, multiplier_percent]
+      properties:
+        month:
+          type: string
+          pattern: '^[0-9]{4}-[0-9]{2}$'
+        effective_days:
+          type: integer
+        multiplier_percent:
+          type: integer
+          enum: [75, 85, 100]
+    GoogleCalendarSyncResult:
+      type: object
+      required: [fetched, stored, window_start, window_end]
+      properties:
+        fetched:
+          type: integer
+        stored:
+          type: integer
+        window_start:
+          $ref: '#/components/schemas/BusinessDate'
+        window_end:
+          $ref: '#/components/schemas/BusinessDate'
 
   responses:
     Unauthorized:
@@ -2308,10 +2371,10 @@ paths:
       operationId: generateRecurringInvoices
       summary: Generate draft invoices for all active customers
       description: |
-        Creates a draft invoice for every active customer by cloning the line
-        items and tax of that customer's most recent invoice. Invoice date is
-        today; due date is today + 10 days. Customers already invoiced in the
-        current month, or with no prior invoice to clone, are skipped.
+        Creates a draft invoice for every active customer from the current
+        contact pricing formula, adjusted by the local school calendar multiplier
+        for the invoice month. Invoice date is today; due date is today + 10 days.
+        Customers already invoiced in the current month are skipped.
         Requires invoices.manage.
       responses:
         '200':
@@ -2329,6 +2392,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '409':
           $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
 
   /invoices/bulk-delete:
     post:
@@ -3275,6 +3340,136 @@ paths:
                       $ref: '#/components/schemas/AuditEntry'
                   meta:
                     $ref: '#/components/schemas/Meta'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /school-calendar/closures:
+    get:
+      operationId: listSchoolClosures
+      summary: List school closures
+      description: Requires the effective `invoices.manage` capability.
+      parameters:
+        - name: month
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: '^[0-9]{4}-[0-9]{2}$'
+          description: Filters closures overlapping the month.
+      responses:
+        '200':
+          description: School closures
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolClosure'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      operationId: createSchoolClosure
+      summary: Create a manual school closure
+      description: Requires the effective `invoices.manage` capability. Source is always `manual`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SchoolClosureInput'
+      responses:
+        '201':
+          description: School closure created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/SchoolClosure'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /school-calendar/closures/{id}:
+    delete:
+      operationId: deleteSchoolClosure
+      summary: Delete a school closure
+      description: Requires the effective `invoices.manage` capability.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: School closure deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /school-calendar/effective-days:
+    get:
+      operationId: getEffectiveSchoolDays
+      summary: Preview effective school days and invoice multiplier
+      description: Requires the effective `invoices.manage` capability.
+      parameters:
+        - name: month
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: '^[0-9]{4}-[0-9]{2}$'
+      responses:
+        '200':
+          description: Effective days and multiplier for the month
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/EffectiveSchoolDays'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /integrations/google-calendar/sync:
+    post:
+      operationId: syncGoogleCalendar
+      summary: Sync school closures from Google Calendar
+      description: Requires an admin user and the effective `invoices.manage` capability. Does not expose OAuth secrets.
+      responses:
+        '200':
+          description: Google Calendar sync result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/GoogleCalendarSyncResult'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
