@@ -27,10 +27,12 @@ import (
 	v1journals "github.com/naufal/latasya-erp/internal/api/v1/journals"
 	v1reports "github.com/naufal/latasya-erp/internal/api/v1/reports"
 	v1roles "github.com/naufal/latasya-erp/internal/api/v1/roles"
+	v1schoolcalendar "github.com/naufal/latasya-erp/internal/api/v1/school_calendar"
 	v1users "github.com/naufal/latasya-erp/internal/api/v1/users"
 	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/auth"
 	"github.com/naufal/latasya-erp/internal/database"
+	"github.com/naufal/latasya-erp/internal/googlecalendar"
 	"github.com/naufal/latasya-erp/internal/handler"
 	"github.com/naufal/latasya-erp/internal/model"
 	"github.com/naufal/latasya-erp/internal/tmpl"
@@ -73,6 +75,11 @@ func main() {
 		TemplateFS: latasyaerp.TemplateFS,
 		FuncMap:    tmpl.FuncMap(),
 		DevMode:    devMode,
+		GoogleCalendarConfig: googlecalendar.Config{
+			ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
+			ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
+			RedirectURL:  os.Getenv("GOOGLE_REDIRECT_URL"),
+		},
 	}
 
 	mux := http.NewServeMux()
@@ -212,6 +219,13 @@ func main() {
 
 	dashboardAPI := &v1dashboard.Handler{DB: db}
 	apiMux.HandleFunc("GET /api/v1/dashboard", dashboardAPI.Get)
+
+	schoolCalendarAPI := &v1schoolcalendar.Handler{DB: db, GoogleCalendarConfig: h.GoogleCalendarConfig}
+	apiMux.HandleFunc("GET /api/v1/school-calendar/closures", schoolCalendarAPI.ListClosures)
+	apiMux.HandleFunc("POST /api/v1/school-calendar/closures", schoolCalendarAPI.CreateClosure)
+	apiMux.HandleFunc("DELETE /api/v1/school-calendar/closures/{id}", schoolCalendarAPI.DeleteClosure)
+	apiMux.HandleFunc("GET /api/v1/school-calendar/effective-days", schoolCalendarAPI.EffectiveDays)
+	apiMux.HandleFunc("POST /api/v1/integrations/google-calendar/sync", schoolCalendarAPI.SyncGoogleCalendar)
 
 	mux.Handle("/api/v1/", v1.BearerOrCookie(db)(apiMux))
 	mux.Handle("POST /api/v1/auth/login", v1.LoginRateLimiter()(http.HandlerFunc(authAPI.Login)))
@@ -353,6 +367,16 @@ func main() {
 	// Company Profile (admin-only settings shown on invoices)
 	protected.HandleFunc("GET /settings/company", auth.AdminOnly(h.CompanyProfilePage))
 	protected.HandleFunc("POST /settings/company", auth.AdminOnly(h.UpdateCompanyProfile))
+
+	// School Calendar (admin-only closures and Google Calendar integration)
+	protected.HandleFunc("GET /settings/school-calendar", auth.AdminOnly(h.SchoolCalendarPage))
+	protected.HandleFunc("POST /settings/school-calendar/closures", auth.AdminOnly(h.CreateSchoolClosure))
+	protected.HandleFunc("POST /settings/school-calendar/closures/{id}/delete", auth.AdminOnly(h.DeleteSchoolClosure))
+	protected.HandleFunc("POST /settings/school-calendar/google-calendar-id", auth.AdminOnly(h.SaveGoogleCalendarID))
+	protected.HandleFunc("POST /integrations/google-calendar/connect", auth.AdminOnly(h.ConnectGoogleCalendar))
+	protected.HandleFunc("GET /integrations/google-calendar/callback", auth.AdminOnly(h.GoogleCalendarCallback))
+	protected.HandleFunc("POST /integrations/google-calendar/sync", auth.AdminOnly(h.SyncGoogleCalendar))
+	protected.HandleFunc("POST /integrations/google-calendar/disconnect", auth.AdminOnly(h.DisconnectGoogleCalendar))
 
 	// Audit log (admin-only via audit.view capability)
 	protected.HandleFunc("GET /audit", auth.CapabilityOnly(model.CapAuditView, h.AuditList))

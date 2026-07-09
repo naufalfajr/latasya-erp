@@ -16,7 +16,7 @@
         <form method="POST" action="/invoices/generate-recurring" class="inline">
             {{template "csrf" $}}
             <button type="submit" class="btn btn-secondary btn-sm"
-                onclick="return confirm('Generate a draft invoice for every active customer by cloning their latest invoice? Customers already invoiced this month are skipped.')">Generate Recurring Invoices</button>
+                onclick="return confirm('Generate draft recurring invoices for active customers using the current school calendar adjustment? Customers already invoiced this month are skipped.')">Generate Recurring Invoices</button>
         </form>
         <a href="/invoices/new" class="btn btn-primary btn-sm">+ New Invoice</a>
     </div>

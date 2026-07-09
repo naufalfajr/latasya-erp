@@ -465,10 +465,12 @@ type GeneratedInvoice struct {
 
 // GenerateRecurringInvoicesResult summarizes a recurring-invoice batch run.
 type GenerateRecurringInvoicesResult struct {
-	Created int                `json:"created"`
-	Skipped int                `json:"skipped"`
-	Failed  int                `json:"failed"`
-	Items   []GeneratedInvoice `json:"items"`
+	Created           int                `json:"created"`
+	Skipped           int                `json:"skipped"`
+	Failed            int                `json:"failed"`
+	EffectiveDays     int                `json:"effective_days"`
+	MultiplierPercent int                `json:"multiplier_percent"`
+	Items             []GeneratedInvoice `json:"items"`
 }
 
 // CreatedNumbers returns the invoice numbers created in the batch, for audit logging.
@@ -503,9 +505,9 @@ func MonthNameID(m int) string {
 }
 
 // GenerateRecurringInvoices creates a draft invoice for every active customer.
-// Invoices are built from scratch using the contact pricing formula, the global
-// default revenue account, and the global recurring description template — no
-// prior invoice is cloned.
+// Invoices are built from scratch using the contact pricing formula adjusted by
+// the local school calendar, the global default revenue account, and the global
+// recurring description template — no prior invoice is cloned.
 //
 // A customer is skipped when they already have an invoice dated in
 // invoiceDate's month (prevents double-billing on repeat runs). Per-customer
@@ -530,6 +532,11 @@ func GenerateRecurringInvoices(db *sql.DB, invoiceDate, dueDate string, userID i
 	if n, _ := fmt.Sscanf(invoiceDate[:7], "%d-%d", &invYear, &invMonth); n != 2 {
 		return nil, fmt.Errorf("invalid invoice date %q", invoiceDate)
 	}
+	effectiveDays, err := EffectiveSchoolDays(db, monthPrefix)
+	if err != nil {
+		return nil, fmt.Errorf("calculate effective school days: %w", err)
+	}
+	multiplierPercent := MonthlyPriceMultiplierPercent(effectiveDays)
 	descTemplate := profile.RecurringDescriptionTemplate
 	if descTemplate == "" {
 		descTemplate = "Antar jemput {month} {year}"
@@ -548,7 +555,11 @@ func GenerateRecurringInvoices(db *sql.DB, invoiceDate, dueDate string, userID i
 		return nil, fmt.Errorf("list active customers: %w", err)
 	}
 
-	result := &GenerateRecurringInvoicesResult{Items: []GeneratedInvoice{}}
+	result := &GenerateRecurringInvoicesResult{
+		EffectiveDays:     effectiveDays,
+		MultiplierPercent: multiplierPercent,
+		Items:             []GeneratedInvoice{},
+	}
 
 	for _, c := range customers {
 		item := GeneratedInvoice{ContactID: c.ID, ContactName: c.Name}
@@ -570,11 +581,12 @@ func GenerateRecurringInvoices(db *sql.DB, invoiceDate, dueDate string, userID i
 			continue
 		}
 
+		unitPrice := ApplyMonthlyPriceMultiplier(c.Price(), multiplierPercent)
 		lines := []InvoiceLine{
 			{
 				Description: description,
 				Quantity:    100, // 1.00 × 100
-				UnitPrice:   c.Price(),
+				UnitPrice:   unitPrice,
 				AccountID:   profile.DefaultRevenueAccountID,
 			},
 		}

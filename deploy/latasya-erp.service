@@ -11,6 +11,7 @@ WorkingDirectory=/var/lib/latasya
 ExecStart=/usr/local/bin/latasya-erp
 Environment=PORT=8080
 Environment=DB_PATH=/var/lib/latasya/latasya.db
+EnvironmentFile=-/etc/latasya/latasya-erp.env
 Restart=on-failure
 RestartSec=3
 
