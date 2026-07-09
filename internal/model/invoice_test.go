@@ -261,7 +261,7 @@ func TestGenerateRecurringInvoices(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 
 	// Active customer with distance pricing — should get a new invoice.
-	db.Exec("INSERT INTO contacts (name, contact_type, is_active, distance_km, has_sibling_discount, is_return_only) VALUES ('Active With Price', 'customer', 1, 8, 1, 1)")
+	db.Exec("INSERT INTO contacts (name, contact_type, is_active, distance_km, has_sibling_discount, is_return_only) VALUES ('Active With Price', 'customer', 1, 8.5, 1, 1)")
 	var withPriceID int
 	db.QueryRow("SELECT id FROM contacts WHERE name = 'Active With Price'").Scan(&withPriceID)
 
