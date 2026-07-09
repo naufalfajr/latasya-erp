@@ -146,7 +146,17 @@ sudo useradd --system --no-create-home --shell /usr/sbin/nologin latasya
 sudo mkdir -p /var/lib/latasya
 sudo chown latasya:latasya /var/lib/latasya
 sudo chmod 750 /var/lib/latasya
+sudo mkdir -p /etc/latasya
+sudo install -m 600 -o root -g root /dev/null /etc/latasya/latasya-erp.env
 sudo timedatectl set-timezone Asia/Jakarta
+```
+
+Put deployment-only environment variables in `/etc/latasya/latasya-erp.env`. The systemd unit loads it optionally, it should be `chmod 600`, and it must not be committed to git. For Google Calendar OAuth, use values like:
+
+```env
+GOOGLE_CLIENT_ID=your-google-oauth-client-id
+GOOGLE_CLIENT_SECRET=your-google-oauth-client-secret
+GOOGLE_REDIRECT_URL=https://latasya.naufalf.net/integrations/google-calendar/callback
 ```
 
 Install the systemd unit:
@@ -261,6 +271,11 @@ Environment variables (all optional):
 | `PORT` | `8080` | Server port |
 | `DB_PATH` | `./latasya.db` | SQLite database file path |
 | `DEV_MODE` | `false` | Re-parse templates on each request |
+| `GOOGLE_CLIENT_ID` | empty | Google OAuth client ID for private school calendar sync |
+| `GOOGLE_CLIENT_SECRET` | empty | Google OAuth client secret for private school calendar sync |
+| `GOOGLE_REDIRECT_URL` | empty | Google OAuth redirect URL, e.g. `https://latasya.naufalf.net/integrations/google-calendar/callback` |
+
+On a VPS, keep secrets and deployment-specific overrides in `/etc/latasya/latasya-erp.env` with mode `600`. The systemd service loads this file if it exists.
 
 ## Testing
 
@@ -296,4 +311,3 @@ All monetary values are stored as integers in IDR (Indonesian Rupiah). IDR has n
 ## License
 
 MIT
-
