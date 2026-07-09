@@ -82,17 +82,19 @@ func (h *Handler) NewContact(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) CreateContact(w http.ResponseWriter, r *http.Request) {
 	c := &model.Contact{
-		Name:        r.FormValue("name"),
-		ContactType: r.FormValue("contact_type"),
-		Phone:       r.FormValue("phone"),
-		Email:       r.FormValue("email"),
-		Address:     r.FormValue("address"),
-		Notes:       r.FormValue("notes"),
-		MapsLink:    strings.TrimSpace(r.FormValue("maps_link")),
-		Class:       strings.TrimSpace(r.FormValue("class")),
-		Price:       parseIDR(r.FormValue("price")),
-		RouteID:     parseOptionalInt(r.FormValue("route_id")),
-		IsActive:    r.FormValue("is_active") == "on",
+		Name:               r.FormValue("name"),
+		ContactType:        r.FormValue("contact_type"),
+		Phone:              r.FormValue("phone"),
+		Email:              r.FormValue("email"),
+		Address:            r.FormValue("address"),
+		Notes:              r.FormValue("notes"),
+		MapsLink:           strings.TrimSpace(r.FormValue("maps_link")),
+		Class:              strings.TrimSpace(r.FormValue("class")),
+		DistanceKm:         parseOptionalInt(r.FormValue("distance_km")),
+		HasSiblingDiscount: r.FormValue("has_sibling_discount") == "on",
+		IsReturnOnly:       r.FormValue("is_return_only") == "on",
+		RouteID:            parseOptionalInt(r.FormValue("route_id")),
+		IsActive:           r.FormValue("is_active") == "on",
 	}
 
 	errors := validateContact(c)
@@ -119,13 +121,15 @@ func (h *Handler) CreateContact(w http.ResponseWriter, r *http.Request) {
 		TargetLabel: c.Name,
 		Metadata: map[string]any{
 			"after": map[string]any{
-				"name":         c.Name,
-				"contact_type": c.ContactType,
-				"email":        c.Email,
-				"phone":        c.Phone,
-				"class":        c.Class,
-				"price":        c.Price,
-				"is_active":    c.IsActive,
+				"name":                 c.Name,
+				"contact_type":         c.ContactType,
+				"email":                c.Email,
+				"phone":                c.Phone,
+				"class":                c.Class,
+				"distance_km":          c.DistanceKm,
+				"has_sibling_discount": c.HasSiblingDiscount,
+				"is_return_only":       c.IsReturnOnly,
+				"is_active":            c.IsActive,
 			},
 		},
 	})
@@ -168,18 +172,20 @@ func (h *Handler) UpdateContact(w http.ResponseWriter, r *http.Request) {
 	}
 
 	c := &model.Contact{
-		ID:          id,
-		Name:        r.FormValue("name"),
-		ContactType: r.FormValue("contact_type"),
-		Phone:       r.FormValue("phone"),
-		Email:       r.FormValue("email"),
-		Address:     r.FormValue("address"),
-		Notes:       r.FormValue("notes"),
-		MapsLink:    strings.TrimSpace(r.FormValue("maps_link")),
-		Class:       strings.TrimSpace(r.FormValue("class")),
-		Price:       parseIDR(r.FormValue("price")),
-		RouteID:     parseOptionalInt(r.FormValue("route_id")),
-		IsActive:    r.FormValue("is_active") == "on",
+		ID:                 id,
+		Name:               r.FormValue("name"),
+		ContactType:        r.FormValue("contact_type"),
+		Phone:              r.FormValue("phone"),
+		Email:              r.FormValue("email"),
+		Address:            r.FormValue("address"),
+		Notes:              r.FormValue("notes"),
+		MapsLink:           strings.TrimSpace(r.FormValue("maps_link")),
+		Class:              strings.TrimSpace(r.FormValue("class")),
+		DistanceKm:         parseOptionalInt(r.FormValue("distance_km")),
+		HasSiblingDiscount: r.FormValue("has_sibling_discount") == "on",
+		IsReturnOnly:       r.FormValue("is_return_only") == "on",
+		RouteID:            parseOptionalInt(r.FormValue("route_id")),
+		IsActive:           r.FormValue("is_active") == "on",
 	}
 
 	errors := validateContact(c)
@@ -199,33 +205,37 @@ func (h *Handler) UpdateContact(w http.ResponseWriter, r *http.Request) {
 	}
 
 	oldFields := map[string]any{
-		"name":         existing.Name,
-		"contact_type": existing.ContactType,
-		"email":        existing.Email,
-		"phone":        existing.Phone,
-		"address":      existing.Address,
-		"notes":        existing.Notes,
-		"maps_link":    existing.MapsLink,
-		"class":        existing.Class,
-		"price":        existing.Price,
-		"route_id":     existing.RouteID,
-		"is_active":    existing.IsActive,
+		"name":                 existing.Name,
+		"contact_type":         existing.ContactType,
+		"email":                existing.Email,
+		"phone":                existing.Phone,
+		"address":              existing.Address,
+		"notes":                existing.Notes,
+		"maps_link":            existing.MapsLink,
+		"class":                existing.Class,
+		"distance_km":          existing.DistanceKm,
+		"has_sibling_discount": existing.HasSiblingDiscount,
+		"is_return_only":       existing.IsReturnOnly,
+		"route_id":             existing.RouteID,
+		"is_active":            existing.IsActive,
 	}
 	newFields := map[string]any{
-		"name":         c.Name,
-		"contact_type": c.ContactType,
-		"email":        c.Email,
-		"phone":        c.Phone,
-		"address":      c.Address,
-		"notes":        c.Notes,
-		"maps_link":    c.MapsLink,
-		"class":        c.Class,
-		"price":        c.Price,
-		"route_id":     c.RouteID,
-		"is_active":    c.IsActive,
+		"name":                 c.Name,
+		"contact_type":         c.ContactType,
+		"email":                c.Email,
+		"phone":                c.Phone,
+		"address":              c.Address,
+		"notes":                c.Notes,
+		"maps_link":            c.MapsLink,
+		"class":                c.Class,
+		"distance_km":          c.DistanceKm,
+		"has_sibling_discount": c.HasSiblingDiscount,
+		"is_return_only":       c.IsReturnOnly,
+		"route_id":             c.RouteID,
+		"is_active":            c.IsActive,
 	}
 	metadata := audit.Diff(oldFields, newFields,
-		[]string{"name", "contact_type", "email", "phone", "address", "notes", "maps_link", "class", "price", "route_id", "is_active"})
+		[]string{"name", "contact_type", "email", "phone", "address", "notes", "maps_link", "class", "distance_km", "has_sibling_discount", "is_return_only", "route_id", "is_active"})
 	if metadata != nil {
 		audit.Log(r.Context(), h.DB, audit.Event{
 			Action:      "contact.update",
@@ -294,6 +304,9 @@ func validateContact(c *model.Contact) map[string]string {
 	}
 	if utf8.RuneCountInString(c.Class) > 5 {
 		errors["class"] = "Class must be 5 characters or fewer"
+	}
+	if c.DistanceKm < 0 {
+		errors["distance_km"] = "Distance must be 0 or greater"
 	}
 	return errors
 }

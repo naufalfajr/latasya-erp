@@ -449,7 +449,6 @@ func (inv *Invoice) AmountDue() int {
 const (
 	GeneratedInvoiceCreated          = "created"
 	GeneratedInvoiceSkippedThisMonth = "skipped_already_invoiced"
-	GeneratedInvoiceSkippedNoPrice   = "skipped_no_price"
 	GeneratedInvoiceFailed           = "failed"
 )
 
@@ -503,15 +502,15 @@ func MonthNameID(m int) string {
 	return names[m-1]
 }
 
-// GenerateRecurringInvoices creates a draft invoice for every active customer
-// whose contact has a non-zero price. Invoices are built from scratch using
-// the contact's price, the global default revenue account, and the global
-// recurring description template — no prior invoice is cloned.
+// GenerateRecurringInvoices creates a draft invoice for every active customer.
+// Invoices are built from scratch using the contact pricing formula, the global
+// default revenue account, and the global recurring description template — no
+// prior invoice is cloned.
 //
 // A customer is skipped when they already have an invoice dated in
-// invoiceDate's month (prevents double-billing on repeat runs) or when their
-// contact price is 0. Per-customer errors are recorded as "failed" items and
-// do not abort the batch. Generated invoices are drafts.
+// invoiceDate's month (prevents double-billing on repeat runs). Per-customer
+// errors are recorded as "failed" items and do not abort the batch. Generated
+// invoices are drafts.
 func GenerateRecurringInvoices(db *sql.DB, invoiceDate, dueDate string, userID int) (*GenerateRecurringInvoicesResult, error) {
 	if len(invoiceDate) < 7 {
 		return nil, fmt.Errorf("invalid invoice date: %q", invoiceDate)
@@ -554,13 +553,6 @@ func GenerateRecurringInvoices(db *sql.DB, invoiceDate, dueDate string, userID i
 	for _, c := range customers {
 		item := GeneratedInvoice{ContactID: c.ID, ContactName: c.Name}
 
-		if c.Price == 0 {
-			item.Result = GeneratedInvoiceSkippedNoPrice
-			result.Skipped++
-			result.Items = append(result.Items, item)
-			continue
-		}
-
 		var thisMonth int
 		if err := db.QueryRow(
 			"SELECT COUNT(*) FROM invoices WHERE contact_id = ? AND substr(invoice_date, 1, 7) = ?",
@@ -582,7 +574,7 @@ func GenerateRecurringInvoices(db *sql.DB, invoiceDate, dueDate string, userID i
 			{
 				Description: description,
 				Quantity:    100, // 1.00 × 100
-				UnitPrice:   c.Price,
+				UnitPrice:   c.Price(),
 				AccountID:   profile.DefaultRevenueAccountID,
 			},
 		}

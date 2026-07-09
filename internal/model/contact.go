@@ -6,21 +6,48 @@ import (
 )
 
 type Contact struct {
-	ID          int    `json:"id"`
-	Name        string `json:"name"`
-	ContactType string `json:"contact_type"`
-	Phone       string `json:"phone"`
-	Email       string `json:"email"`
-	Address     string `json:"address"`
-	Notes       string `json:"notes"`
-	MapsLink    string `json:"maps_link"`
-	Class       string `json:"class"`
-	Price       int    `json:"price"`
-	RouteID     int    `json:"route_id"`
-	IsActive    bool   `json:"is_active"`
-	CreatedAt   string `json:"created_at"`
-	UpdatedAt   string `json:"updated_at"`
-	RouteName   string `json:"route_name,omitempty"`
+	ID                 int    `json:"id"`
+	Name               string `json:"name"`
+	ContactType        string `json:"contact_type"`
+	Phone              string `json:"phone"`
+	Email              string `json:"email"`
+	Address            string `json:"address"`
+	Notes              string `json:"notes"`
+	MapsLink           string `json:"maps_link"`
+	Class              string `json:"class"`
+	DistanceKm         int    `json:"distance_km"`
+	HasSiblingDiscount bool   `json:"has_sibling_discount"`
+	IsReturnOnly       bool   `json:"is_return_only"`
+	RouteID            int    `json:"route_id"`
+	IsActive           bool   `json:"is_active"`
+	CreatedAt          string `json:"created_at"`
+	UpdatedAt          string `json:"updated_at"`
+	RouteName          string `json:"route_name,omitempty"`
+}
+
+func ContactPrice(distanceKm int, hasSiblingDiscount, isReturnOnly bool) int {
+	price := 550000
+	switch {
+	case distanceKm <= 3:
+		price = 350000
+	case distanceKm <= 6:
+		price = 400000
+	case distanceKm <= 9:
+		price = 450000
+	case distanceKm <= 12:
+		price = 500000
+	}
+	if hasSiblingDiscount {
+		price -= 50000
+	}
+	if isReturnOnly {
+		price -= 50000
+	}
+	return price
+}
+
+func (c Contact) Price() int {
+	return ContactPrice(c.DistanceKm, c.HasSiblingDiscount, c.IsReturnOnly)
 }
 
 type ContactFilter struct {
@@ -33,7 +60,7 @@ type ContactFilter struct {
 
 func ListContacts(db *sql.DB, f ContactFilter) ([]Contact, error) {
 	query := `SELECT c.id, c.name, c.contact_type, COALESCE(c.phone,''), COALESCE(c.email,''),
-		COALESCE(c.address,''), COALESCE(c.notes,''), c.maps_link, c.class, c.price, COALESCE(c.route_id, 0), c.is_active, c.created_at, c.updated_at,
+		COALESCE(c.address,''), COALESCE(c.notes,''), c.maps_link, c.class, c.distance_km, c.has_sibling_discount, c.is_return_only, COALESCE(c.route_id, 0), c.is_active, c.created_at, c.updated_at,
 		COALESCE(r.name, '')
 		FROM contacts c LEFT JOIN routes r ON r.id = c.route_id WHERE 1=1`
 	var args []any
@@ -78,7 +105,7 @@ func ListContacts(db *sql.DB, f ContactFilter) ([]Contact, error) {
 	for rows.Next() {
 		var c Contact
 		err := rows.Scan(&c.ID, &c.Name, &c.ContactType, &c.Phone, &c.Email,
-			&c.Address, &c.Notes, &c.MapsLink, &c.Class, &c.Price, &c.RouteID, &c.IsActive, &c.CreatedAt, &c.UpdatedAt, &c.RouteName)
+			&c.Address, &c.Notes, &c.MapsLink, &c.Class, &c.DistanceKm, &c.HasSiblingDiscount, &c.IsReturnOnly, &c.RouteID, &c.IsActive, &c.CreatedAt, &c.UpdatedAt, &c.RouteName)
 		if err != nil {
 			return nil, fmt.Errorf("scan contact: %w", err)
 		}
@@ -91,10 +118,10 @@ func GetContact(db *sql.DB, id int) (*Contact, error) {
 	c := &Contact{}
 	err := db.QueryRow(
 		`SELECT id, name, contact_type, COALESCE(phone,''), COALESCE(email,''),
-		COALESCE(address,''), COALESCE(notes,''), maps_link, class, price, COALESCE(route_id, 0), is_active, created_at, updated_at
+		COALESCE(address,''), COALESCE(notes,''), maps_link, class, distance_km, has_sibling_discount, is_return_only, COALESCE(route_id, 0), is_active, created_at, updated_at
 		FROM contacts WHERE id = ?`, id,
 	).Scan(&c.ID, &c.Name, &c.ContactType, &c.Phone, &c.Email,
-		&c.Address, &c.Notes, &c.MapsLink, &c.Class, &c.Price, &c.RouteID, &c.IsActive, &c.CreatedAt, &c.UpdatedAt)
+		&c.Address, &c.Notes, &c.MapsLink, &c.Class, &c.DistanceKm, &c.HasSiblingDiscount, &c.IsReturnOnly, &c.RouteID, &c.IsActive, &c.CreatedAt, &c.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("get contact: %w", err)
 	}
@@ -103,8 +130,8 @@ func GetContact(db *sql.DB, id int) (*Contact, error) {
 
 func CreateContact(db *sql.DB, c *Contact) error {
 	_, err := db.Exec(
-		"INSERT INTO contacts (name, contact_type, phone, email, address, notes, maps_link, class, price, route_id, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		c.Name, c.ContactType, c.Phone, c.Email, c.Address, c.Notes, c.MapsLink, c.Class, c.Price, nullInt(c.RouteID), c.IsActive,
+		"INSERT INTO contacts (name, contact_type, phone, email, address, notes, maps_link, class, distance_km, has_sibling_discount, is_return_only, route_id, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		c.Name, c.ContactType, c.Phone, c.Email, c.Address, c.Notes, c.MapsLink, c.Class, c.DistanceKm, c.HasSiblingDiscount, c.IsReturnOnly, nullInt(c.RouteID), c.IsActive,
 	)
 	if err != nil {
 		return fmt.Errorf("create contact: %w", err)
@@ -114,8 +141,8 @@ func CreateContact(db *sql.DB, c *Contact) error {
 
 func UpdateContact(db *sql.DB, c *Contact) error {
 	_, err := db.Exec(
-		"UPDATE contacts SET name=?, contact_type=?, phone=?, email=?, address=?, notes=?, maps_link=?, class=?, price=?, route_id=?, is_active=?, updated_at=datetime('now') WHERE id=?",
-		c.Name, c.ContactType, c.Phone, c.Email, c.Address, c.Notes, c.MapsLink, c.Class, c.Price, nullInt(c.RouteID), c.IsActive, c.ID,
+		"UPDATE contacts SET name=?, contact_type=?, phone=?, email=?, address=?, notes=?, maps_link=?, class=?, distance_km=?, has_sibling_discount=?, is_return_only=?, route_id=?, is_active=?, updated_at=datetime('now') WHERE id=?",
+		c.Name, c.ContactType, c.Phone, c.Email, c.Address, c.Notes, c.MapsLink, c.Class, c.DistanceKm, c.HasSiblingDiscount, c.IsReturnOnly, nullInt(c.RouteID), c.IsActive, c.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("update contact: %w", err)

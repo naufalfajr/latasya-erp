@@ -548,8 +548,8 @@ func TestGenerateRecurring(t *testing.T) {
 	token := adminToken(t, db)
 	cid := seedContact(t, db)
 
-	// Give the contact a price so the generator picks it up.
-	db.Exec("UPDATE contacts SET price = 5000000 WHERE id = ?", cid)
+	// Give the contact distance pricing so the generator picks it up.
+	db.Exec("UPDATE contacts SET distance_km = 8, has_sibling_discount = 1, is_return_only = 1 WHERE id = ?", cid)
 
 	t.Run("success", func(t *testing.T) {
 		resp := doRequest(t, ts, http.MethodPost, "/api/v1/invoices/generate-recurring", token, nil, nil)
