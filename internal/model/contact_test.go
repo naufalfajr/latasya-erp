@@ -16,7 +16,7 @@ func TestCreateContact(t *testing.T) {
 		Phone:              "08123456789",
 		Email:              "sd1@example.com",
 		Address:            "Jl. Pendidikan No. 1",
-		DistanceKm:         6,
+		DistanceKm:         6.5,
 		HasSiblingDiscount: true,
 		IsReturnOnly:       true,
 		IsActive:           true,
@@ -33,14 +33,14 @@ func TestCreateContact(t *testing.T) {
 	if contacts[0].Phone != "08123456789" {
 		t.Errorf("expected phone '08123456789', got %q", contacts[0].Phone)
 	}
-	if contacts[0].DistanceKm != 6 || !contacts[0].HasSiblingDiscount || !contacts[0].IsReturnOnly {
+	if contacts[0].DistanceKm != 6.5 || !contacts[0].HasSiblingDiscount || !contacts[0].IsReturnOnly {
 		t.Fatalf("pricing fields not persisted: %+v", contacts[0])
 	}
 }
 
 func TestContactPrice(t *testing.T) {
 	tests := []struct {
-		distanceKm         int
+		distanceKm         float64
 		hasSiblingDiscount bool
 		isReturnOnly       bool
 		want               int
@@ -52,7 +52,9 @@ func TestContactPrice(t *testing.T) {
 		{7, false, false, 450000},
 		{9, false, false, 450000},
 		{10, false, false, 500000},
+		{11.4, false, false, 500000},
 		{12, false, false, 500000},
+		{12.1, false, false, 550000},
 		{13, false, false, 550000},
 		{8, true, false, 400000},
 		{8, false, true, 400000},
@@ -62,7 +64,7 @@ func TestContactPrice(t *testing.T) {
 	for _, tt := range tests {
 		got := model.ContactPrice(tt.distanceKm, tt.hasSiblingDiscount, tt.isReturnOnly)
 		if got != tt.want {
-			t.Fatalf("ContactPrice(%d, %v, %v) = %d, want %d", tt.distanceKm, tt.hasSiblingDiscount, tt.isReturnOnly, got, tt.want)
+			t.Fatalf("ContactPrice(%g, %v, %v) = %d, want %d", tt.distanceKm, tt.hasSiblingDiscount, tt.isReturnOnly, got, tt.want)
 		}
 	}
 }
@@ -137,7 +139,7 @@ func TestUpdateContact(t *testing.T) {
 	contacts, _ := model.ListContacts(db, model.ContactFilter{Search: "Original"})
 	contacts[0].Name = "Updated"
 	contacts[0].Phone = "0999"
-	contacts[0].DistanceKm = 10
+	contacts[0].DistanceKm = 10.5
 	contacts[0].HasSiblingDiscount = true
 
 	if err := model.UpdateContact(db, &contacts[0]); err != nil {
@@ -151,7 +153,7 @@ func TestUpdateContact(t *testing.T) {
 	if updated.Phone != "0999" {
 		t.Errorf("expected phone '0999', got %q", updated.Phone)
 	}
-	if updated.DistanceKm != 10 || !updated.HasSiblingDiscount {
+	if updated.DistanceKm != 10.5 || !updated.HasSiblingDiscount {
 		t.Fatalf("expected updated pricing fields, got %+v", updated)
 	}
 }

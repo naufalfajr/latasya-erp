@@ -61,7 +61,7 @@ func TestMigration_ContactDistancePricingSchema(t *testing.T) {
 	}
 	defer rows.Close()
 
-	columns := map[string]bool{}
+	columns := map[string]string{}
 	for rows.Next() {
 		var cid int
 		var name, typ string
@@ -70,15 +70,18 @@ func TestMigration_ContactDistancePricingSchema(t *testing.T) {
 		if err := rows.Scan(&cid, &name, &typ, &notNull, &dflt, &pk); err != nil {
 			t.Fatal(err)
 		}
-		columns[name] = true
+		columns[name] = typ
 	}
 
 	for _, name := range []string{"distance_km", "has_sibling_discount", "is_return_only"} {
-		if !columns[name] {
+		if columns[name] == "" {
 			t.Fatalf("%s column not found in contacts", name)
 		}
 	}
-	if columns["price"] {
+	if columns["distance_km"] != "REAL" {
+		t.Fatalf("distance_km type: got %q want REAL", columns["distance_km"])
+	}
+	if columns["price"] != "" {
 		t.Fatal("price column should not exist in contacts")
 	}
 
