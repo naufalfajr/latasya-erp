@@ -1,6 +1,7 @@
 package model_test
 
 import (
+	"database/sql"
 	"testing"
 
 	"github.com/naufal/latasya-erp/internal/model"
@@ -259,6 +260,7 @@ func TestListInvoices(t *testing.T) {
 
 func TestGenerateRecurringInvoices(t *testing.T) {
 	db := testutil.SetupTestDB(t)
+	seedManualSchoolClosure(t, db, "Sunday only", "2026-06-07", "2026-06-07")
 
 	// Active customer with distance pricing — should get a new invoice.
 	db.Exec("INSERT INTO contacts (name, contact_type, is_active, distance_km, has_sibling_discount, is_return_only) VALUES ('Active With Price', 'customer', 1, 8.5, 1, 1)")
@@ -280,6 +282,12 @@ func TestGenerateRecurringInvoices(t *testing.T) {
 	}
 	if result.Skipped != 0 {
 		t.Errorf("skipped: got %d want 0", result.Skipped)
+	}
+	if result.EffectiveDays != 26 {
+		t.Errorf("effective days: got %d want 26", result.EffectiveDays)
+	}
+	if result.MultiplierPercent != 100 {
+		t.Errorf("multiplier percent: got %d want 100", result.MultiplierPercent)
 	}
 
 	// The generated invoice uses the contact price formula, is dated this month, draft.
@@ -308,6 +316,87 @@ func TestGenerateRecurringInvoices(t *testing.T) {
 	}
 	if result2.Created != 0 {
 		t.Errorf("second run created: got %d want 0", result2.Created)
+	}
+}
+
+func TestGenerateRecurringInvoicesApplies85PercentMultiplier(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	seedManualSchoolClosure(t, db, "June break", "2026-06-01", "2026-06-08")
+	contactID := seedRecurringCustomer(t, db, "Medium Closure Customer", 5)
+
+	result, err := model.GenerateRecurringInvoices(db, "2026-06-03", "2026-06-13", 1)
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	if result.EffectiveDays != 19 {
+		t.Errorf("effective days: got %d want 19", result.EffectiveDays)
+	}
+	if result.MultiplierPercent != 85 {
+		t.Errorf("multiplier percent: got %d want 85", result.MultiplierPercent)
+	}
+	assertGeneratedRecurringPrice(t, db, contactID, "2026-06", 340000)
+}
+
+func TestGenerateRecurringInvoicesApplies75PercentMultiplier(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	seedManualSchoolClosure(t, db, "Long June break", "2026-06-01", "2026-06-15")
+	contactID := seedRecurringCustomer(t, db, "Low Closure Customer", 5)
+
+	result, err := model.GenerateRecurringInvoices(db, "2026-06-03", "2026-06-13", 1)
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	if result.EffectiveDays != 13 {
+		t.Errorf("effective days: got %d want 13", result.EffectiveDays)
+	}
+	if result.MultiplierPercent != 75 {
+		t.Errorf("multiplier percent: got %d want 75", result.MultiplierPercent)
+	}
+	assertGeneratedRecurringPrice(t, db, contactID, "2026-06", 300000)
+}
+
+func seedManualSchoolClosure(t *testing.T, db *sql.DB, title, startDate, endDate string) {
+	t.Helper()
+	_, err := model.CreateSchoolClosure(db, &model.SchoolClosure{
+		Source:    model.SchoolClosureSourceManual,
+		Title:     title,
+		StartDate: startDate,
+		EndDate:   endDate,
+	})
+	if err != nil {
+		t.Fatalf("seed school closure %q: %v", title, err)
+	}
+}
+
+func seedRecurringCustomer(t *testing.T, db *sql.DB, name string, distanceKm float64) int {
+	t.Helper()
+	result, err := db.Exec(
+		"INSERT INTO contacts (name, contact_type, is_active, distance_km) VALUES (?, 'customer', 1, ?)",
+		name, distanceKm,
+	)
+	if err != nil {
+		t.Fatalf("seed recurring customer: %v", err)
+	}
+	id, _ := result.LastInsertId()
+	return int(id)
+}
+
+func assertGeneratedRecurringPrice(t *testing.T, db *sql.DB, contactID int, month string, want int) {
+	t.Helper()
+	var total, unitPrice int
+	if err := db.QueryRow(
+		`SELECT i.total, il.unit_price
+		 FROM invoices i JOIN invoice_lines il ON il.invoice_id = i.id
+		 WHERE i.contact_id = ? AND substr(i.invoice_date, 1, 7) = ?`,
+		contactID, month,
+	).Scan(&total, &unitPrice); err != nil {
+		t.Fatalf("fetch generated recurring invoice: %v", err)
+	}
+	if unitPrice != want {
+		t.Errorf("generated unit price: got %d want %d", unitPrice, want)
+	}
+	if total != want {
+		t.Errorf("generated total: got %d want %d", total, want)
 	}
 }
 
