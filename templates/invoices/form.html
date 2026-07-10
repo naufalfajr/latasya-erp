@@ -120,6 +120,12 @@ var _meta = document.getElementById('invoice-form-meta').dataset;
 var _defaultAccountID = parseInt(_meta.defaultAccount || '0', 10);
 var _descTemplate = _meta.descTemplate || 'Antar jemput {month} {year}';
 var _monthsID = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
+var _monthMultiplierCache = {};
+var _lastAutoUnitPrice = null;
+var _unitPriceManuallyEdited = false;
+var _lastAutoDescription = '';
+var _descriptionManuallyEdited = false;
+var _prefillRequestID = 0;
 
 function calcLineAmount(row) {
     var qty = parseFloat(row.querySelector('[name="line_quantity"]').value || '1');
@@ -129,10 +135,105 @@ function calcLineAmount(row) {
 }
 document.addEventListener('input', function(e) {
     if (e.target.name === 'line_quantity' || e.target.name === 'line_unit_price') {
+        if (e.target.name === 'line_unit_price') {
+            var unitPrice = parseFloat(e.target.value || '0');
+            _unitPriceManuallyEdited = !!e.target.value && !isNaN(unitPrice) && unitPrice !== 0;
+        }
         calcLineAmount(e.target.closest('tr'));
+    }
+    if (e.target.name === 'line_description') {
+        _descriptionManuallyEdited = !!e.target.value;
     }
 });
 function removeInvLine(btn) { btn.closest('tr').remove(); }
+
+function setPrefillPending(pending) {
+    var form = document.querySelector('form[action^="/invoices"]');
+    if (!form) return;
+    var submitButton = form.querySelector('button[type="submit"]');
+    if (submitButton) submitButton.disabled = pending;
+}
+
+function getInvoiceMonthInfo() {
+    var dateInput = document.querySelector('[name="invoice_date"]');
+    var dateVal = dateInput ? dateInput.value : '';
+    var month = '', monthNum = '', year = '';
+    if (dateVal && dateVal.length >= 7) {
+        var parts = dateVal.split('-');
+        year = parts[0];
+        monthNum = parts[1];
+        month = _monthsID[parseInt(monthNum, 10) - 1] || '';
+    } else {
+        var now = new Date();
+        year = now.getFullYear().toString();
+        monthNum = ('0' + (now.getMonth() + 1)).slice(-2);
+        month = _monthsID[now.getMonth()];
+    }
+    return { month: month, year: year, monthKey: year + '-' + monthNum };
+}
+
+function getSelectedContactBasePrice() {
+    var contactSelect = document.getElementById('contact_id');
+    if (!contactSelect) return 0;
+    var opt = contactSelect.options[contactSelect.selectedIndex];
+    if (!opt || !opt.value) return 0;
+    return parseInt(opt.dataset.price || '0', 10);
+}
+
+function getMonthMultiplier(monthKey) {
+    if (_monthMultiplierCache[monthKey]) return _monthMultiplierCache[monthKey];
+    var controller = window.AbortController ? new AbortController() : null;
+    var timeoutID = window.setTimeout(function() {
+        if (controller) controller.abort();
+    }, 3000);
+    var fetchOptions = {
+        headers: { 'Accept': 'application/json' },
+        credentials: 'same-origin'
+    };
+    if (controller) fetchOptions.signal = controller.signal;
+    _monthMultiplierCache[monthKey] = fetch('/api/v1/school-calendar/effective-days?month=' + encodeURIComponent(monthKey), fetchOptions).then(function(resp) {
+        window.clearTimeout(timeoutID);
+        if (!resp.ok) throw new Error('failed to load multiplier');
+        return resp.json();
+    }).then(function(body) {
+        var multiplier = parseInt(body && body.data ? body.data.multiplier_percent : '', 10);
+        if (isNaN(multiplier)) delete _monthMultiplierCache[monthKey];
+        return { percent: isNaN(multiplier) ? 100 : multiplier, fromAPI: !isNaN(multiplier) };
+    }).catch(function() {
+        window.clearTimeout(timeoutID);
+        delete _monthMultiplierCache[monthKey];
+        return { percent: 100, fromAPI: false };
+    });
+    return _monthMultiplierCache[monthKey];
+}
+
+function canAutoSetUnitPrice(priceInput) {
+    var current = parseFloat(priceInput.value || '0');
+    if (!priceInput.value || isNaN(current) || current === 0) {
+        _unitPriceManuallyEdited = false;
+        return true;
+    }
+    if (_unitPriceManuallyEdited) return false;
+    return _lastAutoUnitPrice !== null && current === _lastAutoUnitPrice;
+}
+
+function setAutoUnitPrice(firstRow, price) {
+    var priceInput = firstRow.querySelector('[name="line_unit_price"]');
+    if (priceInput && canAutoSetUnitPrice(priceInput)) {
+        priceInput.value = price;
+        _lastAutoUnitPrice = price;
+    }
+    calcLineAmount(firstRow);
+}
+
+function setAutoDescription(firstRow, description) {
+    var descInput = firstRow.querySelector('[name="line_description"]');
+    if (!descInput) return;
+    if (!descInput.value || (!_descriptionManuallyEdited && descInput.value === _lastAutoDescription)) {
+        descInput.value = description;
+        _lastAutoDescription = description;
+    }
+}
 
 function prefillFirstLine(price) {
     var tbody = document.getElementById('inv-lines-body');
@@ -140,22 +241,12 @@ function prefillFirstLine(price) {
     var firstRow = tbody.querySelector('tr');
     if (!firstRow) return;
 
-    var dateInput = document.querySelector('[name="invoice_date"]');
-    var dateVal = dateInput ? dateInput.value : '';
-    var month = '', year = '';
-    if (dateVal && dateVal.length >= 7) {
-        var parts = dateVal.split('-');
-        year = parts[0];
-        month = _monthsID[parseInt(parts[1], 10) - 1] || '';
-    } else {
-        var now = new Date();
-        year = now.getFullYear().toString();
-        month = _monthsID[now.getMonth()];
-    }
-    var desc = _descTemplate.replace('{month}', month).replace('{year}', year);
+    var monthInfo = getInvoiceMonthInfo();
+    var requestID = ++_prefillRequestID;
+    var basePrice = isNaN(price) ? 0 : price;
+    var desc = _descTemplate.replace('{month}', monthInfo.month).replace('{year}', monthInfo.year);
 
-    var descInput = firstRow.querySelector('[name="line_description"]');
-    if (descInput && !descInput.value) descInput.value = desc;
+    setAutoDescription(firstRow, desc);
 
     var acctSelect = firstRow.querySelector('[name="line_account_id"]');
     if (acctSelect && !acctSelect.value && _defaultAccountID) {
@@ -165,17 +256,32 @@ function prefillFirstLine(price) {
     var qtyInput = firstRow.querySelector('[name="line_quantity"]');
     if (qtyInput && (!qtyInput.value || parseFloat(qtyInput.value) === 0)) qtyInput.value = '1';
 
-    var priceInput = firstRow.querySelector('[name="line_unit_price"]');
-    if (priceInput && (!priceInput.value || parseFloat(priceInput.value) === 0)) priceInput.value = price;
+    setAutoUnitPrice(firstRow, basePrice);
+    if (basePrice <= 0) {
+        setPrefillPending(false);
+        return;
+    }
 
-    calcLineAmount(firstRow);
+    setPrefillPending(true);
+    getMonthMultiplier(monthInfo.monthKey).then(function(multiplier) {
+        if (requestID !== _prefillRequestID) return;
+        setAutoUnitPrice(firstRow, Math.floor(basePrice * multiplier.percent / 100));
+        setPrefillPending(false);
+    });
 }
 
 document.getElementById('contact_id').addEventListener('change', function() {
-    var opt = this.options[this.selectedIndex];
-    var price = opt ? parseInt(opt.dataset.price || '0', 10) : 0;
-    prefillFirstLine(price);
+    prefillFirstLine(getSelectedContactBasePrice());
 });
+
+var _invoiceDateInput = document.querySelector('[name="invoice_date"]');
+if (_invoiceDateInput) {
+    _invoiceDateInput.addEventListener('change', function() {
+        var contactSelect = document.getElementById('contact_id');
+        if (contactSelect && contactSelect.value) prefillFirstLine(getSelectedContactBasePrice());
+    });
+}
+if (document.getElementById('contact_id').value) prefillFirstLine(getSelectedContactBasePrice());
 </script>
 {{end}}
 
