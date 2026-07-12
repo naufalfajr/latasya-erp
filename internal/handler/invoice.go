@@ -483,12 +483,13 @@ func (h *Handler) DeleteInvoice(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	h.setFlash(w, "Invoice deleted")
 	if r.Header.Get("HX-Request") == "true" {
+		w.Header().Set("HX-Redirect", "/invoices")
 		w.WriteHeader(http.StatusOK)
 		return
 	}
 
-	h.setFlash(w, "Invoice deleted")
 	http.Redirect(w, r, "/invoices", http.StatusSeeOther)
 }
 

@@ -52,8 +52,8 @@ func (h *Handler) ListContacts(w http.ResponseWriter, r *http.Request) {
 }
 
 func contactSortURLs(r *http.Request, sort, order string) map[string]string {
-	urls := make(map[string]string, 3)
-	for _, column := range []string{"name", "class", "status"} {
+	urls := make(map[string]string, 4)
+	for _, column := range []string{"name", "class", "route", "status"} {
 		q := r.URL.Query()
 		q.Set("sort", column)
 		if sort == column && order != "desc" {

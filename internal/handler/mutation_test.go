@@ -98,11 +98,18 @@ func TestDeleteInvoice_Success(t *testing.T) {
 	db.QueryRow("SELECT id FROM invoices ORDER BY id DESC LIMIT 1").Scan(&invID)
 
 	req2, _ := requestWithCookies(db, "DELETE", ts.URL+"/invoices/"+strconv.Itoa(invID), cookies, "")
+	req2.Header.Set("HX-Request", "true")
 	resp2, err := noRedirectClient().Do(req2)
 	if err != nil {
 		t.Fatal(err)
 	}
 	resp2.Body.Close()
+	if resp2.StatusCode != http.StatusOK {
+		t.Fatalf("delete status = %d, want %d", resp2.StatusCode, http.StatusOK)
+	}
+	if redirect := resp2.Header.Get("HX-Redirect"); redirect != "/invoices" {
+		t.Errorf("HX-Redirect = %q, want /invoices", redirect)
+	}
 
 	var n int
 	db.QueryRow("SELECT COUNT(*) FROM invoices WHERE id = ?", invID).Scan(&n)
