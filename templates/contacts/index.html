@@ -49,12 +49,12 @@
         <thead>
             <tr>
                 <th><a class="link link-hover" href="{{index $data.SortURLs "name"}}">Name{{if eq $data.Sort "name"}} {{if eq $data.Order "desc"}}↓{{else}}↑{{end}}{{end}}</a></th>
-                <th>Type</th>
+                <th>Maps</th>
                 <th><a class="link link-hover" href="{{index $data.SortURLs "class"}}">Class{{if eq $data.Sort "class"}} {{if eq $data.Order "desc"}}↓{{else}}↑{{end}}{{end}}</a></th>
-                <th>Route</th>
+                <th><a class="link link-hover" href="{{index $data.SortURLs "route"}}">Route{{if eq $data.Sort "route"}} {{if eq $data.Order "desc"}}↓{{else}}↑{{end}}{{end}}</a></th>
                 <th>Phone</th>
                 <th class="hidden md:table-cell">Address</th>
-                <th class="hidden md:table-cell">Notes</th>
+                <th class="hidden md:table-cell w-64">Notes</th>
                 <th><a class="link link-hover" href="{{index $data.SortURLs "status"}}">Status{{if eq $data.Sort "status"}} {{if eq $data.Order "desc"}}↓{{else}}↑{{end}}{{end}}</a></th>
                 {{if .User.HasCapability "contacts.manage"}}<th>Actions</th>{{end}}
             </tr>
@@ -63,15 +63,17 @@
             {{range $data.Contacts}}
             <tr id="contact-{{.ID}}"{{if not .IsActive}} class="opacity-60"{{end}}>
                 <td class="font-semibold">{{.Name}}</td>
-                <td><span class="badge badge-sm
-                    {{if eq .ContactType "customer"}}badge-success
-                    {{else if eq .ContactType "supplier"}}badge-warning
-                    {{else}}badge-info{{end}}">{{.ContactType}}</span></td>
+                <td class="text-sm">
+                    {{if .MapsLink}}<a href="{{.MapsLink}}" target="_blank" rel="noopener noreferrer"
+                        class="link link-primary whitespace-nowrap" title="{{.MapsLink}}">Open map ↗</a>{{else}}<span class="opacity-40">—</span>{{end}}
+                </td>
                 <td class="text-sm">{{.Class}}</td>
                 <td class="text-sm">{{.RouteName}}</td>
                 <td class="text-sm">{{.Phone}}</td>
                 <td class="hidden md:table-cell text-sm opacity-60">{{.Address}}</td>
-                <td class="hidden md:table-cell text-sm opacity-60">{{.Notes}}</td>
+                <td class="hidden md:table-cell w-64 text-sm opacity-60">
+                    <div class="w-64 whitespace-nowrap" style="overflow: hidden; text-overflow: ellipsis;" title="{{.Notes}}">{{.Notes}}</div>
+                </td>
                 <td>
                     <input type="checkbox" class="toggle toggle-sm toggle-success" {{if .IsActive}}checked{{end}} disabled
                         aria-label="{{.Name}} status: {{if .IsActive}}active{{else}}inactive{{end}}">

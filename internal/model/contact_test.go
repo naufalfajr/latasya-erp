@@ -208,8 +208,11 @@ func TestListContacts_FilterActive(t *testing.T) {
 func TestListContacts_Sort(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 
-	model.CreateContact(db, &model.Contact{Name: "B", ContactType: "customer", Class: "2", IsActive: true})
-	model.CreateContact(db, &model.Contact{Name: "A", ContactType: "customer", Class: "1", IsActive: false})
+	var eastID, westID int
+	db.QueryRow("SELECT id FROM routes WHERE name = 'East'").Scan(&eastID)
+	db.QueryRow("SELECT id FROM routes WHERE name = 'West'").Scan(&westID)
+	model.CreateContact(db, &model.Contact{Name: "B", ContactType: "customer", Class: "2", RouteID: eastID, IsActive: true})
+	model.CreateContact(db, &model.Contact{Name: "A", ContactType: "customer", Class: "1", RouteID: westID, IsActive: false})
 
 	contacts, err := model.ListContacts(db, model.ContactFilter{Sort: "name", Order: "desc"})
 	if err != nil {
@@ -225,6 +228,14 @@ func TestListContacts_Sort(t *testing.T) {
 	}
 	if contacts[0].Class != "1" {
 		t.Fatalf("expected class 1 first, got %s", contacts[0].Class)
+	}
+
+	contacts, err = model.ListContacts(db, model.ContactFilter{Sort: "route", Order: "asc"})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if contacts[0].RouteName != "East" {
+		t.Fatalf("expected East first by route asc, got %s", contacts[0].RouteName)
 	}
 
 	contacts, err = model.ListContacts(db, model.ContactFilter{Sort: "status", Order: "desc"})

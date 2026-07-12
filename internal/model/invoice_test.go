@@ -319,6 +319,50 @@ func TestGenerateRecurringInvoices(t *testing.T) {
 	}
 }
 
+func TestGenerateRecurringInvoicesAllowsPreviousMonthAndSkipsCurrentMonth(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	contactID := seedRecurringCustomer(t, db, "Monthly Customer", 5)
+
+	var revenueID int
+	if err := db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID); err != nil {
+		t.Fatalf("get revenue account: %v", err)
+	}
+	if _, err := model.CreateInvoice(db, &model.Invoice{
+		ContactID: contactID, InvoiceDate: "2026-06-03", DueDate: "2026-06-13", CreatedBy: 1,
+	}, []model.InvoiceLine{
+		{Description: "June service", Quantity: 100, UnitPrice: 400000, AccountID: revenueID},
+	}); err != nil {
+		t.Fatalf("create June draft: %v", err)
+	}
+
+	firstJulyRun, err := model.GenerateRecurringInvoices(db, "2026-07-03", "2026-07-13", 1)
+	if err != nil {
+		t.Fatalf("first July generate: %v", err)
+	}
+	if firstJulyRun.Created != 1 || firstJulyRun.Skipped != 0 {
+		t.Fatalf("first July result: created=%d skipped=%d, want created=1 skipped=0", firstJulyRun.Created, firstJulyRun.Skipped)
+	}
+
+	secondJulyRun, err := model.GenerateRecurringInvoices(db, "2026-07-03", "2026-07-13", 1)
+	if err != nil {
+		t.Fatalf("second July generate: %v", err)
+	}
+	if secondJulyRun.Created != 0 || secondJulyRun.Skipped != 1 {
+		t.Fatalf("second July result: created=%d skipped=%d, want created=0 skipped=1", secondJulyRun.Created, secondJulyRun.Skipped)
+	}
+
+	var julyCount int
+	if err := db.QueryRow(
+		"SELECT COUNT(*) FROM invoices WHERE contact_id = ? AND substr(invoice_date, 1, 7) = '2026-07'",
+		contactID,
+	).Scan(&julyCount); err != nil {
+		t.Fatalf("count July invoices: %v", err)
+	}
+	if julyCount != 1 {
+		t.Fatalf("July invoice count = %d, want 1", julyCount)
+	}
+}
+
 func TestGenerateRecurringInvoicesApplies85PercentMultiplier(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	seedManualSchoolClosure(t, db, "June break", "2026-06-01", "2026-06-08")

@@ -3,6 +3,7 @@ package handler_test
 import (
 	"database/sql"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -485,6 +486,52 @@ func TestListContacts_Authenticated(t *testing.T) {
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+}
+
+func TestListContacts_TableColumnsAndRouteSort(t *testing.T) {
+	ts, db := testServer(t)
+	cookies := loginAsAdmin(t, ts)
+
+	var routeID int
+	if err := db.QueryRow("SELECT id FROM routes WHERE name = 'East'").Scan(&routeID); err != nil {
+		t.Fatalf("get route: %v", err)
+	}
+	if err := model.CreateContact(db, &model.Contact{
+		Name:        "Mapped Customer",
+		ContactType: "customer",
+		MapsLink:    "https://maps.example/pickup",
+		Notes:       "A long note that should stay on one line and truncate inside its fixed-width column",
+		RouteID:     routeID,
+		IsActive:    true,
+	}); err != nil {
+		t.Fatalf("create contact: %v", err)
+	}
+
+	req, _ := requestWithCookies(db, "GET", ts.URL+"/contacts?sort=route&order=asc", cookies, "")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	html := string(body)
+
+	for _, want := range []string{
+		"<th>Maps</th>",
+		`href="https://maps.example/pickup"`,
+		`href="/contacts?order=desc&amp;sort=route"`,
+		`class="w-64 whitespace-nowrap" style="overflow: hidden; text-overflow: ellipsis;"`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Errorf("contacts page missing %q", want)
+		}
+	}
+	if strings.Contains(html, "<th>Type</th>") {
+		t.Error("contacts page still shows the Type column")
 	}
 }
 

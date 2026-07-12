@@ -54,7 +54,7 @@ type ContactFilter struct {
 	Type     string // customer, supplier, both
 	IsActive *bool
 	Search   string
-	Sort     string // name, class, status
+	Sort     string // name, class, route, status
 	Order    string // asc, desc
 }
 
@@ -82,18 +82,20 @@ func ListContacts(db *sql.DB, f ContactFilter) ([]Contact, error) {
 		s := "%" + f.Search + "%"
 		args = append(args, s, s, s)
 	}
-	column := "name"
+	column := "c.name"
 	switch f.Sort {
 	case "class":
-		column = "class"
+		column = "c.class"
+	case "route":
+		column = "COALESCE(r.name, '')"
 	case "status":
-		column = "is_active"
+		column = "c.is_active"
 	}
 	direction := "ASC"
 	if f.Order == "desc" {
 		direction = "DESC"
 	}
-	query += " ORDER BY c." + column + " " + direction + ", c.name ASC"
+	query += " ORDER BY " + column + " " + direction + ", c.name ASC"
 
 	rows, err := db.Query(query, args...)
 	if err != nil {
