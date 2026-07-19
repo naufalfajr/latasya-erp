@@ -44,7 +44,7 @@
                 <th>Number</th>
                 <th>Customer</th>
                 <th>Date</th>
-                <th>Due Date</th>
+                <th>{{if eq (index $data "Filter") "paid"}}Paid Date{{else}}Due Date{{end}}</th>
                 <th>Status</th>
                 <th class="text-right">Total</th>
                 <th class="text-right">Paid</th>
@@ -59,7 +59,7 @@
                 <td class="font-mono text-sm">{{.InvoiceNumber}}</td>
                 <td>{{.ContactName}}</td>
                 <td class="text-sm">{{formatDate .InvoiceDate}}</td>
-                <td class="text-sm">{{formatDate .DueDate}}</td>
+                <td class="text-sm">{{if eq (index $data "Filter") "paid"}}{{formatDate .UpdatedAt}}{{else}}{{formatDate .DueDate}}{{end}}</td>
                 <td>
                     <span class="badge badge-sm
                         {{if eq .Status "draft"}}badge-ghost
