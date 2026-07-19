@@ -7,18 +7,18 @@
     <div class="flex gap-2 flex-wrap">
         <button type="submit" form="bulk-invoice-form" hidden
             class="btn btn-info btn-sm bulk-action-btn" data-label="Mark as sent"
-            formaction="/invoices/bulk-send"
+            formaction="{{$.BasePath}}/invoices/bulk-send"
             onclick="return confirm('Mark the selected draft invoices as sent? A journal entry is posted for each, dated by the invoice date (may affect prior periods). This cannot be undone.')">Mark as sent</button>
         <button type="submit" form="bulk-invoice-form" hidden
             class="btn btn-error btn-sm bulk-action-btn" data-label="Delete selected"
-            formaction="/invoices/bulk-delete"
+            formaction="{{$.BasePath}}/invoices/bulk-delete"
             onclick="return confirm('Delete the selected draft invoices? This cannot be undone.')">Delete selected</button>
-        <form method="POST" action="/invoices/generate-recurring" class="inline">
+        <form method="POST" action="{{$.BasePath}}/invoices/generate-recurring" class="inline">
             {{template "csrf" $}}
             <button type="submit" class="btn btn-secondary btn-sm"
                 onclick="return confirm('Generate draft recurring invoices for active customers using the current school calendar adjustment? Customers already invoiced this month are skipped.')">Generate Recurring Invoices</button>
         </form>
-        <a href="/invoices/new" class="btn btn-primary btn-sm">+ New Invoice</a>
+        <a href="{{$.BasePath}}/invoices/new" class="btn btn-primary btn-sm">+ New Invoice</a>
     </div>
     {{end}}
 </div>
@@ -27,16 +27,16 @@
 
 <!-- Status filter tabs -->
 <div class="tabs tabs-box mb-4 flex-wrap">
-    <a href="/invoices" class="tab {{if eq (index $data "Filter") ""}}tab-active{{end}}">All</a>
-    <a href="/invoices?status=draft" class="tab {{if eq (index $data "Filter") "draft"}}tab-active{{end}}">Draft</a>
-    <a href="/invoices?status=sent" class="tab {{if eq (index $data "Filter") "sent"}}tab-active{{end}}">Sent</a>
-    <a href="/invoices?status=partial" class="tab {{if eq (index $data "Filter") "partial"}}tab-active{{end}}">Partial</a>
-    <a href="/invoices?status=paid" class="tab {{if eq (index $data "Filter") "paid"}}tab-active{{end}}">Paid</a>
-    <a href="/invoices?status=overdue" class="tab {{if eq (index $data "Filter") "overdue"}}tab-active{{end}}">Overdue</a>
+    <a href="{{$.BasePath}}/invoices" class="tab {{if eq (index $data "Filter") ""}}tab-active{{end}}">All</a>
+    <a href="{{$.BasePath}}/invoices?status=draft" class="tab {{if eq (index $data "Filter") "draft"}}tab-active{{end}}">Draft</a>
+    <a href="{{$.BasePath}}/invoices?status=sent" class="tab {{if eq (index $data "Filter") "sent"}}tab-active{{end}}">Sent</a>
+    <a href="{{$.BasePath}}/invoices?status=partial" class="tab {{if eq (index $data "Filter") "partial"}}tab-active{{end}}">Partial</a>
+    <a href="{{$.BasePath}}/invoices?status=paid" class="tab {{if eq (index $data "Filter") "paid"}}tab-active{{end}}">Paid</a>
+    <a href="{{$.BasePath}}/invoices?status=overdue" class="tab {{if eq (index $data "Filter") "overdue"}}tab-active{{end}}">Overdue</a>
 </div>
 
 <div class="overflow-x-auto">
-    {{if $canManage}}<form id="bulk-invoice-form" method="POST" action="/invoices/bulk-send">{{template "csrf" $}}{{end}}
+    {{if $canManage}}<form id="bulk-invoice-form" method="POST" action="{{$.BasePath}}/invoices/bulk-send">{{template "csrf" $}}{{end}}
     <table class="table table-sm">
         <thead>
             <tr>
@@ -74,7 +74,10 @@
                 <td class="text-right font-mono text-sm">{{formatIDR .AmountPaid}}</td>
                 <td class="text-right font-mono text-sm">{{formatIDR .AmountDue}}</td>
                 <td>
-                    <a href="/invoices/{{.ID}}" class="btn btn-ghost btn-xs">View</a>
+                    <a href="{{$.BasePath}}/invoices/{{.ID}}" class="btn btn-ghost btn-xs">View</a>
+                    {{if and $canManage (ne .Status "draft")}}
+                    <a href="{{$.BasePath}}/invoices/{{.ID}}/whatsapp" class="btn btn-ghost btn-xs" target="_blank" rel="noopener">WA</a>
+                    {{end}}
                 </td>
             </tr>
             {{else}}

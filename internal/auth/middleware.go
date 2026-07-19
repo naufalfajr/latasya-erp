@@ -12,6 +12,15 @@ type contextKey string
 
 const userContextKey contextKey = "user"
 
+// loginPath is where RequireAuth sends unauthenticated requests. Defaults to
+// "/login" (what every test expects); production overrides it once at
+// startup via SetLoginPath since the admin app is mounted under a prefix.
+var loginPath = "/login"
+
+// SetLoginPath overrides the redirect target used by RequireAuth. Call once
+// at startup, before serving traffic.
+func SetLoginPath(p string) { loginPath = p }
+
 func UserFromContext(ctx context.Context) *model.User {
 	u, _ := ctx.Value(userContextKey).(*model.User)
 	return u
@@ -28,7 +37,7 @@ func RequireAuth(db *sql.DB, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie("session_id")
 		if err != nil {
-			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			http.Redirect(w, r, loginPath, http.StatusSeeOther)
 			return
 		}
 
@@ -40,13 +49,13 @@ func RequireAuth(db *sql.DB, next http.Handler) http.Handler {
 				Path:   "/",
 				MaxAge: -1,
 			})
-			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			http.Redirect(w, r, loginPath, http.StatusSeeOther)
 			return
 		}
 
 		user, err := model.GetUserByID(db, session.UserID)
 		if err != nil || !user.IsActive {
-			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			http.Redirect(w, r, loginPath, http.StatusSeeOther)
 			return
 		}
 

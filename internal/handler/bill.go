@@ -116,7 +116,7 @@ func (h *Handler) CreateBill(w http.ResponseWriter, r *http.Request) {
 	})
 
 	h.setFlash(w, "Bill created successfully")
-	http.Redirect(w, r, fmt.Sprintf("/bills/%d", billID), http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/bills/%d", billID), http.StatusSeeOther)
 }
 
 func (h *Handler) ViewBill(w http.ResponseWriter, r *http.Request) {
@@ -151,7 +151,7 @@ func (h *Handler) EditBill(w http.ResponseWriter, r *http.Request) {
 	}
 	if b.Status != "draft" {
 		h.setFlash(w, "Can only edit draft bills")
-		http.Redirect(w, r, fmt.Sprintf("/bills/%d", id), http.StatusSeeOther)
+		http.Redirect(w, r, h.BasePath+fmt.Sprintf("/bills/%d", id), http.StatusSeeOther)
 		return
 	}
 	fd := h.newBillFormData()
@@ -235,7 +235,7 @@ func (h *Handler) UpdateBill(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.setFlash(w, "Bill updated successfully")
-	http.Redirect(w, r, fmt.Sprintf("/bills/%d", id), http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/bills/%d", id), http.StatusSeeOther)
 }
 
 func (h *Handler) ReceiveBill(w http.ResponseWriter, r *http.Request) {
@@ -262,7 +262,7 @@ func (h *Handler) ReceiveBill(w http.ResponseWriter, r *http.Request) {
 		}
 		h.setFlash(w, "Bill received — journal entry created")
 	}
-	http.Redirect(w, r, fmt.Sprintf("/bills/%d", id), http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/bills/%d", id), http.StatusSeeOther)
 }
 
 func (h *Handler) BillPayment(w http.ResponseWriter, r *http.Request) {
@@ -278,7 +278,7 @@ func (h *Handler) BillPayment(w http.ResponseWriter, r *http.Request) {
 
 	if amount <= 0 || paymentDate == "" || paymentAccountID == 0 {
 		h.setFlash(w, "Error: all payment fields are required")
-		http.Redirect(w, r, fmt.Sprintf("/bills/%d", id), http.StatusSeeOther)
+		http.Redirect(w, r, h.BasePath+fmt.Sprintf("/bills/%d", id), http.StatusSeeOther)
 		return
 	}
 
@@ -306,7 +306,7 @@ func (h *Handler) BillPayment(w http.ResponseWriter, r *http.Request) {
 		})
 		h.setFlash(w, "Payment recorded successfully")
 	}
-	http.Redirect(w, r, fmt.Sprintf("/bills/%d", id), http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/bills/%d", id), http.StatusSeeOther)
 }
 
 func (h *Handler) DeleteBill(w http.ResponseWriter, r *http.Request) {
@@ -319,7 +319,7 @@ func (h *Handler) DeleteBill(w http.ResponseWriter, r *http.Request) {
 
 	if err := model.DeleteBill(h.DB, id); err != nil {
 		h.setFlash(w, "Error: "+err.Error())
-		http.Redirect(w, r, fmt.Sprintf("/bills/%d", id), http.StatusSeeOther)
+		http.Redirect(w, r, h.BasePath+fmt.Sprintf("/bills/%d", id), http.StatusSeeOther)
 		return
 	}
 
@@ -345,7 +345,7 @@ func (h *Handler) DeleteBill(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.setFlash(w, "Bill deleted")
-	http.Redirect(w, r, "/bills", http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+"/bills", http.StatusSeeOther)
 }
 
 func (h *Handler) BillLinePartial(w http.ResponseWriter, r *http.Request) {

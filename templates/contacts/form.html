@@ -7,7 +7,7 @@
         {{if $data.IsEdit}}Edit Contact{{else}}New Contact{{end}}
     </h1>
 
-    <form method="POST" action="{{if $data.IsEdit}}/contacts/{{$data.Contact.ID}}{{else}}/contacts{{end}}"
+    <form method="POST" action="{{$.BasePath}}{{if $data.IsEdit}}/contacts/{{$data.Contact.ID}}{{else}}/contacts{{end}}"
         class="card bg-base-100 shadow">
         {{template "csrf" $}}
         <div class="card-body">
@@ -136,12 +136,39 @@
 
             <!-- Actions -->
             <div class="card-actions justify-end mt-4">
-                <a href="/contacts" class="btn btn-ghost">Cancel</a>
+                <a href="{{$.BasePath}}/contacts" class="btn btn-ghost">Cancel</a>
                 <button type="submit" class="btn btn-primary">
                     {{if $data.IsEdit}}Update{{else}}Create{{end}} Contact
                 </button>
             </div>
         </div>
     </form>
+
+    {{if $data.IsEdit}}
+    <div class="card bg-base-100 shadow mt-4">
+        <div class="card-body">
+            <h2 class="card-title text-base">Link Portal Orang Tua</h2>
+            {{if $data.PortalURL}}
+            <div class="flex items-center gap-2">
+                <input type="text" readonly value="{{$data.PortalURL}}" class="input input-sm font-mono flex-1"
+                    onclick="this.select()">
+                <button type="button" class="btn btn-ghost btn-sm"
+                    onclick="navigator.clipboard.writeText('{{$data.PortalURL}}')">Salin</button>
+            </div>
+            <p class="text-xs opacity-60 mt-1">Kirim link ini ke orang tua via WhatsApp agar mereka bisa mengecek tagihan sendiri.</p>
+            {{else}}
+            <p class="text-sm opacity-60">Belum ada link portal untuk kontak ini.</p>
+            {{end}}
+            <div class="mt-2">
+                <button type="button" class="btn btn-warning btn-sm"
+                    hx-post="{{$.BasePath}}/contacts/{{$data.Contact.ID}}/reset-token"
+                    hx-target="body"
+                    hx-confirm="{{if $data.PortalURL}}Buat link baru? Link lama akan langsung tidak berlaku.{{else}}Buat link portal untuk kontak ini?{{end}}">
+                    {{if $data.PortalURL}}Reset Link{{else}}Buat Link Portal{{end}}
+                </button>
+            </div>
+        </div>
+    </div>
+    {{end}}
 </div>
 {{end}}

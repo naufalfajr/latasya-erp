@@ -3,7 +3,7 @@
 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
     <h1 class="text-2xl font-bold">Income</h1>
     {{if .User.HasCapability "income.manage"}}
-    <a href="/income/new" class="btn btn-primary btn-sm">+ Record Income</a>
+    <a href="{{$.BasePath}}/income/new" class="btn btn-primary btn-sm">+ Record Income</a>
     {{end}}
 </div>
 
@@ -32,11 +32,11 @@
                 <td class="text-right font-mono text-success">{{formatIDR .TotalDebit}}</td>
                 <td>
                     <div class="flex gap-1">
-                        <a href="/journals/{{.ID}}" class="btn btn-ghost btn-xs">View</a>
+                        <a href="{{$.BasePath}}/journals/{{.ID}}" class="btn btn-ghost btn-xs">View</a>
                         {{if $.User.HasCapability "income.manage"}}
-                        <a href="/income/{{.ID}}/edit" class="btn btn-ghost btn-xs">Edit</a>
+                        <a href="{{$.BasePath}}/income/{{.ID}}/edit" class="btn btn-ghost btn-xs">Edit</a>
                         <button class="btn btn-ghost btn-xs text-error"
-                            hx-delete="/income/{{.ID}}"
+                            hx-delete="{{$.BasePath}}/income/{{.ID}}"
                             hx-target="#income-{{.ID}}"
                             hx-swap="outerHTML"
                             hx-confirm="Delete this income entry?">Delete</button>

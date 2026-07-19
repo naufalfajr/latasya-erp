@@ -4,43 +4,43 @@
         <span class="text-xl font-bold">Latasya ERP</span>
     </li>
 
-    <li><a href="/" class="{{if eq .Path "/"}}active{{end}}">
+    <li><a href="{{$.BasePath}}/" class="{{if eq .Path "/"}}active{{end}}">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0h4"/></svg>
         Dashboard
     </a></li>
 
     <li class="menu-title mt-4"><span>Transactions</span></li>
-    <li><a href="/income" class="{{if eq .Path "/income"}}active{{end}}">Income</a></li>
-    <li><a href="/expenses" class="{{if eq .Path "/expenses"}}active{{end}}">Expenses</a></li>
-    <li><a href="/journals" class="{{if eq .Path "/journals"}}active{{end}}">Journal Entries</a></li>
+    <li><a href="{{$.BasePath}}/income" class="{{if eq .Path "/income"}}active{{end}}">Income</a></li>
+    <li><a href="{{$.BasePath}}/expenses" class="{{if eq .Path "/expenses"}}active{{end}}">Expenses</a></li>
+    <li><a href="{{$.BasePath}}/journals" class="{{if eq .Path "/journals"}}active{{end}}">Journal Entries</a></li>
 
     <li class="menu-title mt-4"><span>Sales & Purchases</span></li>
-    <li><a href="/invoices" class="{{if eq .Path "/invoices"}}active{{end}}">Invoices</a></li>
-    <li><a href="/credit-notes" class="{{if eq .Path "/credit-notes"}}active{{end}}">Credit Notes</a></li>
-    <li><a href="/bills" class="{{if eq .Path "/bills"}}active{{end}}">Bills</a></li>
-    <li><a href="/contacts" class="{{if eq .Path "/contacts"}}active{{end}}">Contacts</a></li>
+    <li><a href="{{$.BasePath}}/invoices" class="{{if eq .Path "/invoices"}}active{{end}}">Invoices</a></li>
+    <li><a href="{{$.BasePath}}/credit-notes" class="{{if eq .Path "/credit-notes"}}active{{end}}">Credit Notes</a></li>
+    <li><a href="{{$.BasePath}}/bills" class="{{if eq .Path "/bills"}}active{{end}}">Bills</a></li>
+    <li><a href="{{$.BasePath}}/contacts" class="{{if eq .Path "/contacts"}}active{{end}}">Contacts</a></li>
 
     <li class="menu-title mt-4"><span>Reports</span></li>
-    <li><a href="/reports/profit-loss" class="{{if eq .Path "/reports/profit-loss"}}active{{end}}">Profit & Loss</a></li>
-    <li><a href="/reports/balance-sheet" class="{{if eq .Path "/reports/balance-sheet"}}active{{end}}">Balance Sheet</a></li>
-    <li><a href="/reports/cash-flow" class="{{if eq .Path "/reports/cash-flow"}}active{{end}}">Cash Flow</a></li>
-    <li><a href="/reports/trial-balance" class="{{if eq .Path "/reports/trial-balance"}}active{{end}}">Trial Balance</a></li>
-    <li><a href="/reports/general-ledger" class="{{if eq .Path "/reports/general-ledger"}}active{{end}}">General Ledger</a></li>
+    <li><a href="{{$.BasePath}}/reports/profit-loss" class="{{if eq .Path "/reports/profit-loss"}}active{{end}}">Profit & Loss</a></li>
+    <li><a href="{{$.BasePath}}/reports/balance-sheet" class="{{if eq .Path "/reports/balance-sheet"}}active{{end}}">Balance Sheet</a></li>
+    <li><a href="{{$.BasePath}}/reports/cash-flow" class="{{if eq .Path "/reports/cash-flow"}}active{{end}}">Cash Flow</a></li>
+    <li><a href="{{$.BasePath}}/reports/trial-balance" class="{{if eq .Path "/reports/trial-balance"}}active{{end}}">Trial Balance</a></li>
+    <li><a href="{{$.BasePath}}/reports/general-ledger" class="{{if eq .Path "/reports/general-ledger"}}active{{end}}">General Ledger</a></li>
 
     <li class="menu-title mt-4"><span>Settings</span></li>
-    <li><a href="/accounts" class="{{if eq .Path "/accounts"}}active{{end}}">Chart of Accounts</a></li>
+    <li><a href="{{$.BasePath}}/accounts" class="{{if eq .Path "/accounts"}}active{{end}}">Chart of Accounts</a></li>
     {{if .User.IsAdmin}}
-    <li><a href="/settings/company" class="{{if eq .Path "/settings/company"}}active{{end}}">Company Profile</a></li>
-    <li><a href="/settings/school-calendar" class="{{if eq .Path "/settings/school-calendar"}}active{{end}}">School Calendar</a></li>
+    <li><a href="{{$.BasePath}}/settings/company" class="{{if eq .Path "/settings/company"}}active{{end}}">Company Profile</a></li>
+    <li><a href="{{$.BasePath}}/settings/school-calendar" class="{{if eq .Path "/settings/school-calendar"}}active{{end}}">School Calendar</a></li>
     {{end}}
     {{if .User.HasCapability "users.manage"}}
-    <li><a href="/users" class="{{if eq .Path "/users"}}active{{end}}">Users</a></li>
+    <li><a href="{{$.BasePath}}/users" class="{{if eq .Path "/users"}}active{{end}}">Users</a></li>
     {{end}}
     {{if .User.HasCapability "roles.manage"}}
-    <li><a href="/roles" class="{{if eq .Path "/roles"}}active{{end}}">Roles</a></li>
+    <li><a href="{{$.BasePath}}/roles" class="{{if eq .Path "/roles"}}active{{end}}">Roles</a></li>
     {{end}}
     {{if .User.HasCapability "audit.view"}}
-    <li><a href="/audit" class="{{if eq .Path "/audit"}}active{{end}}">Audit Log</a></li>
+    <li><a href="{{$.BasePath}}/audit" class="{{if eq .Path "/audit"}}active{{end}}">Audit Log</a></li>
     {{end}}
 
     <li class="mt-auto pt-4 border-t border-base-300">
@@ -49,12 +49,12 @@
             <span class="text-xs opacity-60">{{.User.Role}}</span>
         </div>
     </li>
-    <li><a href="/password/change" class="{{if eq .Path "/password/change"}}active{{end}}">Change Password</a></li>
+    <li><a href="{{$.BasePath}}/password/change" class="{{if eq .Path "/password/change"}}active{{end}}">Change Password</a></li>
     {{if .User.IsAdmin}}
-    <li><a href="/settings/api-tokens" class="{{if eq .Path "/settings/api-tokens"}}active{{end}}">API Tokens</a></li>
+    <li><a href="{{$.BasePath}}/settings/api-tokens" class="{{if eq .Path "/settings/api-tokens"}}active{{end}}">API Tokens</a></li>
     {{end}}
     <li>
-        <form method="POST" action="/logout">
+        <form method="POST" action="{{$.BasePath}}/logout">
             <button type="submit" class="w-full text-left text-error">Logout</button>
         </form>
     </li>

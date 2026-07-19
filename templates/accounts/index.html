@@ -3,7 +3,7 @@
 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
     <h1 class="text-2xl font-bold">Chart of Accounts</h1>
     {{if .User.IsAdmin}}
-    <a href="/accounts/new" class="btn btn-primary btn-sm">+ New Account</a>
+    <a href="{{$.BasePath}}/accounts/new" class="btn btn-primary btn-sm">+ New Account</a>
     {{end}}
 </div>
 
@@ -11,22 +11,22 @@
 
 <!-- Filter tabs -->
 <div class="tabs tabs-boxed mb-4 flex-wrap">
-    <a href="/accounts" class="tab {{if eq $data.Filter ""}}tab-active{{end}}">
+    <a href="{{$.BasePath}}/accounts" class="tab {{if eq $data.Filter ""}}tab-active{{end}}">
         All ({{index $data.TypeCounts "all"}})
     </a>
-    <a href="/accounts?type=asset" class="tab {{if eq $data.Filter "asset"}}tab-active{{end}}">
+    <a href="{{$.BasePath}}/accounts?type=asset" class="tab {{if eq $data.Filter "asset"}}tab-active{{end}}">
         Asset ({{index $data.TypeCounts "asset"}})
     </a>
-    <a href="/accounts?type=liability" class="tab {{if eq $data.Filter "liability"}}tab-active{{end}}">
+    <a href="{{$.BasePath}}/accounts?type=liability" class="tab {{if eq $data.Filter "liability"}}tab-active{{end}}">
         Liability ({{index $data.TypeCounts "liability"}})
     </a>
-    <a href="/accounts?type=equity" class="tab {{if eq $data.Filter "equity"}}tab-active{{end}}">
+    <a href="{{$.BasePath}}/accounts?type=equity" class="tab {{if eq $data.Filter "equity"}}tab-active{{end}}">
         Equity ({{index $data.TypeCounts "equity"}})
     </a>
-    <a href="/accounts?type=revenue" class="tab {{if eq $data.Filter "revenue"}}tab-active{{end}}">
+    <a href="{{$.BasePath}}/accounts?type=revenue" class="tab {{if eq $data.Filter "revenue"}}tab-active{{end}}">
         Revenue ({{index $data.TypeCounts "revenue"}})
     </a>
-    <a href="/accounts?type=expense" class="tab {{if eq $data.Filter "expense"}}tab-active{{end}}">
+    <a href="{{$.BasePath}}/accounts?type=expense" class="tab {{if eq $data.Filter "expense"}}tab-active{{end}}">
         Expense ({{index $data.TypeCounts "expense"}})
     </a>
 </div>
@@ -35,7 +35,7 @@
 <div class="flex flex-col gap-1 mb-4">
     <input type="text" placeholder="Search accounts..."
         class="input input-sm w-full max-w-xs"
-        hx-get="/accounts{{if $data.Filter}}?type={{$data.Filter}}{{end}}"
+        hx-get="{{$.BasePath}}/accounts{{if $data.Filter}}?type={{$data.Filter}}{{end}}"
         hx-trigger="keyup changed delay:300ms"
         hx-target="#account-table"
         hx-select="#account-table"
@@ -77,10 +77,10 @@
                 {{if $.User.IsAdmin}}
                 <td>
                     <div class="flex gap-1">
-                        <a href="/accounts/{{.ID}}/edit" class="btn btn-ghost btn-xs">Edit</a>
+                        <a href="{{$.BasePath}}/accounts/{{.ID}}/edit" class="btn btn-ghost btn-xs">Edit</a>
                         {{if not .IsSystem}}
                         <button class="btn btn-ghost btn-xs text-error"
-                            hx-delete="/accounts/{{.ID}}"
+                            hx-delete="{{$.BasePath}}/accounts/{{.ID}}"
                             hx-target="#account-{{.ID}}"
                             hx-swap="outerHTML"
                             hx-confirm="Delete account {{.Code}} - {{.Name}}?">Delete</button>

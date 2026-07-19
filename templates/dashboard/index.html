@@ -32,7 +32,7 @@
             <span class="font-semibold">Outstanding Invoices:</span>
             <span class="font-mono">{{formatIDR $d.OutstandingInvoices}}</span>
         </div>
-        <a href="/invoices?status=sent" class="btn btn-sm btn-ghost">View</a>
+        <a href="{{$.BasePath}}/invoices?status=sent" class="btn btn-sm btn-ghost">View</a>
     </div>
     {{end}}
     {{if gt $d.OutstandingBills 0}}
@@ -41,7 +41,7 @@
             <span class="font-semibold">Outstanding Bills:</span>
             <span class="font-mono">{{formatIDR $d.OutstandingBills}}</span>
         </div>
-        <a href="/bills?status=received" class="btn btn-sm btn-ghost">View</a>
+        <a href="{{$.BasePath}}/bills?status=received" class="btn btn-sm btn-ghost">View</a>
     </div>
     {{end}}
 </div>
@@ -49,10 +49,10 @@
 <!-- Quick Actions -->
 {{if .User.IsAdmin}}
 <div class="flex flex-wrap gap-2 mb-6">
-    <a href="/income/new" class="btn btn-success btn-sm">+ Record Income</a>
-    <a href="/expenses/new" class="btn btn-error btn-sm">+ Record Expense</a>
-    <a href="/invoices/new" class="btn btn-info btn-sm">+ New Invoice</a>
-    <a href="/bills/new" class="btn btn-warning btn-sm">+ New Bill</a>
+    <a href="{{$.BasePath}}/income/new" class="btn btn-success btn-sm">+ Record Income</a>
+    <a href="{{$.BasePath}}/expenses/new" class="btn btn-error btn-sm">+ Record Expense</a>
+    <a href="{{$.BasePath}}/invoices/new" class="btn btn-info btn-sm">+ New Invoice</a>
+    <a href="{{$.BasePath}}/bills/new" class="btn btn-warning btn-sm">+ New Bill</a>
 </div>
 {{end}}
 
@@ -61,7 +61,7 @@
     <div class="card-body">
         <div class="flex justify-between items-center mb-2">
             <h2 class="card-title text-lg">Recent Transactions</h2>
-            <a href="/journals" class="btn btn-ghost btn-xs">View All</a>
+            <a href="{{$.BasePath}}/journals" class="btn btn-ghost btn-xs">View All</a>
         </div>
         <div class="overflow-x-auto">
             <table class="table table-sm">
@@ -76,7 +76,7 @@
                 </thead>
                 <tbody>
                     {{range $d.RecentTransactions}}
-                    <tr class="hover cursor-pointer" onclick="window.location='/journals/{{.ID}}'">
+                    <tr class="hover cursor-pointer" onclick="window.location='{{$.BasePath}}/journals/{{.ID}}'">
                         <td class="text-sm">{{formatDate .EntryDate}}</td>
                         <td class="font-mono text-sm">{{.Reference}}</td>
                         <td>{{.Description}}</td>

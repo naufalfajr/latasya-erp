@@ -12,12 +12,14 @@ const minPasswordLength = 8
 
 // EnforcePasswordChange redirects any authenticated user whose account has
 // must_change_password=1 to the forced-change page, except when they are
-// already on it.
-func EnforcePasswordChange(next http.Handler) http.Handler {
+// already on it. r.URL.Path is compared unprefixed: this middleware sits
+// inside the BasePath mount point (any StripPrefix has already run), so the
+// path it sees never includes BasePath — only the outbound redirect does.
+func (h *Handler) EnforcePasswordChange(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		user := auth.UserFromContext(r.Context())
 		if user != nil && user.MustChangePassword && r.URL.Path != "/password/change" {
-			http.Redirect(w, r, "/password/change", http.StatusSeeOther)
+			http.Redirect(w, r, h.BasePath+"/password/change", http.StatusSeeOther)
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -39,7 +41,7 @@ func (h *Handler) PasswordChangePage(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) PasswordChange(w http.ResponseWriter, r *http.Request) {
 	user := auth.UserFromContext(r.Context())
 	if user == nil {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		http.Redirect(w, r, h.BasePath+"/login", http.StatusSeeOther)
 		return
 	}
 
@@ -94,5 +96,5 @@ func (h *Handler) PasswordChange(w http.ResponseWriter, r *http.Request) {
 	})
 
 	h.setFlash(w, "Password updated successfully")
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+"/", http.StatusSeeOther)
 }

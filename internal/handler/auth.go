@@ -11,7 +11,7 @@ import (
 func (h *Handler) LoginPage(w http.ResponseWriter, r *http.Request) {
 	if cookie, err := r.Cookie("session_id"); err == nil {
 		if _, err := auth.GetSessionUserID(h.DB, cookie.Value); err == nil {
-			http.Redirect(w, r, "/", http.StatusSeeOther)
+			http.Redirect(w, r, h.BasePath+"/", http.StatusSeeOther)
 			return
 		}
 	}
@@ -109,10 +109,10 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if user.MustChangePassword {
-		http.Redirect(w, r, "/password/change", http.StatusSeeOther)
+		http.Redirect(w, r, h.BasePath+"/password/change", http.StatusSeeOther)
 		return
 	}
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+"/", http.StatusSeeOther)
 }
 
 func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
@@ -141,5 +141,5 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 		MaxAge: -1,
 	})
 
-	http.Redirect(w, r, "/login", http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+"/login", http.StatusSeeOther)
 }

@@ -11,7 +11,6 @@ import (
 	"testing"
 
 	"github.com/naufal/latasya-erp/internal/auth"
-	"github.com/naufal/latasya-erp/internal/handler"
 	"github.com/naufal/latasya-erp/internal/model"
 	"github.com/naufal/latasya-erp/internal/testutil"
 )
@@ -19,16 +18,24 @@ import (
 const adminTestPassword = "admin-test-password"
 
 // testServer sets up a full HTTP test server with all routes wired up.
-func testServer(t *testing.T) (*httptest.Server, *sql.DB) {
+// Mounted at root by default; pass a basePath (e.g. "/dashboard") to mount
+// the admin app under a prefix instead, exactly like production — for
+// tests that specifically guard against a link skipping h.BasePath.
+func testServer(t *testing.T, basePath ...string) (*httptest.Server, *sql.DB) {
 	t.Helper()
 	db := testutil.SetupTestDB(t)
 	h := testutil.SetupTestHandler(t, db)
+	bp := ""
+	if len(basePath) > 0 {
+		bp = basePath[0]
+	}
+	h.BasePath = bp
 
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("GET /login", h.LoginPage)
-	mux.HandleFunc("POST /login", h.Login)
-	mux.HandleFunc("POST /logout", h.Logout)
+	mux.HandleFunc("GET "+bp+"/login", h.LoginPage)
+	mux.HandleFunc("POST "+bp+"/login", h.Login)
+	mux.HandleFunc("POST "+bp+"/logout", h.Logout)
 
 	protected := http.NewServeMux()
 	protected.HandleFunc("GET /{$}", h.Dashboard)
@@ -44,6 +51,7 @@ func testServer(t *testing.T) (*httptest.Server, *sql.DB) {
 	protected.HandleFunc("GET /contacts/{id}/edit", h.EditContact)
 	protected.HandleFunc("POST /contacts/{id}", auth.CapabilityOnly("contacts.manage", h.UpdateContact))
 	protected.HandleFunc("DELETE /contacts/{id}", auth.CapabilityOnly("contacts.manage", h.DeleteContact))
+	protected.HandleFunc("POST /contacts/{id}/reset-token", auth.CapabilityOnly("contacts.manage", h.ResetContactPortalToken))
 	protected.HandleFunc("GET /journals", h.ListJournals)
 	protected.HandleFunc("GET /journals/new", h.NewJournal)
 	protected.HandleFunc("POST /journals", auth.CapabilityOnly("journals.manage", h.CreateJournal))
@@ -75,6 +83,7 @@ func testServer(t *testing.T) (*httptest.Server, *sql.DB) {
 	protected.HandleFunc("POST /invoices/{id}/payment", auth.CapabilityOnly("invoices.manage", h.InvoicePayment))
 	protected.HandleFunc("GET /invoices/{id}/print", h.PrintInvoice)
 	protected.HandleFunc("GET /invoices/{id}/pdf", h.InvoicePDF)
+	protected.HandleFunc("GET /invoices/{id}/whatsapp", auth.CapabilityOnly("invoices.manage", h.InvoiceWhatsApp))
 	protected.HandleFunc("GET /credit-notes", h.ListCreditNotes)
 	protected.HandleFunc("GET /credit-notes/new", h.NewCreditNote)
 	protected.HandleFunc("POST /credit-notes", auth.CapabilityOnly("invoices.manage", h.CreateCreditNote))
@@ -126,7 +135,12 @@ func testServer(t *testing.T) (*httptest.Server, *sql.DB) {
 
 	protected.HandleFunc("GET /audit", auth.CapabilityOnly("audit.view", h.AuditList))
 
-	mux.Handle("/", auth.RequireAuth(db, auth.CSRFProtect(handler.EnforcePasswordChange(protected))))
+	authChain := auth.RequireAuth(db, auth.CSRFProtect(h.EnforcePasswordChange(protected)))
+	if bp == "" {
+		mux.Handle("/", authChain)
+	} else {
+		mux.Handle(bp+"/", http.StripPrefix(bp, authChain))
+	}
 
 	// Replace the seeded admin/admin with a non-default password and clear the
 	// forced-change flag so tests logging in as admin aren't bounced to the
@@ -149,14 +163,18 @@ func testServer(t *testing.T) (*httptest.Server, *sql.DB) {
 }
 
 // loginAsAdmin logs in as the default admin and returns the session cookie.
-func loginAsAdmin(t *testing.T, ts *httptest.Server) []*http.Cookie {
+func loginAsAdmin(t *testing.T, ts *httptest.Server, basePath ...string) []*http.Cookie {
 	t.Helper()
+	bp := ""
+	if len(basePath) > 0 {
+		bp = basePath[0]
+	}
 	client := &http.Client{CheckRedirect: func(r *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse // don't follow redirects
 	}}
 
 	form := url.Values{"username": {"admin"}, "password": {adminTestPassword}}
-	resp, err := client.PostForm(ts.URL+"/login", form)
+	resp, err := client.PostForm(ts.URL+bp+"/login", form)
 	if err != nil {
 		t.Fatalf("login request failed: %v", err)
 	}

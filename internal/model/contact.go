@@ -23,6 +23,7 @@ type Contact struct {
 	CreatedAt          string  `json:"created_at"`
 	UpdatedAt          string  `json:"updated_at"`
 	RouteName          string  `json:"route_name,omitempty"`
+	PortalToken        string  `json:"-"`
 }
 
 func ContactPrice(distanceKm float64, hasSiblingDiscount, isReturnOnly bool) int {
@@ -120,10 +121,10 @@ func GetContact(db *sql.DB, id int) (*Contact, error) {
 	c := &Contact{}
 	err := db.QueryRow(
 		`SELECT id, name, contact_type, COALESCE(phone,''), COALESCE(email,''),
-		COALESCE(address,''), COALESCE(notes,''), maps_link, class, distance_km, has_sibling_discount, is_return_only, COALESCE(route_id, 0), is_active, created_at, updated_at
+		COALESCE(address,''), COALESCE(notes,''), maps_link, class, distance_km, has_sibling_discount, is_return_only, COALESCE(route_id, 0), is_active, created_at, updated_at, COALESCE(portal_token,'')
 		FROM contacts WHERE id = ?`, id,
 	).Scan(&c.ID, &c.Name, &c.ContactType, &c.Phone, &c.Email,
-		&c.Address, &c.Notes, &c.MapsLink, &c.Class, &c.DistanceKm, &c.HasSiblingDiscount, &c.IsReturnOnly, &c.RouteID, &c.IsActive, &c.CreatedAt, &c.UpdatedAt)
+		&c.Address, &c.Notes, &c.MapsLink, &c.Class, &c.DistanceKm, &c.HasSiblingDiscount, &c.IsReturnOnly, &c.RouteID, &c.IsActive, &c.CreatedAt, &c.UpdatedAt, &c.PortalToken)
 	if err != nil {
 		return nil, fmt.Errorf("get contact: %w", err)
 	}

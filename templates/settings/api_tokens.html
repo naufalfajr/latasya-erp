@@ -3,7 +3,7 @@
 {{$data := .Data}}
 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
     <h1 class="text-2xl font-bold">API Tokens</h1>
-    <a href="/settings/api-tokens/new" class="btn btn-primary btn-sm">Create new token</a>
+    <a href="{{$.BasePath}}/settings/api-tokens/new" class="btn btn-primary btn-sm">Create new token</a>
 </div>
 
 {{if $data.Errors.general}}
@@ -43,7 +43,7 @@
                 </td>
                 <td>
                     {{if not .RevokedAt}}
-                    <form method="POST" action="/settings/api-tokens/{{.ID}}/revoke" class="inline" onsubmit="return confirm('Revoke this token? This cannot be undone.')">
+                    <form method="POST" action="{{$.BasePath}}/settings/api-tokens/{{.ID}}/revoke" class="inline" onsubmit="return confirm('Revoke this token? This cannot be undone.')">
                         {{template "csrf" $}}
                         <button type="submit" class="btn btn-error btn-xs">Revoke</button>
                     </form>

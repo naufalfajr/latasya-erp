@@ -31,7 +31,7 @@
     {{$co := .Data.Company}}
     <div class="no-print" style="margin-bottom:20px">
         <button onclick="window.print()" style="padding:8px 16px;cursor:pointer">Print</button>
-        <a href="/invoices/{{$inv.ID}}" style="margin-left:10px">Back</a>
+        <a href="{{$.BasePath}}/invoices/{{$inv.ID}}" style="margin-left:10px">Back</a>
     </div>
 
     <div class="header">

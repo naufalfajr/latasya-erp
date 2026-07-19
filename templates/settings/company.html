@@ -11,7 +11,7 @@
 <div class="alert alert-error mb-4">{{$data.Errors.general}}</div>
 {{end}}
 
-<form method="POST" action="/settings/company" class="max-w-2xl">
+<form method="POST" action="{{$.BasePath}}/settings/company" class="max-w-2xl">
     {{template "csrf" $}}
 
     <div class="divider">Identity</div>

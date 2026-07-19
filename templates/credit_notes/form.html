@@ -15,7 +15,7 @@
     {{if $data.SourceInvoice}}
     <div class="alert alert-info mb-4">
         <span>Pre-filled from invoice
-            <a href="/invoices/{{$data.SourceInvoice.ID}}" class="link font-mono">{{$data.SourceInvoice.InvoiceNumber}}</a>.
+            <a href="{{$.BasePath}}/invoices/{{$data.SourceInvoice.ID}}" class="link font-mono">{{$data.SourceInvoice.InvoiceNumber}}</a>.
             Adjust the lines to credit only what's needed.</span>
     </div>
     {{end}}
@@ -24,7 +24,7 @@
     <div class="alert alert-error mb-4"><span>{{index $data.Errors "general"}}</span></div>
     {{end}}
 
-    <form method="POST" action="{{if $data.IsEdit}}/credit-notes/{{$cn.ID}}{{else}}/credit-notes{{end}}"
+    <form method="POST" action="{{$.BasePath}}{{if $data.IsEdit}}/credit-notes/{{$cn.ID}}{{else}}/credit-notes{{end}}"
         class="card bg-base-100 shadow">
         {{template "csrf" $}}
         {{if $cn.InvoiceID}}<input type="hidden" name="invoice_id" value="{{$cn.InvoiceID}}">{{end}}
@@ -70,7 +70,7 @@
                     <label class="label">Linked Invoice</label>
                     {{if $cn.InvoiceID}}
                     <p class="text-sm font-mono pt-2">
-                        <a href="/invoices/{{$cn.InvoiceID}}" class="link">
+                        <a href="{{$.BasePath}}/invoices/{{$cn.InvoiceID}}" class="link">
                             {{if $data.SourceInvoice}}{{$data.SourceInvoice.InvoiceNumber}}{{else}}#{{$cn.InvoiceID}}{{end}}
                         </a>
                     </p>
@@ -110,7 +110,7 @@
                 </div>
 
                 <button type="button" class="btn btn-ghost btn-sm mt-2"
-                    hx-get="/htmx/credit-note-line"
+                    hx-get="{{$.BasePath}}/htmx/credit-note-line"
                     hx-target="#cn-lines-body"
                     hx-swap="beforeend">
                     + Add Line
@@ -131,7 +131,7 @@
             </div>
 
             <div class="card-actions justify-end mt-4">
-                <a href="/credit-notes" class="btn btn-ghost">Cancel</a>
+                <a href="{{$.BasePath}}/credit-notes" class="btn btn-ghost">Cancel</a>
                 <button type="submit" class="btn btn-primary">
                     {{if $data.IsEdit}}Update{{else}}Create Draft{{end}}
                 </button>

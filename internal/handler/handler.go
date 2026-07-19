@@ -19,6 +19,12 @@ type Handler struct {
 	FuncMap    template.FuncMap
 	DevMode    bool
 
+	// BasePath prefixes every internal redirect and template link, so the
+	// admin app can be mounted under a path other than "/" (e.g.
+	// "/dashboard" in production) without hardcoding it into every handler.
+	// Zero value "" keeps routes at the root, which is what tests use.
+	BasePath string
+
 	GoogleCalendarConfig googlecalendar.Config
 
 	mu    sync.RWMutex
@@ -31,6 +37,7 @@ type PageData struct {
 	Flash     string
 	Path      string
 	CSRFToken string
+	BasePath  string
 	Data      any
 }
 
@@ -82,6 +89,7 @@ func (h *Handler) render(w http.ResponseWriter, r *http.Request, page string, ti
 		Title:     title,
 		Path:      r.URL.Path,
 		CSRFToken: auth.CSRFFromContext(r.Context()),
+		BasePath:  h.BasePath,
 		Data:      data,
 	}
 

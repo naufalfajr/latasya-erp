@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -47,11 +48,11 @@ func (h *Handler) ListContacts(w http.ResponseWriter, r *http.Request) {
 		Search:        search,
 		Sort:          sort,
 		Order:         order,
-		SortURLs:      contactSortURLs(r, sort, order),
+		SortURLs:      h.contactSortURLs(r, sort, order),
 	})
 }
 
-func contactSortURLs(r *http.Request, sort, order string) map[string]string {
+func (h *Handler) contactSortURLs(r *http.Request, sort, order string) map[string]string {
 	urls := make(map[string]string, 4)
 	for _, column := range []string{"name", "class", "route", "status"} {
 		q := r.URL.Query()
@@ -61,16 +62,17 @@ func contactSortURLs(r *http.Request, sort, order string) map[string]string {
 		} else {
 			q.Set("order", "asc")
 		}
-		urls[column] = "/contacts?" + q.Encode()
+		urls[column] = h.BasePath + "/contacts?" + q.Encode()
 	}
 	return urls
 }
 
 type contactFormData struct {
-	Contact *model.Contact
-	Routes  []model.Route
-	Errors  map[string]string
-	IsEdit  bool
+	Contact   *model.Contact
+	Routes    []model.Route
+	Errors    map[string]string
+	IsEdit    bool
+	PortalURL string
 }
 
 func (h *Handler) NewContact(w http.ResponseWriter, r *http.Request) {
@@ -135,7 +137,7 @@ func (h *Handler) CreateContact(w http.ResponseWriter, r *http.Request) {
 	})
 
 	h.setFlash(w, "Contact created successfully")
-	http.Redirect(w, r, "/contacts", http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+"/contacts", http.StatusSeeOther)
 }
 
 func (h *Handler) EditContact(w http.ResponseWriter, r *http.Request) {
@@ -151,10 +153,16 @@ func (h *Handler) EditContact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var portalURL string
+	if contact.PortalToken != "" {
+		portalURL = h.publicOrigin(r) + "/i/" + contact.PortalToken
+	}
+
 	h.render(w, r, "templates/contacts/form.html", "Edit Contact", contactFormData{
-		Contact: contact,
-		Routes:  h.contactRoutes(),
-		IsEdit:  true,
+		Contact:   contact,
+		Routes:    h.contactRoutes(),
+		IsEdit:    true,
+		PortalURL: portalURL,
 	})
 }
 
@@ -247,7 +255,37 @@ func (h *Handler) UpdateContact(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.setFlash(w, "Contact updated successfully")
-	http.Redirect(w, r, "/contacts", http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+"/contacts", http.StatusSeeOther)
+}
+
+// ResetContactPortalToken issues the contact a fresh parent-portal link,
+// invalidating whatever link (if any) was issued before it — for a
+// suspected leak, or simply to generate the first one.
+func (h *Handler) ResetContactPortalToken(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	contact, err := model.GetContact(h.DB, id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	if _, err := model.RegeneratePortalToken(h.DB, id); err != nil {
+		h.setFlash(w, "Error: "+err.Error())
+	} else {
+		audit.Log(r.Context(), h.DB, audit.Event{
+			Action:      "contact.portal_token_reset",
+			TargetType:  "contact",
+			TargetID:    int64(id),
+			TargetLabel: contact.Name,
+		})
+		h.setFlash(w, "Link portal baru berhasil dibuat")
+	}
+	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/contacts/%d/edit", id), http.StatusSeeOther)
 }
 
 func (h *Handler) DeleteContact(w http.ResponseWriter, r *http.Request) {
@@ -286,7 +324,7 @@ func (h *Handler) DeleteContact(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.setFlash(w, "Contact deleted successfully")
-	http.Redirect(w, r, "/contacts", http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+"/contacts", http.StatusSeeOther)
 }
 
 func (h *Handler) contactRoutes() []model.Route {
