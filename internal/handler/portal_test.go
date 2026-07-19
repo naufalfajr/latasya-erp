@@ -181,6 +181,37 @@ func TestPortalInvoicePDF_OwnInvoice_Succeeds(t *testing.T) {
 	}
 }
 
+// TestPortalPages_NoStore guards against caching an unauthenticated,
+// durable financial-data URL: both the portal page and its PDF must tell
+// shared caches/proxies not to store the response.
+func TestPortalPages_NoStore(t *testing.T) {
+	ts, db := publicTestServer(t)
+	contactID := mustContact(t, db, "No Store", "085555555555")
+	invID := mustInvoice(t, db, contactID)
+	if err := model.SendInvoice(db, invID, 1); err != nil {
+		t.Fatalf("send invoice: %v", err)
+	}
+	token, _ := model.GetOrCreatePortalToken(db, contactID)
+
+	indexResp, err := http.Get(ts.URL + "/i/" + token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer indexResp.Body.Close()
+	if cc := indexResp.Header.Get("Cache-Control"); cc != "private, no-store" {
+		t.Errorf("portal index: expected Cache-Control %q, got %q", "private, no-store", cc)
+	}
+
+	pdfResp, err := http.Get(ts.URL + "/i/" + token + "/invoice/" + strconv.Itoa(invID) + "/pdf")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pdfResp.Body.Close()
+	if cc := pdfResp.Header.Get("Cache-Control"); cc != "private, no-store" {
+		t.Errorf("portal PDF: expected Cache-Control %q, got %q", "private, no-store", cc)
+	}
+}
+
 func TestInvoiceWhatsApp_Draft_RedirectsBackWithoutSending(t *testing.T) {
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)

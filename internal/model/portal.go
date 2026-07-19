@@ -61,10 +61,12 @@ func (f *PortalFamily) Has(contactID int) bool {
 	return false
 }
 
-// ContactsByPortalToken resolves a token to its family of contacts. A blank
-// phone number never groups with other contacts (each is its own family),
-// so a shared blank phone can't leak one family's invoices to another.
-// Returns (nil, nil) if the token doesn't match any contact.
+// ContactsByPortalToken resolves a token to its family of contacts: the
+// token's own contact plus any other contact whose phone number normalizes
+// to the same digits (so "0812..." and "+62 812-..." group together). A
+// blank phone number never groups with other contacts (each is its own
+// family), so a shared blank phone can't leak one family's invoices to
+// another. Returns (nil, nil) if the token doesn't match any contact.
 func ContactsByPortalToken(db *sql.DB, token string) (*PortalFamily, error) {
 	if token == "" {
 		return nil, nil
@@ -84,8 +86,13 @@ func ContactsByPortalToken(db *sql.DB, token string) (*PortalFamily, error) {
 	if origin.Phone == "" {
 		return &PortalFamily{Contacts: []Contact{origin}}, nil
 	}
+	originDigits := NormalizePhoneID(origin.Phone)
 
-	rows, err := db.Query("SELECT id, name FROM contacts WHERE phone = ? ORDER BY id", origin.Phone)
+	// ponytail: normalization can't be expressed in the WHERE clause, so this
+	// scans every contact with a phone on file and filters in Go. Fine at
+	// this business's contact-book scale; move to a stored normalized-phone
+	// column if that ever changes.
+	rows, err := db.Query("SELECT id, name, phone FROM contacts WHERE phone IS NOT NULL AND phone <> '' ORDER BY id")
 	if err != nil {
 		return nil, fmt.Errorf("list family contacts: %w", err)
 	}
@@ -94,10 +101,12 @@ func ContactsByPortalToken(db *sql.DB, token string) (*PortalFamily, error) {
 	var family []Contact
 	for rows.Next() {
 		var c Contact
-		if err := rows.Scan(&c.ID, &c.Name); err != nil {
+		if err := rows.Scan(&c.ID, &c.Name, &c.Phone); err != nil {
 			return nil, fmt.Errorf("scan family contact: %w", err)
 		}
-		family = append(family, c)
+		if NormalizePhoneID(c.Phone) == originDigits {
+			family = append(family, Contact{ID: c.ID, Name: c.Name})
+		}
 	}
 	return &PortalFamily{Contacts: family}, nil
 }
@@ -118,7 +127,8 @@ func ListPortalInvoices(db *sql.DB, contactIDs []int) ([]Invoice, error) {
 	}
 
 	query := `SELECT id, invoice_number, contact_id, invoice_date, due_date, status,
-			subtotal, tax_amount, total, amount_paid, amount_credited, COALESCE(notes,'')
+			subtotal, tax_amount, total, amount_paid, amount_credited, COALESCE(notes,''),
+			COALESCE((SELECT MAX(payment_date) FROM payments WHERE payment_type = 'invoice' AND reference_id = invoices.id), updated_at)
 		FROM invoices
 		WHERE contact_id IN (` + strings.Join(placeholders, ",") + `) AND status != 'draft'
 		ORDER BY invoice_date DESC, id DESC`
@@ -133,7 +143,7 @@ func ListPortalInvoices(db *sql.DB, contactIDs []int) ([]Invoice, error) {
 	for rows.Next() {
 		var inv Invoice
 		err := rows.Scan(&inv.ID, &inv.InvoiceNumber, &inv.ContactID, &inv.InvoiceDate, &inv.DueDate, &inv.Status,
-			&inv.Subtotal, &inv.TaxAmount, &inv.Total, &inv.AmountPaid, &inv.AmountCredited, &inv.Notes)
+			&inv.Subtotal, &inv.TaxAmount, &inv.Total, &inv.AmountPaid, &inv.AmountCredited, &inv.Notes, &inv.PaidDate)
 		if err != nil {
 			return nil, fmt.Errorf("scan portal invoice: %w", err)
 		}

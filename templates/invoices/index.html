@@ -59,7 +59,7 @@
                 <td class="font-mono text-sm">{{.InvoiceNumber}}</td>
                 <td>{{.ContactName}}</td>
                 <td class="text-sm">{{formatDate .InvoiceDate}}</td>
-                <td class="text-sm">{{if eq (index $data "Filter") "paid"}}{{formatDate .UpdatedAt}}{{else}}{{formatDate .DueDate}}{{end}}</td>
+                <td class="text-sm">{{if eq (index $data "Filter") "paid"}}{{formatDate .PaidDate}}{{else}}{{formatDate .DueDate}}{{end}}</td>
                 <td>
                     <span class="badge badge-sm
                         {{if eq .Status "draft"}}badge-ghost

@@ -45,6 +45,8 @@ func portalRemark(childName, invoiceDate string) string {
 // resolves to a family (the token's contact plus any siblings sharing its
 // phone number) and shows every non-draft invoice across that family.
 func (h *Handler) PortalIndex(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "private, no-store")
+
 	token := r.PathValue("token")
 	family, err := model.ContactsByPortalToken(h.DB, token)
 	if err != nil {
@@ -133,6 +135,8 @@ func (h *Handler) PortalIndex(w http.ResponseWriter, r *http.Request) {
 // actually owns the invoice, and drafts are never served — both guard
 // against a parent enumerating another family's or an unfinalized invoice.
 func (h *Handler) PortalInvoicePDF(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "private, no-store")
+
 	token := r.PathValue("token")
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {

@@ -91,6 +91,34 @@ func TestContactsByPortalToken_GroupsSiblingsBySharedPhone(t *testing.T) {
 	}
 }
 
+// TestContactsByPortalToken_GroupsSiblingsByDifferentlyFormattedPhone guards
+// against comparing phone numbers as raw strings: "081..." and "+62 812-..."
+// are the same number, entered inconsistently, and must still group.
+func TestContactsByPortalToken_GroupsSiblingsByDifferentlyFormattedPhone(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	c1 := &model.Contact{Name: "Format One", ContactType: "customer", Phone: "081234567890", IsActive: true}
+	c2 := &model.Contact{Name: "Format Two", ContactType: "customer", Phone: "+62 812-3456-7890", IsActive: true}
+	model.CreateContact(db, c1)
+	model.CreateContact(db, c2)
+	contacts, _ := model.ListContacts(db, model.ContactFilter{Search: "Format"})
+	if len(contacts) != 2 {
+		t.Fatalf("expected 2 contacts, got %d", len(contacts))
+	}
+
+	token, err := model.GetOrCreatePortalToken(db, contacts[0].ID)
+	if err != nil {
+		t.Fatalf("get token: %v", err)
+	}
+
+	fam, err := model.ContactsByPortalToken(db, token)
+	if err != nil {
+		t.Fatalf("lookup: %v", err)
+	}
+	if fam == nil || len(fam.Contacts) != 2 {
+		t.Fatalf("expected differently formatted phone numbers to group into a family of 2, got %+v", fam)
+	}
+}
+
 func TestContactsByPortalToken_BlankPhoneDoesNotGroup(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	c1 := &model.Contact{Name: "No Phone One", ContactType: "customer", Phone: "", IsActive: true}

@@ -69,7 +69,7 @@
                 <div class="mt-2 text-sm">
                     <p>Total: <span class="font-mono">{{formatIDR .Total}}</span></p>
                     {{if eq .Status "paid"}}
-                    <p class="text-success mt-1">Lunas pada {{formatDate .UpdatedAt}} &check;</p>
+                    <p class="text-success mt-1">Lunas pada {{formatDate .PaidDate}} &check;</p>
                     {{else if gt .AmountDue 0}}
                     <p>Sisa tagihan: <span class="font-mono font-semibold">{{formatIDR .AmountDue}}</span></p>
                     {{end}}
