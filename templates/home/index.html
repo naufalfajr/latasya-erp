@@ -1,202 +1,125 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{.Title}}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Figtree:wght@400;500;600&family=Space+Mono&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400..700;1,400..700&family=Plus+Jakarta+Sans:wght@300..700&display=swap" rel="stylesheet">
 <style>
-    :root {
-        --dawn-deep: #16233f;
-        --dawn-mid: #6a4a5c;
-        --dawn-warm: #f2a93b;
-        --paper: #faf6ee;
-        --ink: #1b2a4a;
-        --ink-soft: #5b6b85;
-        --line: #dcd3be;
-    }
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-        font-family: 'Figtree', -apple-system, BlinkMacSystemFont, sans-serif;
-        background: var(--paper);
-        color: var(--ink);
-        min-height: 100vh;
-        display: flex;
-        align-items: flex-start;
-        justify-content: center;
-        padding: clamp(1rem, 4vw, 3rem) 1rem;
-    }
-    .card {
-        width: 100%;
-        max-width: 640px;
-        border-radius: 20px;
-        overflow: hidden;
-        box-shadow: 0 24px 60px -24px rgba(22, 35, 63, 0.35);
-    }
-    .hero {
-        background: linear-gradient(160deg, var(--dawn-deep) 0%, var(--dawn-mid) 62%, var(--dawn-warm) 130%);
-        color: var(--paper);
-        padding: clamp(2rem, 6vw, 3.25rem) clamp(1.5rem, 6vw, 3rem) clamp(1.25rem, 4vw, 1.75rem);
-    }
-    .eyebrow {
-        font-family: 'Space Mono', monospace;
-        font-size: 0.7rem;
-        letter-spacing: 0.16em;
-        text-transform: uppercase;
-        color: #d9c9b8;
-        opacity: 0.85;
-    }
-    .wordmark {
-        font-family: 'Fraunces', serif;
-        font-weight: 600;
-        font-size: clamp(2.2rem, 7vw, 3rem);
-        line-height: 1.05;
-        margin-top: 0.6rem;
-    }
-    .tagline {
-        margin-top: 0.5rem;
-        font-size: 0.95rem;
-        color: #bcd2df;
-    }
-    .route {
-        display: flex;
-        align-items: center;
-        height: 28px;
-        margin-top: clamp(1.25rem, 4vw, 2rem);
-    }
-    .route svg { width: 100%; height: 100%; display: block; }
-    .route-dash {
-        stroke: rgba(250, 246, 238, 0.55);
-        stroke-width: 2;
-        stroke-dasharray: 1 10;
-        stroke-linecap: round;
-    }
-    .route-stop { fill: rgba(250, 246, 238, 0.75); }
-    .route-here {
-        fill: var(--dawn-warm);
-        transform-origin: center;
-        animation: arrive 1.4s ease-out both;
-    }
-    @media (prefers-reduced-motion: reduce) {
-        .route-here { animation: none; }
-    }
-    @keyframes arrive {
-        from { transform: translateX(-90px) scale(0.6); opacity: 0; }
-        to { transform: translateX(0) scale(1); opacity: 1; }
-    }
-    .details {
-        background: var(--paper);
-        padding: clamp(1.75rem, 6vw, 2.75rem) clamp(1.5rem, 6vw, 3rem) clamp(2rem, 6vw, 2.75rem);
-    }
-    .label {
-        font-family: 'Space Mono', monospace;
-        font-size: 0.65rem;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-        color: var(--ink-soft);
-        margin-bottom: 0.3rem;
-    }
-    .field { margin-bottom: 1.25rem; }
-    .field p { font-size: 0.95rem; white-space: pre-line; }
-    .field-row {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 1rem 1.5rem;
-    }
-    @media (max-width: 420px) {
-        .field-row { grid-template-columns: 1fr; }
-    }
-    .cta {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 0.6rem;
-        width: 100%;
-        margin-top: 0.5rem;
-        padding: 0.9rem 1.25rem;
-        border-radius: 999px;
-        background: var(--dawn-warm);
-        color: var(--dawn-deep);
-        font-weight: 600;
-        font-size: 0.95rem;
-        text-decoration: none;
-        transition: transform 0.15s ease, box-shadow 0.15s ease;
-        box-shadow: 0 10px 24px -12px rgba(242, 169, 59, 0.65);
-    }
-    .cta:hover { transform: translateY(-1px); }
-    .cta:focus-visible, .staff-login:focus-visible {
-        outline: 2px solid var(--dawn-deep);
-        outline-offset: 3px;
-    }
-    .foot {
-        display: flex;
-        justify-content: flex-end;
-        margin-top: 1.5rem;
-    }
-    .staff-login {
-        font-family: 'Space Mono', monospace;
-        font-size: 0.7rem;
-        letter-spacing: 0.05em;
-        color: var(--ink-soft);
-        text-decoration: none;
-        border-bottom: 1px solid var(--line);
-        padding-bottom: 1px;
-    }
-    .staff-login:hover { color: var(--ink); border-color: var(--ink-soft); }
+    html,body{margin:0;padding:0;background:#FBFAF7;}
+    body{font-family:'Plus Jakarta Sans',sans-serif;color:#1B2A55;}
+    a{color:#1B2A55;text-decoration:none;}
+    a:hover{color:#C9A24B;}
+    ::selection{background:#C9A24B;color:#fff;}
+    .wa-btn{background:#1B2A55;color:#FBFAF7;transition:background .2s;}
+    .wa-btn:hover{background:#2B4C9D;color:#FBFAF7;}
+    .outline-btn{border:1px solid #D8D3C6;transition:border-color .2s;}
+    .outline-btn:hover{border-color:#C9A24B;color:#1B2A55;}
+    .service-card{transition:background .2s;}
+    .service-card:hover{background:#20315F;}
+    .staff-link:hover{color:#1B2A55;}
 </style>
 </head>
 <body>
 {{$d := .Data}}
-<div class="card">
-    <div class="hero">
-        <p class="eyebrow">Profil Perusahaan</p>
-        <h1 class="wordmark">{{$d.Company.Name}}</h1>
-        {{if $d.Company.Tagline}}<p class="tagline">{{$d.Company.Tagline}}</p>{{end}}
-        <div class="route" aria-hidden="true">
-            <svg viewBox="0 0 400 28" preserveAspectRatio="none">
-                <line x1="0" y1="14" x2="400" y2="14" class="route-dash" />
-                <circle cx="60" cy="14" r="4" class="route-stop" />
-                <circle cx="200" cy="14" r="4" class="route-stop" />
-                <circle cx="340" cy="14" r="4" class="route-stop" />
-                <circle cx="340" cy="14" r="6" class="route-here" />
-            </svg>
+<div style="min-height:100vh;display:flex;flex-direction:column;background:#FBFAF7">
+    <header style="display:flex;align-items:center;justify-content:space-between;max-width:1040px;width:100%;margin:0 auto;padding:28px 32px;box-sizing:border-box">
+        <div style="display:flex;align-items:baseline;gap:8px">
+            <span style="font-family:'Lora',serif;font-weight:700;font-size:20px;letter-spacing:0.06em;color:#1B2A55">LATASYA</span>
+            <span style="font-weight:400;font-size:20px;letter-spacing:0.22em;color:#C9A24B">TRANS</span>
         </div>
-    </div>
-    <div class="details">
-        {{if $d.Company.Address}}
-        <div class="field">
-            <p class="label">Alamat</p>
-            <p>{{$d.Company.Address}}</p>
-        </div>
-        {{end}}
+    </header>
 
-        {{if or $d.Company.Phone $d.Company.Email}}
-        <div class="field-row">
-            {{if $d.Company.Phone}}
-            <div class="field">
-                <p class="label">Telepon</p>
-                <p>{{$d.Company.Phone}}</p>
+    <main style="flex:1">
+        <section style="max-width:1040px;margin:0 auto;padding:72px 32px 88px;box-sizing:border-box;text-align:center">
+            <div style="font-size:12px;letter-spacing:0.28em;text-transform:uppercase;color:#C9A24B;margin-bottom:24px;font-weight:700">Profil Perusahaan</div>
+            <h1 style="font-family:'Lora',serif;font-weight:500;font-size:clamp(44px,6vw,68px);line-height:1.08;margin:0 0 24px;color:#1B2A55;text-wrap:balance">Solusi transportasi yang <em style="font-style:italic;color:#C9A24B">terpercaya</em></h1>
+            <p style="font-size:18px;line-height:1.65;color:#4A5470;max-width:560px;margin:0 auto 40px;text-wrap:pretty">Antar jemput sekolah, wisata, dan travel antar daerah. Dikelola PT Latansa Asyariyah Linarchadi dengan mengutamakan keselamatan, kenyamanan, dan ketepatan waktu.</p>
+            <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap">
+                {{if $d.Company.Phone}}<a href="{{$d.ContactWA}}" target="_blank" rel="noopener" class="wa-btn" style="display:inline-flex;align-items:center;gap:10px;padding:15px 32px;border-radius:2px;font-size:15px;font-weight:500;letter-spacing:0.02em">Hubungi Kami di WhatsApp</a>{{end}}
+                <a href="#layanan" class="outline-btn" style="display:inline-flex;align-items:center;padding:15px 28px;border-radius:2px;font-size:15px;color:#1B2A55">Lihat Layanan</a>
             </div>
-            {{end}}
-            {{if $d.Company.Email}}
-            <div class="field">
-                <p class="label">Email</p>
-                <p>{{$d.Company.Email}}</p>
+        </section>
+
+        <section id="layanan" style="background:#1B2A55;color:#FBFAF7">
+            <div style="max-width:1040px;margin:0 auto;padding:80px 32px;box-sizing:border-box">
+                <div style="display:flex;align-items:baseline;justify-content:space-between;gap:24px;flex-wrap:wrap;margin-bottom:56px">
+                    <h2 style="font-family:'Lora',serif;font-weight:500;font-size:34px;margin:0">Tiga lini layanan</h2>
+                    <span style="font-size:12px;letter-spacing:0.28em;text-transform:uppercase;color:#C9A24B;font-weight:700">Layanan Kami</span>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1px;background:rgba(232,238,249,0.14)">
+                    <div class="service-card" style="background:#1B2A55;padding:36px 36px 40px 32px;display:flex;flex-direction:column;gap:16px">
+                        <span style="font-family:'Lora',serif;font-size:15px;color:#C9A24B">01</span>
+                        <h3 style="font-family:'Lora',serif;font-weight:500;font-size:22px;margin:0;color:#FBFAF7">Antar Jemput Sekolah</h3>
+                        <p style="font-size:14.5px;line-height:1.65;color:#AEB8D4;margin:0;text-wrap:pretty">Layanan terjadwal harian Senin–Sabtu untuk peserta didik Sekolah Plus Latansa, dengan rute rapi dan tarif berbasis jarak.</p>
+                    </div>
+                    <div class="service-card" style="background:#1B2A55;padding:36px 36px 40px 32px;display:flex;flex-direction:column;gap:16px">
+                        <span style="font-family:'Lora',serif;font-size:15px;color:#C9A24B">02</span>
+                        <h3 style="font-family:'Lora',serif;font-weight:500;font-size:22px;margin:0;color:#FBFAF7">Agen Wisata</h3>
+                        <p style="font-size:14.5px;line-height:1.65;color:#AEB8D4;margin:0;text-wrap:pretty">Paket dan pengaturan perjalanan wisata sesuai kebutuhan rombongan keluarga, sekolah, maupun komunitas.</p>
+                    </div>
+                    <div class="service-card" style="background:#1B2A55;padding:36px 36px 40px 32px;display:flex;flex-direction:column;gap:16px">
+                        <span style="font-family:'Lora',serif;font-size:15px;color:#C9A24B">03</span>
+                        <h3 style="font-family:'Lora',serif;font-weight:500;font-size:22px;margin:0;color:#FBFAF7">Travel Antar Daerah</h3>
+                        <p style="font-size:14.5px;line-height:1.65;color:#AEB8D4;margin:0;text-wrap:pretty">Perjalanan antar kota berdasarkan permintaan — fleksibel dan tidak terikat jadwal tetap.</p>
+                    </div>
+                </div>
             </div>
-            {{end}}
-        </div>
-        {{end}}
+        </section>
 
-        {{if $d.Company.Phone}}
-        <a href="{{$d.ContactWA}}" class="cta" target="_blank" rel="noopener">Hubungi Kami di WhatsApp</a>
-        {{end}}
+        <section style="max-width:1040px;margin:0 auto;padding:88px 32px;box-sizing:border-box">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:48px;text-align:center">
+                <div style="display:flex;flex-direction:column;gap:10px">
+                    <div style="width:28px;height:1px;background:#C9A24B;margin:0 auto 8px"></div>
+                    <h3 style="font-family:'Lora',serif;font-weight:500;font-size:19px;margin:0;color:#1B2A55">Keselamatan</h3>
+                    <p style="font-size:14px;line-height:1.6;color:#6B7591;margin:0">Prioritas utama di setiap perjalanan</p>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:10px">
+                    <div style="width:28px;height:1px;background:#C9A24B;margin:0 auto 8px"></div>
+                    <h3 style="font-family:'Lora',serif;font-weight:500;font-size:19px;margin:0;color:#1B2A55">Kenyamanan</h3>
+                    <p style="font-size:14px;line-height:1.6;color:#6B7591;margin:0">Armada terawat &amp; petugas profesional</p>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:10px">
+                    <div style="width:28px;height:1px;background:#C9A24B;margin:0 auto 8px"></div>
+                    <h3 style="font-family:'Lora',serif;font-weight:500;font-size:19px;margin:0;color:#1B2A55">Ketepatan Waktu</h3>
+                    <p style="font-size:14px;line-height:1.6;color:#6B7591;margin:0">Jadwal disiplin dan terukur</p>
+                </div>
+            </div>
+        </section>
 
-        <div class="foot">
-            <a href="{{$.BasePath}}/login" class="staff-login">Masuk staf →</a>
+        <section style="border-top:1px solid #E8E4D9">
+            <div style="max-width:1040px;margin:0 auto;padding:72px 32px 80px;box-sizing:border-box;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:56px">
+                <div>
+                    <span style="font-size:12px;letter-spacing:0.28em;text-transform:uppercase;color:#C9A24B;font-weight:700">Hubungi Kami</span>
+                    <h2 style="font-family:'Lora',serif;font-weight:500;font-size:32px;margin:18px 0 16px;color:#1B2A55">Siap melayani perjalanan Anda</h2>
+                    <p style="font-size:15px;line-height:1.65;color:#4A5470;margin:0;max-width:420px;text-wrap:pretty">Untuk pendaftaran antar jemput, pemesanan wisata, atau travel antar daerah, silakan hubungi tim kami.</p>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:22px;justify-content:center">
+                    {{if $d.Company.Address}}
+                    <div style="display:flex;flex-direction:column;gap:4px">
+                        <span style="font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:#9AA1B5">Alamat</span>
+                        <span style="font-size:15px;color:#1B2A55;line-height:1.5">{{$d.Company.Address}}</span>
+                    </div>
+                    {{end}}
+                    {{if $d.Company.Phone}}
+                    <div style="display:flex;flex-direction:column;gap:4px">
+                        <span style="font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:#9AA1B5">Kontak Administrasi (Whatsapp)</span>
+                        <a href="{{$d.ContactWA}}" target="_blank" rel="noopener" style="font-size:15px;color:#1B2A55">{{$d.PhoneDisplay}}</a>
+                    </div>
+                    {{end}}
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer style="border-top:1px solid #E8E4D9">
+        <div style="max-width:1040px;margin:0 auto;padding:24px 32px;box-sizing:border-box;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap">
+            <span style="font-size:12.5px;color:#9AA1B5">{{$d.Company.Name}} · Latasya Trans</span>
+            <a href="{{$.BasePath}}/login" class="staff-link" style="font-size:12.5px;color:#9AA1B5">Masuk staf →</a>
         </div>
-    </div>
+    </footer>
 </div>
 </body>
 </html>

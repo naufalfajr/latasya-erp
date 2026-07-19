@@ -2,5 +2,7 @@
 
 @source "../../templates";
 
-@plugin "../../bin/daisyui.mjs";
+@plugin "../../bin/daisyui.mjs" {
+  themes: silk --default;
+}
 @plugin "../../bin/daisyui-theme.mjs";
