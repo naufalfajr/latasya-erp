@@ -138,7 +138,7 @@ func (h *Handler) CreateExpense(w http.ResponseWriter, r *http.Request) {
 	})
 
 	h.setFlash(w, "Expense recorded successfully")
-	http.Redirect(w, r, fmt.Sprintf("/journals/%d", entryID), http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/journals/%d", entryID), http.StatusSeeOther)
 }
 
 func (h *Handler) EditExpense(w http.ResponseWriter, r *http.Request) {
@@ -279,7 +279,7 @@ func (h *Handler) UpdateExpense(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.setFlash(w, "Expense updated successfully")
-	http.Redirect(w, r, fmt.Sprintf("/journals/%d", id), http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/journals/%d", id), http.StatusSeeOther)
 }
 
 func (h *Handler) DeleteExpense(w http.ResponseWriter, r *http.Request) {
@@ -293,7 +293,7 @@ func (h *Handler) DeleteExpense(w http.ResponseWriter, r *http.Request) {
 
 	if err := model.DeleteJournalEntryBySource(h.DB, id, model.SourceExpense); err != nil {
 		h.setFlash(w, "Error: "+err.Error())
-		http.Redirect(w, r, "/expenses", http.StatusSeeOther)
+		http.Redirect(w, r, h.BasePath+"/expenses", http.StatusSeeOther)
 		return
 	}
 
@@ -323,7 +323,7 @@ func (h *Handler) DeleteExpense(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.setFlash(w, "Expense deleted successfully")
-	http.Redirect(w, r, "/expenses", http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+"/expenses", http.StatusSeeOther)
 }
 
 func (h *Handler) newExpenseFormData() expenseFormData {

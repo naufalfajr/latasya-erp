@@ -7,7 +7,7 @@
         {{if $data.IsEdit}}Edit User{{else}}New User{{end}}
     </h1>
 
-    <form method="POST" action="{{if $data.IsEdit}}/users/{{$data.User.ID}}{{else}}/users{{end}}"
+    <form method="POST" action="{{$.BasePath}}{{if $data.IsEdit}}/users/{{$data.User.ID}}{{else}}/users{{end}}"
         class="card bg-base-100 shadow">
         {{template "csrf" $}}
         <div class="card-body">
@@ -88,7 +88,7 @@
             </div>
 
             <div class="card-actions justify-end mt-4">
-                <a href="/users" class="btn btn-ghost">Cancel</a>
+                <a href="{{$.BasePath}}/users" class="btn btn-ghost">Cancel</a>
                 <button type="submit" class="btn btn-primary">
                     {{if $data.IsEdit}}Update{{else}}Create{{end}} User
                 </button>

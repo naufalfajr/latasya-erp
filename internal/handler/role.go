@@ -76,7 +76,7 @@ func (h *Handler) CreateRole(w http.ResponseWriter, r *http.Request) {
 	})
 
 	h.setFlash(w, "Role created successfully")
-	http.Redirect(w, r, "/roles", http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+"/roles", http.StatusSeeOther)
 }
 
 func (h *Handler) EditRole(w http.ResponseWriter, r *http.Request) {
@@ -148,7 +148,7 @@ func (h *Handler) UpdateRole(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.setFlash(w, "Role updated successfully")
-	http.Redirect(w, r, "/roles", http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+"/roles", http.StatusSeeOther)
 }
 
 func (h *Handler) DeleteRole(w http.ResponseWriter, r *http.Request) {
@@ -160,7 +160,7 @@ func (h *Handler) DeleteRole(w http.ResponseWriter, r *http.Request) {
 	}
 	if role.IsSystem {
 		h.setFlash(w, "System roles cannot be deleted")
-		http.Redirect(w, r, "/roles", http.StatusSeeOther)
+		http.Redirect(w, r, h.BasePath+"/roles", http.StatusSeeOther)
 		return
 	}
 
@@ -171,7 +171,7 @@ func (h *Handler) DeleteRole(w http.ResponseWriter, r *http.Request) {
 	}
 	if count > 0 {
 		h.setFlash(w, "Cannot delete role: still assigned to one or more users")
-		http.Redirect(w, r, "/roles", http.StatusSeeOther)
+		http.Redirect(w, r, h.BasePath+"/roles", http.StatusSeeOther)
 		return
 	}
 
@@ -199,7 +199,7 @@ func (h *Handler) DeleteRole(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.setFlash(w, "Role deleted")
-	http.Redirect(w, r, "/roles", http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+"/roles", http.StatusSeeOther)
 }
 
 func validateRole(r *model.Role, isEdit bool) map[string]string {

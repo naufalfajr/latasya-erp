@@ -93,5 +93,5 @@ func (h *Handler) UpdateCompanyProfile(w http.ResponseWriter, r *http.Request) {
 	})
 
 	h.setFlash(w, "Company profile saved")
-	http.Redirect(w, r, "/settings/company", http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+"/settings/company", http.StatusSeeOther)
 }

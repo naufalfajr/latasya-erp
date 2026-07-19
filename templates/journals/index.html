@@ -3,7 +3,7 @@
 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
     <h1 class="text-2xl font-bold">Journal Entries</h1>
     {{if .User.HasCapability "journals.manage"}}
-    <a href="/journals/new" class="btn btn-primary btn-sm">+ New Journal Entry</a>
+    <a href="{{$.BasePath}}/journals/new" class="btn btn-primary btn-sm">+ New Journal Entry</a>
     {{end}}
 </div>
 
@@ -13,21 +13,21 @@
 <div class="flex flex-wrap gap-2 mb-4">
     <input type="date" name="from" value="{{$data.Filter.DateFrom}}" placeholder="From"
         class="input input-sm"
-        hx-get="/journals"
+        hx-get="{{$.BasePath}}/journals"
         hx-trigger="change"
         hx-target="#journal-table"
         hx-select="#journal-table"
         hx-include="[name='to'],[name='search']" hx-push-url="true">
     <input type="date" name="to" value="{{$data.Filter.DateTo}}" placeholder="To"
         class="input input-sm"
-        hx-get="/journals"
+        hx-get="{{$.BasePath}}/journals"
         hx-trigger="change"
         hx-target="#journal-table"
         hx-select="#journal-table"
         hx-include="[name='from'],[name='search']" hx-push-url="true">
     <input type="text" name="search" value="{{$data.Filter.Search}}" placeholder="Search..."
         class="input input-sm w-full max-w-xs"
-        hx-get="/journals"
+        hx-get="{{$.BasePath}}/journals"
         hx-trigger="keyup changed delay:300ms"
         hx-target="#journal-table"
         hx-select="#journal-table"
@@ -64,7 +64,7 @@
                     {{end}}
                 </td>
                 <td>
-                    <a href="/journals/{{.ID}}" class="btn btn-ghost btn-xs">View</a>
+                    <a href="{{$.BasePath}}/journals/{{.ID}}" class="btn btn-ghost btn-xs">View</a>
                 </td>
             </tr>
             {{else}}
@@ -82,7 +82,7 @@
         <div class="join">
             {{if $pg.HasPrev}}
             <button class="join-item btn btn-sm"
-                hx-get="/journals" hx-target="#journal-table" hx-select="#journal-table"
+                hx-get="{{$.BasePath}}/journals" hx-target="#journal-table" hx-select="#journal-table"
                 hx-include="[name='from'],[name='to'],[name='search']"
                 hx-vals='{"page": "{{$pg.PrevPage}}"}' hx-push-url="true">‹ Prev</button>
             {{else}}
@@ -90,7 +90,7 @@
             {{end}}
             {{if $pg.HasNext}}
             <button class="join-item btn btn-sm"
-                hx-get="/journals" hx-target="#journal-table" hx-select="#journal-table"
+                hx-get="{{$.BasePath}}/journals" hx-target="#journal-table" hx-select="#journal-table"
                 hx-include="[name='from'],[name='to'],[name='search']"
                 hx-vals='{"page": "{{$pg.NextPage}}"}' hx-push-url="true">Next ›</button>
             {{else}}

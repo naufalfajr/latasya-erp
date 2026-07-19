@@ -6,17 +6,17 @@
         <p class="text-sm opacity-60">Reversing entries that offset previously sent invoices</p>
     </div>
     {{if .User.HasCapability "invoices.manage"}}
-    <a href="/credit-notes/new" class="btn btn-primary btn-sm">+ New Credit Note</a>
+    <a href="{{$.BasePath}}/credit-notes/new" class="btn btn-primary btn-sm">+ New Credit Note</a>
     {{end}}
 </div>
 
 {{$data := .Data}}
 
 <div class="tabs tabs-boxed mb-4 flex-wrap">
-    <a href="/credit-notes" class="tab {{if eq (index $data "Filter") ""}}tab-active{{end}}">All</a>
-    <a href="/credit-notes?status=draft" class="tab {{if eq (index $data "Filter") "draft"}}tab-active{{end}}">Draft</a>
-    <a href="/credit-notes?status=issued" class="tab {{if eq (index $data "Filter") "issued"}}tab-active{{end}}">Issued</a>
-    <a href="/credit-notes?status=void" class="tab {{if eq (index $data "Filter") "void"}}tab-active{{end}}">Void</a>
+    <a href="{{$.BasePath}}/credit-notes" class="tab {{if eq (index $data "Filter") ""}}tab-active{{end}}">All</a>
+    <a href="{{$.BasePath}}/credit-notes?status=draft" class="tab {{if eq (index $data "Filter") "draft"}}tab-active{{end}}">Draft</a>
+    <a href="{{$.BasePath}}/credit-notes?status=issued" class="tab {{if eq (index $data "Filter") "issued"}}tab-active{{end}}">Issued</a>
+    <a href="{{$.BasePath}}/credit-notes?status=void" class="tab {{if eq (index $data "Filter") "void"}}tab-active{{end}}">Void</a>
 </div>
 
 <div class="overflow-x-auto">
@@ -41,7 +41,7 @@
                 <td class="text-sm">{{formatDate .CNDate}}</td>
                 <td class="text-sm capitalize">{{.Reason}}</td>
                 <td class="font-mono text-xs">
-                    {{if .InvoiceID}}<a href="/invoices/{{.InvoiceID}}" class="link link-hover">{{.InvoiceNumber}}</a>{{else}}—{{end}}
+                    {{if .InvoiceID}}<a href="{{$.BasePath}}/invoices/{{.InvoiceID}}" class="link link-hover">{{.InvoiceNumber}}</a>{{else}}—{{end}}
                 </td>
                 <td>
                     <span class="badge badge-sm
@@ -52,7 +52,7 @@
                 </td>
                 <td class="text-right font-mono text-sm">{{formatIDR .Total}}</td>
                 <td>
-                    <a href="/credit-notes/{{.ID}}" class="btn btn-ghost btn-xs">View</a>
+                    <a href="{{$.BasePath}}/credit-notes/{{.ID}}" class="btn btn-ghost btn-xs">View</a>
                 </td>
             </tr>
             {{else}}

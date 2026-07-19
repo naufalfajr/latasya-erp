@@ -135,7 +135,7 @@ func (h *Handler) CreateJournal(w http.ResponseWriter, r *http.Request) {
 	})
 
 	h.setFlash(w, "Journal entry created successfully")
-	http.Redirect(w, r, fmt.Sprintf("/journals/%d", entryID), http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/journals/%d", entryID), http.StatusSeeOther)
 }
 
 func (h *Handler) ViewJournal(w http.ResponseWriter, r *http.Request) {
@@ -170,7 +170,7 @@ func (h *Handler) EditJournal(w http.ResponseWriter, r *http.Request) {
 	// Don't allow editing auto-generated entries
 	if je.SourceType != "" && je.SourceType != model.SourceManual {
 		h.setFlash(w, "Cannot edit auto-generated journal entries")
-		http.Redirect(w, r, fmt.Sprintf("/journals/%d", id), http.StatusSeeOther)
+		http.Redirect(w, r, h.BasePath+fmt.Sprintf("/journals/%d", id), http.StatusSeeOther)
 		return
 	}
 
@@ -258,7 +258,7 @@ func (h *Handler) UpdateJournal(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.setFlash(w, "Journal entry updated successfully")
-	http.Redirect(w, r, fmt.Sprintf("/journals/%d", id), http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/journals/%d", id), http.StatusSeeOther)
 }
 
 func (h *Handler) DeleteJournal(w http.ResponseWriter, r *http.Request) {
@@ -272,7 +272,7 @@ func (h *Handler) DeleteJournal(w http.ResponseWriter, r *http.Request) {
 
 	if err := model.DeleteJournalEntry(h.DB, id); err != nil {
 		h.setFlash(w, "Error: "+err.Error())
-		http.Redirect(w, r, fmt.Sprintf("/journals/%d", id), http.StatusSeeOther)
+		http.Redirect(w, r, h.BasePath+fmt.Sprintf("/journals/%d", id), http.StatusSeeOther)
 		return
 	}
 
@@ -299,7 +299,7 @@ func (h *Handler) DeleteJournal(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.setFlash(w, "Journal entry deleted successfully")
-	http.Redirect(w, r, "/journals", http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+"/journals", http.StatusSeeOther)
 }
 
 // JournalLinePartial returns an empty journal line row for HTMX "Add Line"

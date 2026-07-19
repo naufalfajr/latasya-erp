@@ -15,24 +15,30 @@ import (
 var ErrNoDefaultRevenueAccount = errors.New("set a default revenue account in Company Profile before generating recurring invoices")
 
 type Invoice struct {
-	ID             int           `json:"id"`
-	InvoiceNumber  string        `json:"invoice_number"`
-	ContactID      int           `json:"contact_id"`
-	InvoiceDate    string        `json:"invoice_date"`
-	DueDate        string        `json:"due_date"`
-	Status         string        `json:"status"`
-	Subtotal       int           `json:"-"`
-	TaxAmount      int           `json:"-"`
-	Total          int           `json:"-"`
-	AmountPaid     int           `json:"-"`
-	AmountCredited int           `json:"-"`
-	Notes          string        `json:"notes"`
-	JournalID      *int          `json:"journal_id"`
-	CreatedBy      int           `json:"created_by"`
-	CreatedAt      string        `json:"created_at"`
-	UpdatedAt      string        `json:"updated_at"`
-	ContactName    string        `json:"contact_name,omitempty"`
-	Lines          []InvoiceLine `json:"lines,omitempty"`
+	ID             int    `json:"id"`
+	InvoiceNumber  string `json:"invoice_number"`
+	ContactID      int    `json:"contact_id"`
+	InvoiceDate    string `json:"invoice_date"`
+	DueDate        string `json:"due_date"`
+	Status         string `json:"status"`
+	Subtotal       int    `json:"-"`
+	TaxAmount      int    `json:"-"`
+	Total          int    `json:"-"`
+	AmountPaid     int    `json:"-"`
+	AmountCredited int    `json:"-"`
+	Notes          string `json:"notes"`
+	JournalID      *int   `json:"journal_id"`
+	CreatedBy      int    `json:"created_by"`
+	CreatedAt      string `json:"created_at"`
+	UpdatedAt      string `json:"updated_at"`
+	// PaidDate is when the invoice was actually settled: the most recent
+	// payment's payment_date (which staff can backdate, unlike updated_at),
+	// or updated_at as a fallback for invoices settled purely by credit
+	// note (no payments row). Only meaningful once Status == "paid";
+	// populated by ListInvoices/ListPortalInvoices, left blank elsewhere.
+	PaidDate    string        `json:"paid_date,omitempty"`
+	ContactName string        `json:"contact_name,omitempty"`
+	Lines       []InvoiceLine `json:"lines,omitempty"`
 }
 
 // MarshalJSON serializes IDR-valued fields as strings and exposes
@@ -232,7 +238,8 @@ func ListInvoices(db *sql.DB, f InvoiceFilter) ([]Invoice, error) {
 	where, args := invoiceWhere(f)
 	query := `SELECT i.id, i.invoice_number, i.contact_id, i.invoice_date, i.due_date, i.status,
 			i.subtotal, i.tax_amount, i.total, i.amount_paid, i.amount_credited, COALESCE(i.notes,''),
-			i.journal_id, i.created_by, i.created_at, i.updated_at, c.name
+			i.journal_id, i.created_by, i.created_at, i.updated_at, c.name,
+			COALESCE((SELECT MAX(payment_date) FROM payments WHERE payment_type = 'invoice' AND reference_id = i.id), i.updated_at)
 		 FROM invoices i
 		 JOIN contacts c ON c.id = i.contact_id
 		 WHERE 1=1` + where + ` ORDER BY i.invoice_date DESC, i.id DESC`
@@ -252,7 +259,7 @@ func ListInvoices(db *sql.DB, f InvoiceFilter) ([]Invoice, error) {
 		var inv Invoice
 		err := rows.Scan(&inv.ID, &inv.InvoiceNumber, &inv.ContactID, &inv.InvoiceDate, &inv.DueDate, &inv.Status,
 			&inv.Subtotal, &inv.TaxAmount, &inv.Total, &inv.AmountPaid, &inv.AmountCredited, &inv.Notes,
-			&inv.JournalID, &inv.CreatedBy, &inv.CreatedAt, &inv.UpdatedAt, &inv.ContactName)
+			&inv.JournalID, &inv.CreatedBy, &inv.CreatedAt, &inv.UpdatedAt, &inv.ContactName, &inv.PaidDate)
 		if err != nil {
 			return nil, fmt.Errorf("scan invoice: %w", err)
 		}

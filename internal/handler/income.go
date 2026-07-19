@@ -130,7 +130,7 @@ func (h *Handler) CreateIncome(w http.ResponseWriter, r *http.Request) {
 	})
 
 	h.setFlash(w, "Income recorded successfully")
-	http.Redirect(w, r, fmt.Sprintf("/journals/%d", entryID), http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/journals/%d", entryID), http.StatusSeeOther)
 }
 
 func (h *Handler) EditIncome(w http.ResponseWriter, r *http.Request) {
@@ -265,7 +265,7 @@ func (h *Handler) UpdateIncome(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.setFlash(w, "Income updated successfully")
-	http.Redirect(w, r, fmt.Sprintf("/journals/%d", id), http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/journals/%d", id), http.StatusSeeOther)
 }
 
 func (h *Handler) DeleteIncome(w http.ResponseWriter, r *http.Request) {
@@ -279,7 +279,7 @@ func (h *Handler) DeleteIncome(w http.ResponseWriter, r *http.Request) {
 
 	if err := model.DeleteJournalEntryBySource(h.DB, id, model.SourceIncome); err != nil {
 		h.setFlash(w, "Error: "+err.Error())
-		http.Redirect(w, r, "/income", http.StatusSeeOther)
+		http.Redirect(w, r, h.BasePath+"/income", http.StatusSeeOther)
 		return
 	}
 
@@ -308,7 +308,7 @@ func (h *Handler) DeleteIncome(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.setFlash(w, "Income deleted successfully")
-	http.Redirect(w, r, "/income", http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+"/income", http.StatusSeeOther)
 }
 
 func (h *Handler) newIncomeFormData() incomeFormData {

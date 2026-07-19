@@ -18,7 +18,7 @@
     </div>
     {{end}}
 
-    <form method="POST" action="{{if $data.IsEdit}}/journals/{{$data.Entry.ID}}{{else}}/journals{{end}}"
+    <form method="POST" action="{{$.BasePath}}{{if $data.IsEdit}}/journals/{{$data.Entry.ID}}{{else}}/journals{{end}}"
         class="card bg-base-100 shadow">
         {{template "csrf" $}}
         <div class="card-body">
@@ -84,7 +84,7 @@
                 </div>
 
                 <button type="button" class="btn btn-ghost btn-sm mt-2"
-                    hx-get="/htmx/journal-line"
+                    hx-get="{{$.BasePath}}/htmx/journal-line"
                     hx-target="#lines-body"
                     hx-swap="beforeend"
                     hx-vals="js:{idx: document.querySelectorAll('#lines-body tr').length}">
@@ -94,7 +94,7 @@
 
             <!-- Actions -->
             <div class="card-actions justify-end mt-4">
-                <a href="/journals" class="btn btn-ghost">Cancel</a>
+                <a href="{{$.BasePath}}/journals" class="btn btn-ghost">Cancel</a>
                 <button type="submit" class="btn btn-primary">
                     {{if $data.IsEdit}}Update{{else}}Create{{end}} Journal Entry
                 </button>

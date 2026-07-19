@@ -378,7 +378,7 @@ func (h *Handler) redirectSchoolCalendar(w http.ResponseWriter, r *http.Request,
 	if _, err := time.Parse("2006-01", month); err != nil {
 		month = time.Now().Format("2006-01")
 	}
-	http.Redirect(w, r, "/settings/school-calendar?month="+month, http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+"/settings/school-calendar?month="+month, http.StatusSeeOther)
 }
 
 func randomOAuthState() (string, error) {

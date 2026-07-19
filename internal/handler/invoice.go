@@ -122,7 +122,7 @@ func (h *Handler) CreateInvoice(w http.ResponseWriter, r *http.Request) {
 	})
 
 	h.setFlash(w, "Invoice created successfully")
-	http.Redirect(w, r, fmt.Sprintf("/invoices/%d", invID), http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/invoices/%d", invID), http.StatusSeeOther)
 }
 
 func (h *Handler) GenerateRecurringInvoices(w http.ResponseWriter, r *http.Request) {
@@ -135,7 +135,7 @@ func (h *Handler) GenerateRecurringInvoices(w http.ResponseWriter, r *http.Reque
 	result, err := model.GenerateRecurringInvoices(h.DB, invoiceDate, dueDate, user.ID)
 	if err != nil {
 		h.setFlash(w, "Error generating invoices: "+err.Error())
-		http.Redirect(w, r, "/invoices", http.StatusSeeOther)
+		http.Redirect(w, r, h.BasePath+"/invoices", http.StatusSeeOther)
 		return
 	}
 
@@ -159,7 +159,7 @@ func (h *Handler) GenerateRecurringInvoices(w http.ResponseWriter, r *http.Reque
 		msg += fmt.Sprintf(" Failed %d.", result.Failed)
 	}
 	h.setFlash(w, msg)
-	http.Redirect(w, r, "/invoices", http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+"/invoices", http.StatusSeeOther)
 }
 
 func (h *Handler) BulkDeleteInvoices(w http.ResponseWriter, r *http.Request) {
@@ -173,14 +173,14 @@ func (h *Handler) BulkDeleteInvoices(w http.ResponseWriter, r *http.Request) {
 
 	if len(ids) == 0 {
 		h.setFlash(w, "No invoices selected")
-		http.Redirect(w, r, "/invoices", http.StatusSeeOther)
+		http.Redirect(w, r, h.BasePath+"/invoices", http.StatusSeeOther)
 		return
 	}
 
 	deleted, skipped, err := model.BulkDeleteDraftInvoices(h.DB, ids)
 	if err != nil {
 		h.setFlash(w, "Error deleting invoices: "+err.Error())
-		http.Redirect(w, r, "/invoices", http.StatusSeeOther)
+		http.Redirect(w, r, h.BasePath+"/invoices", http.StatusSeeOther)
 		return
 	}
 
@@ -195,7 +195,7 @@ func (h *Handler) BulkDeleteInvoices(w http.ResponseWriter, r *http.Request) {
 		msg += fmt.Sprintf(" Skipped %d (not draft).", len(skipped))
 	}
 	h.setFlash(w, msg)
-	http.Redirect(w, r, "/invoices", http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+"/invoices", http.StatusSeeOther)
 }
 
 func (h *Handler) BulkSendInvoices(w http.ResponseWriter, r *http.Request) {
@@ -209,7 +209,7 @@ func (h *Handler) BulkSendInvoices(w http.ResponseWriter, r *http.Request) {
 
 	if len(ids) == 0 {
 		h.setFlash(w, "No invoices selected")
-		http.Redirect(w, r, "/invoices", http.StatusSeeOther)
+		http.Redirect(w, r, h.BasePath+"/invoices", http.StatusSeeOther)
 		return
 	}
 
@@ -217,7 +217,7 @@ func (h *Handler) BulkSendInvoices(w http.ResponseWriter, r *http.Request) {
 	res, err := model.BulkSendInvoices(h.DB, ids, user.ID)
 	if err != nil {
 		h.setFlash(w, "Error sending invoices: "+err.Error())
-		http.Redirect(w, r, "/invoices", http.StatusSeeOther)
+		http.Redirect(w, r, h.BasePath+"/invoices", http.StatusSeeOther)
 		return
 	}
 
@@ -235,7 +235,7 @@ func (h *Handler) BulkSendInvoices(w http.ResponseWriter, r *http.Request) {
 		msg += fmt.Sprintf(" Failed %d.", len(res.Failed))
 	}
 	h.setFlash(w, msg)
-	http.Redirect(w, r, "/invoices", http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+"/invoices", http.StatusSeeOther)
 }
 
 func (h *Handler) ViewInvoice(w http.ResponseWriter, r *http.Request) {
@@ -277,7 +277,7 @@ func (h *Handler) EditInvoice(w http.ResponseWriter, r *http.Request) {
 
 	if inv.Status != "draft" {
 		h.setFlash(w, "Can only edit draft invoices")
-		http.Redirect(w, r, fmt.Sprintf("/invoices/%d", id), http.StatusSeeOther)
+		http.Redirect(w, r, h.BasePath+fmt.Sprintf("/invoices/%d", id), http.StatusSeeOther)
 		return
 	}
 
@@ -371,7 +371,7 @@ func (h *Handler) UpdateInvoice(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.setFlash(w, "Invoice updated successfully")
-	http.Redirect(w, r, fmt.Sprintf("/invoices/%d", id), http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/invoices/%d", id), http.StatusSeeOther)
 }
 
 func (h *Handler) SendInvoice(w http.ResponseWriter, r *http.Request) {
@@ -400,7 +400,51 @@ func (h *Handler) SendInvoice(w http.ResponseWriter, r *http.Request) {
 		h.setFlash(w, "Invoice sent — journal entry created")
 	}
 
-	http.Redirect(w, r, fmt.Sprintf("/invoices/%d", id), http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/invoices/%d", id), http.StatusSeeOther)
+}
+
+// InvoiceWhatsApp opens WhatsApp to the invoice's contact with the parent
+// portal link pre-filled, so staff can share it in one tap. Drafts aren't
+// shareable (the portal hides them until sent), and a contact needs a phone
+// number on file to be reachable this way.
+func (h *Handler) InvoiceWhatsApp(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	inv, err := model.GetInvoice(h.DB, id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if inv.Status == model.StatusDraft {
+		h.setFlash(w, "Kirim invoice ini dulu (Mark as Sent) sebelum membagikan link ke orang tua.")
+		http.Redirect(w, r, h.BasePath+fmt.Sprintf("/invoices/%d", id), http.StatusSeeOther)
+		return
+	}
+
+	contact, err := model.GetContact(h.DB, inv.ContactID)
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	if contact.Phone == "" {
+		h.setFlash(w, "Nomor telepon kontak belum diisi.")
+		http.Redirect(w, r, h.BasePath+fmt.Sprintf("/invoices/%d", id), http.StatusSeeOther)
+		return
+	}
+
+	token, err := model.GetOrCreatePortalToken(h.DB, contact.ID)
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	portalURL := h.publicOrigin(r) + "/i/" + token
+	message := fmt.Sprintf("Halo %s, berikut link tagihan Antar Jemput (%s): %s", contact.Name, inv.InvoiceNumber, portalURL)
+	http.Redirect(w, r, buildWALink(contact.Phone, message), http.StatusFound)
 }
 
 func (h *Handler) InvoicePayment(w http.ResponseWriter, r *http.Request) {
@@ -417,7 +461,7 @@ func (h *Handler) InvoicePayment(w http.ResponseWriter, r *http.Request) {
 
 	if amount <= 0 || paymentDate == "" || paymentAccountID == 0 {
 		h.setFlash(w, "Error: all payment fields are required")
-		http.Redirect(w, r, fmt.Sprintf("/invoices/%d", id), http.StatusSeeOther)
+		http.Redirect(w, r, h.BasePath+fmt.Sprintf("/invoices/%d", id), http.StatusSeeOther)
 		return
 	}
 
@@ -446,7 +490,7 @@ func (h *Handler) InvoicePayment(w http.ResponseWriter, r *http.Request) {
 		h.setFlash(w, "Payment recorded successfully")
 	}
 
-	http.Redirect(w, r, fmt.Sprintf("/invoices/%d", id), http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/invoices/%d", id), http.StatusSeeOther)
 }
 
 func (h *Handler) DeleteInvoice(w http.ResponseWriter, r *http.Request) {
@@ -462,7 +506,7 @@ func (h *Handler) DeleteInvoice(w http.ResponseWriter, r *http.Request) {
 
 	if err := model.DeleteInvoice(h.DB, id); err != nil {
 		h.setFlash(w, "Error: "+err.Error())
-		http.Redirect(w, r, fmt.Sprintf("/invoices/%d", id), http.StatusSeeOther)
+		http.Redirect(w, r, h.BasePath+fmt.Sprintf("/invoices/%d", id), http.StatusSeeOther)
 		return
 	}
 
@@ -490,7 +534,7 @@ func (h *Handler) DeleteInvoice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, "/invoices", http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+"/invoices", http.StatusSeeOther)
 }
 
 type invoicePrintData struct {
@@ -525,11 +569,12 @@ func (h *Handler) PrintInvoice(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pd := PageData{
-		User:  auth.UserFromContext(r.Context()),
-		Title: "Invoice " + inv.InvoiceNumber,
-		Data:  invoicePrintData{Invoice: inv, Company: company},
+		User:     auth.UserFromContext(r.Context()),
+		Title:    "Invoice " + inv.InvoiceNumber,
+		BasePath: h.BasePath,
+		Data:     invoicePrintData{Invoice: inv, Company: company},
 	}
-	t.ExecuteTemplate(w, "templates/invoices/print.html", pd)
+	t.ExecuteTemplate(w, "print.html", pd)
 }
 
 func (h *Handler) InvoicePDF(w http.ResponseWriter, r *http.Request) {

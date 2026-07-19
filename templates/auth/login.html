@@ -15,7 +15,7 @@
         {{end}}
         {{end}}
 
-        <form method="POST" action="/login">
+        <form method="POST" action="{{$.BasePath}}/login">
             <div class="flex flex-col gap-1 mb-4">
                 <label class="label" for="username">Username</label>
                 <input type="text" id="username" name="username" placeholder="Username"

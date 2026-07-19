@@ -2,7 +2,7 @@
 {{define "content"}}
 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
     <h1 class="text-2xl font-bold">Roles</h1>
-    <a href="/roles/new" class="btn btn-primary btn-sm">+ New Role</a>
+    <a href="{{$.BasePath}}/roles/new" class="btn btn-primary btn-sm">+ New Role</a>
 </div>
 
 {{$roles := .Data}}
@@ -48,11 +48,11 @@
                 <td>
                     <div class="flex gap-1">
                         {{if ne .Name "admin"}}
-                        <a href="/roles/{{.Name}}/edit" class="btn btn-ghost btn-xs">Edit</a>
+                        <a href="{{$.BasePath}}/roles/{{.Name}}/edit" class="btn btn-ghost btn-xs">Edit</a>
                         {{end}}
                         {{if not .IsSystem}}
                         <button class="btn btn-ghost btn-xs text-error"
-                            hx-delete="/roles/{{.Name}}"
+                            hx-delete="{{$.BasePath}}/roles/{{.Name}}"
                             hx-target="#role-{{.Name}}"
                             hx-swap="outerHTML"
                             hx-confirm="Delete role {{.Name}}?">Delete</button>

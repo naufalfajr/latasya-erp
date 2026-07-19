@@ -112,7 +112,7 @@ func (h *Handler) CreateAccount(w http.ResponseWriter, r *http.Request) {
 	})
 
 	h.setFlash(w, "Account created successfully")
-	http.Redirect(w, r, "/accounts", http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+"/accounts", http.StatusSeeOther)
 }
 
 func (h *Handler) EditAccount(w http.ResponseWriter, r *http.Request) {
@@ -207,7 +207,7 @@ func (h *Handler) UpdateAccount(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.setFlash(w, "Account updated successfully")
-	http.Redirect(w, r, "/accounts", http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+"/accounts", http.StatusSeeOther)
 }
 
 func (h *Handler) DeleteAccount(w http.ResponseWriter, r *http.Request) {
@@ -255,7 +255,7 @@ func (h *Handler) DeleteAccount(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.setFlash(w, "Account deleted successfully")
-	http.Redirect(w, r, "/accounts", http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+"/accounts", http.StatusSeeOther)
 }
 
 func validateAccount(a *model.Account) map[string]string {

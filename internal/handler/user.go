@@ -96,7 +96,7 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	})
 
 	h.setFlash(w, "User created successfully")
-	http.Redirect(w, r, "/users", http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+"/users", http.StatusSeeOther)
 }
 
 func (h *Handler) EditUser(w http.ResponseWriter, r *http.Request) {
@@ -227,7 +227,7 @@ func (h *Handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.setFlash(w, "User updated successfully")
-	http.Redirect(w, r, "/users", http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+"/users", http.StatusSeeOther)
 }
 
 func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
@@ -241,7 +241,7 @@ func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	currentUser := auth.UserFromContext(r.Context())
 	if currentUser.ID == id {
 		h.setFlash(w, "Cannot delete your own account")
-		http.Redirect(w, r, "/users", http.StatusSeeOther)
+		http.Redirect(w, r, h.BasePath+"/users", http.StatusSeeOther)
 		return
 	}
 
@@ -275,7 +275,7 @@ func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.setFlash(w, "User deactivated")
-	http.Redirect(w, r, "/users", http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+"/users", http.StatusSeeOther)
 }
 
 func validateUser(db *sql.DB, u *model.User, password string, isEdit bool) map[string]string {

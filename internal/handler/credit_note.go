@@ -164,7 +164,7 @@ func (h *Handler) CreateCreditNote(w http.ResponseWriter, r *http.Request) {
 	})
 
 	h.setFlash(w, "Credit note created")
-	http.Redirect(w, r, fmt.Sprintf("/credit-notes/%d", cnID), http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/credit-notes/%d", cnID), http.StatusSeeOther)
 }
 
 func (h *Handler) ViewCreditNote(w http.ResponseWriter, r *http.Request) {
@@ -196,7 +196,7 @@ func (h *Handler) EditCreditNote(w http.ResponseWriter, r *http.Request) {
 	}
 	if cn.Status != model.StatusDraft {
 		h.setFlash(w, "Can only edit draft credit notes")
-		http.Redirect(w, r, fmt.Sprintf("/credit-notes/%d", id), http.StatusSeeOther)
+		http.Redirect(w, r, h.BasePath+fmt.Sprintf("/credit-notes/%d", id), http.StatusSeeOther)
 		return
 	}
 	fd := h.newCreditNoteFormData()
@@ -282,7 +282,7 @@ func (h *Handler) UpdateCreditNote(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.setFlash(w, "Credit note updated")
-	http.Redirect(w, r, fmt.Sprintf("/credit-notes/%d", id), http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/credit-notes/%d", id), http.StatusSeeOther)
 }
 
 func (h *Handler) IssueCreditNote(w http.ResponseWriter, r *http.Request) {
@@ -308,7 +308,7 @@ func (h *Handler) IssueCreditNote(w http.ResponseWriter, r *http.Request) {
 		}
 		h.setFlash(w, "Credit note issued — journal entry posted")
 	}
-	http.Redirect(w, r, fmt.Sprintf("/credit-notes/%d", id), http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/credit-notes/%d", id), http.StatusSeeOther)
 }
 
 func (h *Handler) VoidCreditNote(w http.ResponseWriter, r *http.Request) {
@@ -333,7 +333,7 @@ func (h *Handler) VoidCreditNote(w http.ResponseWriter, r *http.Request) {
 		}
 		h.setFlash(w, "Credit note voided")
 	}
-	http.Redirect(w, r, fmt.Sprintf("/credit-notes/%d", id), http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/credit-notes/%d", id), http.StatusSeeOther)
 }
 
 func (h *Handler) DeleteCreditNote(w http.ResponseWriter, r *http.Request) {
@@ -345,7 +345,7 @@ func (h *Handler) DeleteCreditNote(w http.ResponseWriter, r *http.Request) {
 	existing, _ := model.GetCreditNote(h.DB, id)
 	if err := model.DeleteCreditNote(h.DB, id); err != nil {
 		h.setFlash(w, "Error: "+err.Error())
-		http.Redirect(w, r, fmt.Sprintf("/credit-notes/%d", id), http.StatusSeeOther)
+		http.Redirect(w, r, h.BasePath+fmt.Sprintf("/credit-notes/%d", id), http.StatusSeeOther)
 		return
 	}
 	if existing != nil {
@@ -368,7 +368,7 @@ func (h *Handler) DeleteCreditNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.setFlash(w, "Credit note deleted")
-	http.Redirect(w, r, "/credit-notes", http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+"/credit-notes", http.StatusSeeOther)
 }
 
 // CreditNoteLinePartial returns one new blank credit note line row for HTMX.

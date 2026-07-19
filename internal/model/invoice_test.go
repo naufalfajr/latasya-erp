@@ -167,6 +167,48 @@ func TestRecordInvoicePayment(t *testing.T) {
 	}
 }
 
+// TestListInvoices_PaidDateReflectsPaymentNotUpdatedAt guards against using
+// updated_at as a stand-in for "when was this paid": updated_at is the DB
+// write time, but staff can backdate payment_date, so the two can legitimately
+// differ. PaidDate must reflect the payment's own date.
+func TestListInvoices_PaidDateReflectsPaymentNotUpdatedAt(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+
+	db.Exec("INSERT INTO contacts (name, contact_type, is_active) VALUES ('Test', 'customer', 1)")
+	var contactID, revenueID, cashID int
+	db.QueryRow("SELECT id FROM contacts WHERE name = 'Test'").Scan(&contactID)
+	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
+	db.QueryRow("SELECT id FROM accounts WHERE code = '1-1001'").Scan(&cashID)
+
+	inv := &model.Invoice{
+		ContactID: contactID, InvoiceDate: "2026-04-04", DueDate: "2026-04-30", CreatedBy: 1,
+	}
+	invID, _ := model.CreateInvoice(db, inv, []model.InvoiceLine{
+		{Description: "Test", Quantity: 100, UnitPrice: 5000000, AccountID: revenueID},
+	})
+	model.SendInvoice(db, invID, 1)
+
+	// Backdated payment: entered today, but dated in the past.
+	if err := model.RecordInvoicePayment(db, invID, 5000000, "2026-04-15", cashID, 1); err != nil {
+		t.Fatalf("record payment: %v", err)
+	}
+
+	invoices, err := model.ListInvoices(db, model.InvoiceFilter{Status: "paid"})
+	if err != nil {
+		t.Fatalf("list invoices: %v", err)
+	}
+	if len(invoices) != 1 {
+		t.Fatalf("expected 1 paid invoice, got %d", len(invoices))
+	}
+	got := invoices[0]
+	if got.PaidDate != "2026-04-15" {
+		t.Errorf("expected paid date 2026-04-15 (the payment's date), got %q", got.PaidDate)
+	}
+	if got.PaidDate == got.UpdatedAt {
+		t.Errorf("paid date should not equal updated_at (write time) for a backdated payment: both are %q", got.PaidDate)
+	}
+}
+
 func TestRecordInvoicePayment_ExceedsBalance(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 

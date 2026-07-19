@@ -7,7 +7,7 @@
         {{if $data.IsEdit}}Edit Role{{else}}New Role{{end}}
     </h1>
 
-    <form method="POST" action="{{if $data.IsEdit}}/roles/{{$data.Role.Name}}{{else}}/roles{{end}}"
+    <form method="POST" action="{{$.BasePath}}{{if $data.IsEdit}}/roles/{{$data.Role.Name}}{{else}}/roles{{end}}"
         class="card bg-base-100 shadow">
         {{template "csrf" $}}
         <div class="card-body">
@@ -63,7 +63,7 @@
             </div>
 
             <div class="card-actions justify-end mt-4">
-                <a href="/roles" class="btn btn-ghost">Cancel</a>
+                <a href="{{$.BasePath}}/roles" class="btn btn-ghost">Cancel</a>
                 <button type="submit" class="btn btn-primary">
                     {{if $data.IsEdit}}Update{{else}}Create{{end}} Role
                 </button>

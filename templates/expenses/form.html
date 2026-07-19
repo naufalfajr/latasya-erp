@@ -13,7 +13,7 @@
     </div>
     {{end}}
 
-    <form method="POST" action="{{if $data.IsEdit}}/expenses/{{$data.Entry.ID}}{{else}}/expenses{{end}}"
+    <form method="POST" action="{{$.BasePath}}{{if $data.IsEdit}}/expenses/{{$data.Entry.ID}}{{else}}/expenses{{end}}"
         class="card bg-base-100 shadow">
         {{template "csrf" $}}
         <div class="card-body">
@@ -100,7 +100,7 @@
             </div>
 
             <div class="card-actions justify-end mt-4">
-                <a href="/expenses" class="btn btn-ghost">Cancel</a>
+                <a href="{{$.BasePath}}/expenses" class="btn btn-ghost">Cancel</a>
                 <button type="submit" class="btn btn-primary">
                     {{if $data.IsEdit}}Update{{else}}Record{{end}} Expense
                 </button>

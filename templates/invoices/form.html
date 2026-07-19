@@ -11,7 +11,7 @@
     <div class="alert alert-error mb-4"><span>{{index $data.Errors "general"}}</span></div>
     {{end}}
 
-    <form method="POST" action="{{if $data.IsEdit}}/invoices/{{$data.Invoice.ID}}{{else}}/invoices{{end}}"
+    <form method="POST" action="{{$.BasePath}}{{if $data.IsEdit}}/invoices/{{$data.Invoice.ID}}{{else}}/invoices{{end}}"
         class="card bg-base-100 shadow">
         {{template "csrf" $}}
         <div class="card-body">
@@ -79,7 +79,7 @@
                 </div>
 
                 <button type="button" class="btn btn-ghost btn-sm mt-2"
-                    hx-get="/htmx/invoice-line"
+                    hx-get="{{$.BasePath}}/htmx/invoice-line"
                     hx-target="#inv-lines-body"
                     hx-swap="beforeend">
                     + Add Line
@@ -101,7 +101,7 @@
             </div>
 
             <div class="card-actions justify-end mt-4">
-                <a href="/invoices" class="btn btn-ghost">Cancel</a>
+                <a href="{{$.BasePath}}/invoices" class="btn btn-ghost">Cancel</a>
                 <button type="submit" class="btn btn-primary">
                     {{if $data.IsEdit}}Update{{else}}Create{{end}} Invoice
                 </button>

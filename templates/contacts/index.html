@@ -3,7 +3,7 @@
 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
     <h1 class="text-2xl font-bold">Contacts</h1>
     {{if .User.HasCapability "contacts.manage"}}
-    <a href="/contacts/new" class="btn btn-primary btn-sm">+ New Contact</a>
+    <a href="{{$.BasePath}}/contacts/new" class="btn btn-primary btn-sm">+ New Contact</a>
     {{end}}
 </div>
 
@@ -25,16 +25,16 @@
 
 <!-- Filter tabs -->
 <div class="tabs tabs-box mb-4">
-    <a href="/contacts" class="tab {{if eq $data.Filter ""}}tab-active{{end}}">All</a>
-    <a href="/contacts?type=customer" class="tab {{if eq $data.Filter "customer"}}tab-active{{end}}">Customers</a>
-    <a href="/contacts?type=supplier" class="tab {{if eq $data.Filter "supplier"}}tab-active{{end}}">Suppliers</a>
+    <a href="{{$.BasePath}}/contacts" class="tab {{if eq $data.Filter ""}}tab-active{{end}}">All</a>
+    <a href="{{$.BasePath}}/contacts?type=customer" class="tab {{if eq $data.Filter "customer"}}tab-active{{end}}">Customers</a>
+    <a href="{{$.BasePath}}/contacts?type=supplier" class="tab {{if eq $data.Filter "supplier"}}tab-active{{end}}">Suppliers</a>
 </div>
 
 <!-- Search -->
 <div class="flex flex-col gap-1 mb-4">
     <input type="text" placeholder="Search contacts..."
         class="input input-sm w-full max-w-xs"
-        hx-get="/contacts{{if $data.Filter}}?type={{$data.Filter}}{{end}}"
+        hx-get="{{$.BasePath}}/contacts{{if $data.Filter}}?type={{$data.Filter}}{{end}}"
         hx-trigger="keyup changed delay:300ms"
         hx-target="#contact-table"
         hx-select="#contact-table"
@@ -81,9 +81,9 @@
                 {{if $.User.HasCapability "contacts.manage"}}
                 <td>
                     <div class="flex gap-1">
-                        <a href="/contacts/{{.ID}}/edit" class="btn btn-ghost btn-xs">Edit</a>
+                        <a href="{{$.BasePath}}/contacts/{{.ID}}/edit" class="btn btn-ghost btn-xs">Edit</a>
                         <button class="btn btn-ghost btn-xs text-error"
-                            hx-delete="/contacts/{{.ID}}"
+                            hx-delete="{{$.BasePath}}/contacts/{{.ID}}"
                             hx-target="#contact-{{.ID}}"
                             hx-swap="outerHTML"
                             hx-confirm="Delete contact {{.Name}}?">Delete</button>

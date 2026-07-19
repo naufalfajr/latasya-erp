@@ -9,17 +9,17 @@
         <p class="text-sm opacity-60">{{$bill.ContactName}} &middot; {{formatDate $bill.BillDate}}</p>
     </div>
     <div class="flex gap-2 flex-wrap">
-        <a href="/bills" class="btn btn-ghost btn-sm">Back</a>
+        <a href="{{$.BasePath}}/bills" class="btn btn-ghost btn-sm">Back</a>
         {{if .User.HasCapability "bills.manage"}}
             {{if eq $bill.Status "draft"}}
-            <a href="/bills/{{$bill.ID}}/edit" class="btn btn-sm">Edit</a>
-            <form method="POST" action="/bills/{{$bill.ID}}/receive" class="inline">
+            <a href="{{$.BasePath}}/bills/{{$bill.ID}}/edit" class="btn btn-sm">Edit</a>
+            <form method="POST" action="{{$.BasePath}}/bills/{{$bill.ID}}/receive" class="inline">
                 {{template "csrf" $}}
                 <button type="submit" class="btn btn-info btn-sm"
                     onclick="return confirm('Mark as received? This will create a journal entry.')">Mark as Received</button>
             </form>
             <button class="btn btn-error btn-sm"
-                hx-delete="/bills/{{$bill.ID}}"
+                hx-delete="{{$.BasePath}}/bills/{{$bill.ID}}"
                 hx-confirm="Delete this draft bill?"
                 hx-target="body">Delete</button>
             {{end}}
@@ -35,7 +35,7 @@
         {{else if eq $bill.Status "paid"}}badge-success
         {{end}} badge-lg">{{$bill.Status}}</span>
     {{if $bill.JournalID}}
-    <a href="/journals/{{$bill.JournalID}}" class="link link-primary text-sm ml-2">View Journal Entry</a>
+    <a href="{{$.BasePath}}/journals/{{$bill.JournalID}}" class="link link-primary text-sm ml-2">View Journal Entry</a>
     {{end}}
 </div>
 
@@ -102,7 +102,7 @@
 <div class="card bg-base-100 shadow">
     <div class="card-body">
         <h2 class="card-title text-lg">Record Payment</h2>
-        <form method="POST" action="/bills/{{$bill.ID}}/payment">
+        <form method="POST" action="{{$.BasePath}}/bills/{{$bill.ID}}/payment">
             {{template "csrf" $}}
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div class="flex flex-col gap-1">

@@ -10,24 +10,27 @@
         <p class="text-sm opacity-60">{{$inv.ContactName}} &middot; {{formatDate $inv.InvoiceDate}}</p>
     </div>
     <div class="flex gap-2 flex-wrap">
-        <a href="/invoices" class="btn btn-ghost btn-sm">Back</a>
-        <a href="/invoices/{{$inv.ID}}/print" class="btn btn-sm" target="_blank">Print</a>
-        <a href="/invoices/{{$inv.ID}}/pdf" class="btn btn-sm">PDF</a>
+        <a href="{{$.BasePath}}/invoices" class="btn btn-ghost btn-sm">Back</a>
+        <a href="{{$.BasePath}}/invoices/{{$inv.ID}}/print" class="btn btn-sm" target="_blank">Print</a>
+        <a href="{{$.BasePath}}/invoices/{{$inv.ID}}/pdf" class="btn btn-sm">PDF</a>
         {{if .User.HasCapability "invoices.manage"}}
+            {{if ne $inv.Status "draft"}}
+            <a href="{{$.BasePath}}/invoices/{{$inv.ID}}/whatsapp" class="btn btn-success btn-sm" target="_blank" rel="noopener">Kirim via WhatsApp</a>
+            {{end}}
             {{if eq $inv.Status "draft"}}
-            <a href="/invoices/{{$inv.ID}}/edit" class="btn btn-sm">Edit</a>
-            <form method="POST" action="/invoices/{{$inv.ID}}/send" class="inline">
+            <a href="{{$.BasePath}}/invoices/{{$inv.ID}}/edit" class="btn btn-sm">Edit</a>
+            <form method="POST" action="{{$.BasePath}}/invoices/{{$inv.ID}}/send" class="inline">
                 {{template "csrf" $}}
                 <button type="submit" class="btn btn-info btn-sm"
                     onclick="return confirm('Send this invoice? This will create a journal entry.')">Mark as Sent</button>
             </form>
             <button class="btn btn-error btn-sm"
-                hx-delete="/invoices/{{$inv.ID}}"
+                hx-delete="{{$.BasePath}}/invoices/{{$inv.ID}}"
                 hx-confirm="Delete this draft invoice?"
                 hx-target="body">Delete</button>
             {{end}}
             {{if and (gt $inv.AmountDue 0) (or (eq $inv.Status "sent") (eq $inv.Status "partial") (eq $inv.Status "overdue"))}}
-            <a href="/credit-notes/new?invoice_id={{$inv.ID}}" class="btn btn-warning btn-sm">Create Credit Note</a>
+            <a href="{{$.BasePath}}/credit-notes/new?invoice_id={{$inv.ID}}" class="btn btn-warning btn-sm">Create Credit Note</a>
             {{end}}
         {{end}}
     </div>
@@ -44,7 +47,7 @@
         {{else if eq $inv.Status "cancelled"}}badge-error
         {{end}} badge-lg">{{$inv.Status}}</span>
     {{if $inv.JournalID}}
-    <a href="/journals/{{$inv.JournalID}}" class="link link-primary text-sm ml-2">View Journal Entry</a>
+    <a href="{{$.BasePath}}/journals/{{$inv.JournalID}}" class="link link-primary text-sm ml-2">View Journal Entry</a>
     {{end}}
 </div>
 
@@ -152,7 +155,7 @@
             <tbody>
                 {{range $creditNotes}}
                 <tr>
-                    <td><a href="/credit-notes/{{.ID}}" class="link font-mono text-sm">{{.CNNumber}}</a></td>
+                    <td><a href="{{$.BasePath}}/credit-notes/{{.ID}}" class="link font-mono text-sm">{{.CNNumber}}</a></td>
                     <td class="text-sm">{{formatDate .CNDate}}</td>
                     <td class="text-sm capitalize">{{.Reason}}</td>
                     <td>
@@ -176,7 +179,7 @@
 <div class="card bg-base-100 shadow">
     <div class="card-body">
         <h2 class="card-title text-lg">Record Payment</h2>
-        <form method="POST" action="/invoices/{{$inv.ID}}/payment">
+        <form method="POST" action="{{$.BasePath}}/invoices/{{$inv.ID}}/payment">
             {{template "csrf" $}}
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div class="flex flex-col gap-1">

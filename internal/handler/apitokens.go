@@ -78,7 +78,7 @@ func (h *Handler) ListAPITokens(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user := auth.UserFromContext(ctx)
 	if user == nil {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		http.Redirect(w, r, h.BasePath+"/login", http.StatusSeeOther)
 		return
 	}
 
@@ -102,7 +102,7 @@ func (h *Handler) ListAPITokens(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) NewAPIToken(w http.ResponseWriter, r *http.Request) {
 	user := auth.UserFromContext(r.Context())
 	if user == nil {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		http.Redirect(w, r, h.BasePath+"/login", http.StatusSeeOther)
 		return
 	}
 
@@ -118,7 +118,7 @@ func (h *Handler) CreateAPIToken(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user := auth.UserFromContext(ctx)
 	if user == nil {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		http.Redirect(w, r, h.BasePath+"/login", http.StatusSeeOther)
 		return
 	}
 
@@ -217,19 +217,19 @@ func (h *Handler) CreateAPIToken(w http.ResponseWriter, r *http.Request) {
 	})
 
 	h.setFlash(w, plaintext)
-	http.Redirect(w, r, "/settings/api-tokens/created", http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+"/settings/api-tokens/created", http.StatusSeeOther)
 }
 
 func (h *Handler) CreatedAPIToken(w http.ResponseWriter, r *http.Request) {
 	user := auth.UserFromContext(r.Context())
 	if user == nil {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		http.Redirect(w, r, h.BasePath+"/login", http.StatusSeeOther)
 		return
 	}
 
 	plaintext := h.consumeFlash(w, r)
 	if plaintext == "" {
-		http.Redirect(w, r, "/settings/api-tokens", http.StatusSeeOther)
+		http.Redirect(w, r, h.BasePath+"/settings/api-tokens", http.StatusSeeOther)
 		return
 	}
 
@@ -243,7 +243,7 @@ func (h *Handler) RevokeAPIToken(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user := auth.UserFromContext(ctx)
 	if user == nil {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		http.Redirect(w, r, h.BasePath+"/login", http.StatusSeeOther)
 		return
 	}
 
@@ -262,7 +262,7 @@ func (h *Handler) RevokeAPIToken(w http.ResponseWriter, r *http.Request) {
 			slog.Error("api_token: revoke", "user_id", user.ID, "token_id", tokenID, "error", err)
 			h.setFlash(w, "Failed to revoke token")
 		}
-		http.Redirect(w, r, "/settings/api-tokens", http.StatusSeeOther)
+		http.Redirect(w, r, h.BasePath+"/settings/api-tokens", http.StatusSeeOther)
 		return
 	}
 
@@ -273,5 +273,5 @@ func (h *Handler) RevokeAPIToken(w http.ResponseWriter, r *http.Request) {
 	})
 
 	h.setFlash(w, "Token revoked")
-	http.Redirect(w, r, "/settings/api-tokens", http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+"/settings/api-tokens", http.StatusSeeOther)
 }

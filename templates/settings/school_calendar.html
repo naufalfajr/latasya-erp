@@ -12,7 +12,7 @@
 {{end}}
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-    <form method="GET" action="/settings/school-calendar" class="card bg-base-100 shadow lg:col-span-2">
+    <form method="GET" action="{{$.BasePath}}/settings/school-calendar" class="card bg-base-100 shadow lg:col-span-2">
         <div class="card-body">
             <h2 class="card-title">Month Preview</h2>
             <div class="form-control max-w-xs">
@@ -40,7 +40,7 @@
 
 <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
     <div class="xl:col-span-2 flex flex-col gap-4">
-        <form method="POST" action="/settings/school-calendar/closures?month={{$data.Month}}" class="card bg-base-100 shadow">
+        <form method="POST" action="{{$.BasePath}}/settings/school-calendar/closures?month={{$data.Month}}" class="card bg-base-100 shadow">
             {{template "csrf" $}}
             <div class="card-body">
                 <h2 class="card-title">Add Manual Closure</h2>
@@ -89,7 +89,7 @@
                                     <span class="badge badge-sm {{if eq .Source "manual"}}badge-info{{else}}badge-success{{end}}">{{.Source}}</span>
                                 </td>
                                 <td class="text-right">
-                                    <form method="POST" action="/settings/school-calendar/closures/{{.ID}}/delete?month={{$data.Month}}" class="inline" onsubmit="return confirm('Delete this closure?')">
+                                    <form method="POST" action="{{$.BasePath}}/settings/school-calendar/closures/{{.ID}}/delete?month={{$data.Month}}" class="inline" onsubmit="return confirm('Delete this closure?')">
                                         {{template "csrf" $}}
                                         <button type="submit" class="btn btn-ghost btn-xs text-error">Delete</button>
                                     </form>
@@ -115,7 +115,7 @@
             {{end}}
             <p class="text-sm opacity-60">Paste the private school closure calendar ID, then connect Google to sync events into local closures.</p>
 
-            <form method="POST" action="/settings/school-calendar/google-calendar-id?month={{$data.Month}}" class="flex flex-col gap-3">
+            <form method="POST" action="{{$.BasePath}}/settings/school-calendar/google-calendar-id?month={{$data.Month}}" class="flex flex-col gap-3">
                 {{template "csrf" $}}
                 <div class="form-control">
                     <label class="label" for="calendar_id"><span class="label-text">Private calendar ID</span></label>
@@ -139,15 +139,15 @@
             </div>
 
             <div class="flex flex-col gap-2">
-                <form method="POST" action="/integrations/google-calendar/connect?month={{$data.Month}}">
+                <form method="POST" action="{{$.BasePath}}/integrations/google-calendar/connect?month={{$data.Month}}">
                     {{template "csrf" $}}
                     <button type="submit" class="btn btn-secondary btn-sm w-full" {{if not $data.GoogleConfigEnabled}}disabled{{end}}>{{if $data.GoogleConnectionActive}}Reconnect Google{{else}}Connect Google{{end}}</button>
                 </form>
-                <form method="POST" action="/integrations/google-calendar/sync?month={{$data.Month}}">
+                <form method="POST" action="{{$.BasePath}}/integrations/google-calendar/sync?month={{$data.Month}}">
                     {{template "csrf" $}}
                     <button type="submit" class="btn btn-primary btn-sm w-full" {{if or (not $data.GoogleConfigEnabled) (not $data.GoogleConnectionActive) (not $data.GoogleCalendarIDSaved)}}disabled{{end}}>Sync now</button>
                 </form>
-                <form method="POST" action="/integrations/google-calendar/disconnect?month={{$data.Month}}" onsubmit="return confirm('Disconnect Google Calendar and remove synced Google closures? Manual closures stay.')">
+                <form method="POST" action="{{$.BasePath}}/integrations/google-calendar/disconnect?month={{$data.Month}}" onsubmit="return confirm('Disconnect Google Calendar and remove synced Google closures? Manual closures stay.')">
                     {{template "csrf" $}}
                     <button type="submit" class="btn btn-error btn-sm w-full" {{if not $data.GoogleConnectionActive}}disabled{{end}}>Disconnect</button>
                 </form>

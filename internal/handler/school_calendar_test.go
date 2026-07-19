@@ -11,7 +11,6 @@ import (
 
 	"github.com/naufal/latasya-erp/internal/auth"
 	"github.com/naufal/latasya-erp/internal/googlecalendar"
-	"github.com/naufal/latasya-erp/internal/handler"
 	"github.com/naufal/latasya-erp/internal/model"
 	"github.com/naufal/latasya-erp/internal/testutil"
 )
@@ -38,7 +37,7 @@ func testServerWithSchoolCalendar(t *testing.T, config googlecalendar.Config) (*
 	protected.HandleFunc("GET /password/change", h.PasswordChangePage)
 	protected.HandleFunc("POST /password/change", h.PasswordChange)
 
-	mux.Handle("/", auth.RequireAuth(db, auth.CSRFProtect(handler.EnforcePasswordChange(protected))))
+	mux.Handle("/", auth.RequireAuth(db, auth.CSRFProtect(h.EnforcePasswordChange(protected))))
 
 	hash, err := auth.HashPassword(adminTestPassword)
 	if err != nil {

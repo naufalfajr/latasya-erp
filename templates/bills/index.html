@@ -3,18 +3,18 @@
 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
     <h1 class="text-2xl font-bold">Bills</h1>
     {{if .User.HasCapability "bills.manage"}}
-    <a href="/bills/new" class="btn btn-primary btn-sm">+ New Bill</a>
+    <a href="{{$.BasePath}}/bills/new" class="btn btn-primary btn-sm">+ New Bill</a>
     {{end}}
 </div>
 
 {{$data := .Data}}
 
 <div class="tabs tabs-boxed mb-4 flex-wrap">
-    <a href="/bills" class="tab {{if eq (index $data "Filter") ""}}tab-active{{end}}">All</a>
-    <a href="/bills?status=draft" class="tab {{if eq (index $data "Filter") "draft"}}tab-active{{end}}">Draft</a>
-    <a href="/bills?status=received" class="tab {{if eq (index $data "Filter") "received"}}tab-active{{end}}">Received</a>
-    <a href="/bills?status=partial" class="tab {{if eq (index $data "Filter") "partial"}}tab-active{{end}}">Partial</a>
-    <a href="/bills?status=paid" class="tab {{if eq (index $data "Filter") "paid"}}tab-active{{end}}">Paid</a>
+    <a href="{{$.BasePath}}/bills" class="tab {{if eq (index $data "Filter") ""}}tab-active{{end}}">All</a>
+    <a href="{{$.BasePath}}/bills?status=draft" class="tab {{if eq (index $data "Filter") "draft"}}tab-active{{end}}">Draft</a>
+    <a href="{{$.BasePath}}/bills?status=received" class="tab {{if eq (index $data "Filter") "received"}}tab-active{{end}}">Received</a>
+    <a href="{{$.BasePath}}/bills?status=partial" class="tab {{if eq (index $data "Filter") "partial"}}tab-active{{end}}">Partial</a>
+    <a href="{{$.BasePath}}/bills?status=paid" class="tab {{if eq (index $data "Filter") "paid"}}tab-active{{end}}">Paid</a>
 </div>
 
 <div class="overflow-x-auto">
@@ -48,7 +48,7 @@
                 <td class="text-right font-mono text-sm">{{formatIDR .Total}}</td>
                 <td class="text-right font-mono text-sm">{{formatIDR .AmountPaid}}</td>
                 <td class="text-right font-mono text-sm">{{formatIDR .AmountDue}}</td>
-                <td><a href="/bills/{{.ID}}" class="btn btn-ghost btn-xs">View</a></td>
+                <td><a href="{{$.BasePath}}/bills/{{.ID}}" class="btn btn-ghost btn-xs">View</a></td>
             </tr>
             {{else}}
             <tr><td colspan="9" class="text-center py-8 opacity-60">No bills found</td></tr>

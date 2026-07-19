@@ -75,12 +75,14 @@ func main() {
 		TemplateFS: latasyaerp.TemplateFS,
 		FuncMap:    tmpl.FuncMap(),
 		DevMode:    devMode,
+		BasePath:   "/dashboard",
 		GoogleCalendarConfig: googlecalendar.Config{
 			ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
 			ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
 			RedirectURL:  os.Getenv("GOOGLE_REDIRECT_URL"),
 		},
 	}
+	auth.SetLoginPath(h.BasePath + "/login")
 
 	mux := http.NewServeMux()
 
@@ -230,12 +232,22 @@ func main() {
 	mux.Handle("/api/v1/", v1.BearerOrCookie(db)(apiMux))
 	mux.Handle("POST /api/v1/auth/login", v1.LoginRateLimiter()(http.HandlerFunc(authAPI.Login)))
 
-	// Auth routes (no auth required)
-	mux.HandleFunc("GET /login", h.LoginPage)
-	mux.Handle("POST /login", v1.LoginRateLimiter()(http.HandlerFunc(h.Login)))
-	mux.HandleFunc("POST /logout", h.Logout)
+	// Public site: company profile at the bare domain, plus the parent
+	// invoice portal. No auth required.
+	mux.HandleFunc("GET /{$}", h.PublicHome)
+	mux.HandleFunc("GET /i/{token}", h.PortalIndex)
+	mux.HandleFunc("GET /i/{token}/invoice/{id}/pdf", h.PortalInvoicePDF)
 
-	// Protected routes (any authenticated user)
+	// Auth routes (no auth required)
+	mux.HandleFunc("GET /dashboard/login", h.LoginPage)
+	mux.Handle("POST /dashboard/login", v1.LoginRateLimiter()(http.HandlerFunc(h.Login)))
+	mux.HandleFunc("POST /dashboard/logout", h.Logout)
+
+	// Protected routes (any authenticated user), mounted under BasePath.
+	// StripPrefix removes it before dispatch, so every pattern below and
+	// every handler's PathValue/r.URL.Path logic is unprefixed and
+	// untouched — only outbound redirects and rendered links need it,
+	// via h.BasePath.
 	protected := http.NewServeMux()
 	protected.HandleFunc("GET /{$}", h.Dashboard)
 
@@ -254,6 +266,7 @@ func main() {
 	protected.HandleFunc("GET /contacts/{id}/edit", h.EditContact)
 	protected.HandleFunc("POST /contacts/{id}", auth.CapabilityOnly(model.CapContactsManage, h.UpdateContact))
 	protected.HandleFunc("DELETE /contacts/{id}", auth.CapabilityOnly(model.CapContactsManage, h.DeleteContact))
+	protected.HandleFunc("POST /contacts/{id}/reset-token", auth.CapabilityOnly(model.CapContactsManage, h.ResetContactPortalToken))
 
 	// Journal Entries
 	protected.HandleFunc("GET /journals", h.ListJournals)
@@ -295,6 +308,7 @@ func main() {
 	protected.HandleFunc("POST /invoices/{id}/payment", auth.CapabilityOnly(model.CapInvoicesManage, h.InvoicePayment))
 	protected.HandleFunc("GET /invoices/{id}/print", h.PrintInvoice)
 	protected.HandleFunc("GET /invoices/{id}/pdf", h.InvoicePDF)
+	protected.HandleFunc("GET /invoices/{id}/whatsapp", auth.CapabilityOnly(model.CapInvoicesManage, h.InvoiceWhatsApp))
 
 	// Credit Notes (piggyback on invoices.manage capability)
 	protected.HandleFunc("GET /credit-notes", h.ListCreditNotes)
@@ -381,7 +395,7 @@ func main() {
 	// Audit log (admin-only via audit.view capability)
 	protected.HandleFunc("GET /audit", auth.CapabilityOnly(model.CapAuditView, h.AuditList))
 
-	mux.Handle("/", auth.RequireAuth(db, auth.CSRFProtect(handler.EnforcePasswordChange(protected))))
+	mux.Handle(h.BasePath+"/", http.StripPrefix(h.BasePath, auth.RequireAuth(db, auth.CSRFProtect(h.EnforcePasswordChange(protected)))))
 
 	// audit.RequestContext wraps everything so pre-auth events (login attempts)
 	// still get a request_id and client IP attached.

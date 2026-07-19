@@ -8,26 +8,26 @@
         <p class="text-sm opacity-60">
             {{$cn.ContactName}} &middot; {{formatDate $cn.CNDate}}
             {{if $cn.InvoiceID}}&middot; for invoice
-                <a href="/invoices/{{$cn.InvoiceID}}" class="link font-mono">{{$cn.InvoiceNumber}}</a>
+                <a href="{{$.BasePath}}/invoices/{{$cn.InvoiceID}}" class="link font-mono">{{$cn.InvoiceNumber}}</a>
             {{end}}
         </p>
     </div>
     <div class="flex gap-2 flex-wrap">
-        <a href="/credit-notes" class="btn btn-ghost btn-sm">Back</a>
+        <a href="{{$.BasePath}}/credit-notes" class="btn btn-ghost btn-sm">Back</a>
         {{if .User.HasCapability "invoices.manage"}}
             {{if eq $cn.Status "draft"}}
-            <a href="/credit-notes/{{$cn.ID}}/edit" class="btn btn-sm">Edit</a>
-            <form method="POST" action="/credit-notes/{{$cn.ID}}/issue" class="inline">
+            <a href="{{$.BasePath}}/credit-notes/{{$cn.ID}}/edit" class="btn btn-sm">Edit</a>
+            <form method="POST" action="{{$.BasePath}}/credit-notes/{{$cn.ID}}/issue" class="inline">
                 {{template "csrf" $}}
                 <button type="submit" class="btn btn-info btn-sm"
                     onclick="return confirm('Issue this credit note? This posts a journal entry and reduces the customer balance.')">Issue Credit Note</button>
             </form>
             <button class="btn btn-error btn-sm"
-                hx-delete="/credit-notes/{{$cn.ID}}"
+                hx-delete="{{$.BasePath}}/credit-notes/{{$cn.ID}}"
                 hx-confirm="Delete this draft credit note?"
                 hx-target="body">Delete</button>
             {{else if eq $cn.Status "issued"}}
-            <form method="POST" action="/credit-notes/{{$cn.ID}}/void" class="inline">
+            <form method="POST" action="{{$.BasePath}}/credit-notes/{{$cn.ID}}/void" class="inline">
                 {{template "csrf" $}}
                 <button type="submit" class="btn btn-warning btn-sm"
                     onclick="return confirm('Void this credit note? This reverses its effect on the customer balance.')">Void</button>
@@ -45,7 +45,7 @@
         {{end}}">{{$cn.Status}}</span>
     <span class="badge badge-lg badge-outline ml-1 capitalize">{{$cn.Reason}}</span>
     {{if $cn.JournalID}}
-    <a href="/journals/{{$cn.JournalID}}" class="link link-primary text-sm ml-2">View Journal Entry</a>
+    <a href="{{$.BasePath}}/journals/{{$cn.JournalID}}" class="link link-primary text-sm ml-2">View Journal Entry</a>
     {{end}}
 </div>
 
