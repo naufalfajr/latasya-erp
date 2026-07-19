@@ -27,8 +27,8 @@ jobs:
 
       - name: Download Tailwind CLI and daisyUI
         env:
-          TAILWIND_VERSION: v4.3.0
-          DAISYUI_VERSION: v5.5.20
+          TAILWIND_VERSION: v4.3.3
+          DAISYUI_VERSION: v5.6.18
         run: |
           mkdir -p bin
           curl -sL https://github.com/tailwindlabs/tailwindcss/releases/download/${TAILWIND_VERSION}/tailwindcss-linux-x64 -o bin/tailwindcss

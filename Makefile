@@ -6,8 +6,8 @@ DAISYUI := ./bin/daisyui.mjs
 DAISYUI_THEME := ./bin/daisyui-theme.mjs
 
 # Pinned CSS toolchain versions — keep in sync with .github/workflows/deploy.yml
-TAILWIND_VERSION := v4.3.0
-DAISYUI_VERSION := v5.5.20
+TAILWIND_VERSION := v4.3.3
+DAISYUI_VERSION := v5.6.18
 
 $(TAILWIND):
 	@mkdir -p bin

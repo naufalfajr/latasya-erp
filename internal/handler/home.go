@@ -7,8 +7,9 @@ import (
 )
 
 type homeData struct {
-	Company   *model.CompanyProfile
-	ContactWA string
+	Company      *model.CompanyProfile
+	ContactWA    string
+	PhoneDisplay string
 }
 
 // PublicHome is the bare-domain landing page: a read-only company profile
@@ -32,8 +33,9 @@ func (h *Handler) PublicHome(w http.ResponseWriter, r *http.Request) {
 		Title:    company.Name,
 		BasePath: h.BasePath,
 		Data: homeData{
-			Company:   company,
-			ContactWA: buildWALink(company.Phone, "Halo, saya ingin bertanya soal layanan antar jemput Latasya."),
+			Company:      company,
+			ContactWA:    buildWALink(company.Phone, "Halo, saya ingin bertanya soal layanan Latasya Trans."),
+			PhoneDisplay: "+" + model.NormalizePhoneID(company.Phone),
 		},
 	})
 }

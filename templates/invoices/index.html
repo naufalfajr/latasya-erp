@@ -74,9 +74,9 @@
                 <td class="text-right font-mono text-sm">{{formatIDR .AmountPaid}}</td>
                 <td class="text-right font-mono text-sm">{{formatIDR .AmountDue}}</td>
                 <td>
-                    <a href="{{$.BasePath}}/invoices/{{.ID}}" class="btn btn-ghost btn-xs">View</a>
+                    <a href="{{$.BasePath}}/invoices/{{.ID}}" class="btn btn-outline btn-accent btn-xs">View</a>
                     {{if and $canManage (ne .Status "draft")}}
-                    <a href="{{$.BasePath}}/invoices/{{.ID}}/whatsapp" class="btn btn-ghost btn-xs" target="_blank" rel="noopener">WA</a>
+                    <a href="{{$.BasePath}}/invoices/{{.ID}}/whatsapp" class="btn btn-outline btn-accent btn-xs" target="_blank" rel="noopener">WA</a>
                     {{end}}
                 </td>
             </tr>
