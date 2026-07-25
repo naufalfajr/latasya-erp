@@ -291,28 +291,35 @@ type CashFlowRow struct {
 
 // CashFlowReport holds the cash flow statement.
 type CashFlowReport struct {
-	Operating      []CashFlowRow `json:"operating"`
-	TotalOperating int           `json:"total_operating"`
+	Movements      []CashFlowRow `json:"movements"`
+	TotalMovement  int           `json:"total_movement"`
+	Operating      []CashFlowRow `json:"operating"`       // Deprecated: use Movements.
+	TotalOperating int           `json:"total_operating"` // Deprecated: use TotalMovement.
 	NetCashChange  int           `json:"net_cash_change"`
 	OpeningCash    int           `json:"opening_cash"`
 	ClosingCash    int           `json:"closing_cash"`
+	CashConfigured bool          `json:"cash_configured"`
 }
 
 // CashFlow returns a simplified cash flow report for a date range.
-// It shows changes in cash/bank accounts categorized by the counterpart account type.
+// It shows debit-minus-credit activity in explicitly classified cash accounts.
 func CashFlow(db *sql.DB, dateFrom, dateTo string) (*CashFlowReport, error) {
-	// Get all cash/bank account transactions
+	report := &CashFlowReport{}
+	var cashCount int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM accounts WHERE is_cash = 1`).Scan(&cashCount); err != nil {
+		return nil, fmt.Errorf("cash configuration: %w", err)
+	}
+	if cashCount == 0 {
+		return report, nil
+	}
+	report.CashConfigured = true
+
 	query := `
-		SELECT a2.code, a2.name,
-			SUM(CASE WHEN jl2.account_id = jl.account_id THEN 0
-				WHEN jl2.debit > 0 THEN -jl2.debit
-				ELSE jl2.credit END) AS amount
+		SELECT a.code, a.name, SUM(jl.debit - jl.credit) AS amount
 		FROM journal_lines jl
 		JOIN journal_entries je ON je.id = jl.entry_id AND je.is_posted = 1
-		JOIN accounts a ON a.id = jl.account_id
-		JOIN journal_lines jl2 ON jl2.entry_id = je.id AND jl2.account_id != jl.account_id
-		JOIN accounts a2 ON a2.id = jl2.account_id
-		WHERE a.code LIKE '1-1%'`
+		JOIN accounts a ON a.id = jl.account_id AND a.is_cash = 1
+		WHERE 1=1`
 
 	var args []any
 	if dateFrom != "" {
@@ -325,9 +332,9 @@ func CashFlow(db *sql.DB, dateFrom, dateTo string) (*CashFlowReport, error) {
 	}
 
 	query += `
-		GROUP BY a2.id, a2.code, a2.name
+		GROUP BY a.id, a.code, a.name
 		HAVING amount != 0
-		ORDER BY a2.code`
+		ORDER BY a.code`
 
 	rows, err := db.Query(query, args...)
 	if err != nil {
@@ -335,14 +342,13 @@ func CashFlow(db *sql.DB, dateFrom, dateTo string) (*CashFlowReport, error) {
 	}
 	defer rows.Close()
 
-	report := &CashFlowReport{}
 	for rows.Next() {
 		var r CashFlowRow
 		if err := rows.Scan(&r.AccountCode, &r.AccountName, &r.Amount); err != nil {
 			return nil, fmt.Errorf("scan cash flow: %w", err)
 		}
-		report.Operating = append(report.Operating, r)
-		report.TotalOperating += r.Amount
+		report.Movements = append(report.Movements, r)
+		report.TotalMovement += r.Amount
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate cash flow: %w", err)
@@ -354,8 +360,8 @@ func CashFlow(db *sql.DB, dateFrom, dateTo string) (*CashFlowReport, error) {
 			SELECT COALESCE(SUM(jl.debit) - SUM(jl.credit), 0)
 			FROM journal_lines jl
 			JOIN journal_entries je ON je.id = jl.entry_id AND je.is_posted = 1
-			JOIN accounts a ON a.id = jl.account_id
-			WHERE a.code LIKE '1-1%' AND je.entry_date < ?`, dateFrom).Scan(&report.OpeningCash); err != nil {
+			JOIN accounts a ON a.id = jl.account_id AND a.is_cash = 1
+			WHERE je.entry_date < ?`, dateFrom).Scan(&report.OpeningCash); err != nil {
 			return nil, fmt.Errorf("opening cash: %w", err)
 		}
 	}
@@ -364,8 +370,8 @@ func CashFlow(db *sql.DB, dateFrom, dateTo string) (*CashFlowReport, error) {
 		SELECT COALESCE(SUM(jl.debit) - SUM(jl.credit), 0)
 		FROM journal_lines jl
 		JOIN journal_entries je ON je.id = jl.entry_id AND je.is_posted = 1
-		JOIN accounts a ON a.id = jl.account_id
-		WHERE a.code LIKE '1-1%'`
+		JOIN accounts a ON a.id = jl.account_id AND a.is_cash = 1
+		WHERE 1=1`
 	closingArgs := []any{}
 	if dateTo != "" {
 		closingQuery += " AND je.entry_date <= ?"
@@ -376,5 +382,7 @@ func CashFlow(db *sql.DB, dateFrom, dateTo string) (*CashFlowReport, error) {
 	}
 
 	report.NetCashChange = report.ClosingCash - report.OpeningCash
+	report.Operating = report.Movements
+	report.TotalOperating = report.TotalMovement
 	return report, nil
 }

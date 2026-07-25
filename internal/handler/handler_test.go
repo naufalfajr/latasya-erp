@@ -1331,4 +1331,46 @@ func TestDashboard_WithData(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("expected 200, got %d", resp.StatusCode)
 	}
+	body := readBody(t, resp)
+	for _, want := range []string{
+		"Monthly Profitability", "Cash Position", "financial-charts.js",
+		"View exact monthly values", "/reports/profit-loss?from=", "/reports/cash-flow?from=",
+		"MTD through", "?months=6", "?months=12", "?months=24",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("dashboard should contain %q", want)
+		}
+	}
+}
+
+func TestDashboard_InvalidMonthRange(t *testing.T) {
+	ts, db := testServer(t)
+	cookies := loginAsAdmin(t, ts)
+	req, _ := requestWithCookies(db, "GET", ts.URL+"/?months=18", cookies, "")
+	resp, err := (&http.Client{}).Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestDashboard_NoCashConfigurationWarning(t *testing.T) {
+	ts, db := testServer(t)
+	cookies := loginAsAdmin(t, ts)
+	if _, err := db.Exec(`UPDATE accounts SET is_cash = 0`); err != nil {
+		t.Fatal(err)
+	}
+	req, _ := requestWithCookies(db, "GET", ts.URL+"/", cookies, "")
+	resp, err := (&http.Client{}).Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	body := readBody(t, resp)
+	if !strings.Contains(body, "Cash figures are unavailable") || !strings.Contains(body, "Configure accounts") {
+		t.Fatal("expected administrator cash configuration warning and link")
+	}
 }

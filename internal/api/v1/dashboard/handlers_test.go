@@ -42,8 +42,12 @@ func anyAuthToken(t *testing.T, db *sql.DB) string {
 }
 
 func doReq(t *testing.T, ts *httptest.Server, bearer string) *http.Response {
+	return doReqPath(t, ts, bearer, "/api/v1/dashboard")
+}
+
+func doReqPath(t *testing.T, ts *httptest.Server, bearer, path string) *http.Response {
 	t.Helper()
-	req, err := http.NewRequest(http.MethodGet, ts.URL+"/api/v1/dashboard", bytes.NewReader(nil))
+	req, err := http.NewRequest(http.MethodGet, ts.URL+path, bytes.NewReader(nil))
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
@@ -110,6 +114,47 @@ func TestGetDashboard(t *testing.T) {
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
 			t.Errorf("expected 200 for any authenticated user, got %d", resp.StatusCode)
+		}
+	})
+
+	t.Run("range defaults to 12 and accepts supported values", func(t *testing.T) {
+		for _, months := range []string{"", "6", "12", "24"} {
+			path := "/api/v1/dashboard"
+			if months != "" {
+				path += "?months=" + months
+			}
+			resp := doReqPath(t, ts, tok, path)
+			var env struct {
+				Data struct {
+					Months        int `json:"months"`
+					MonthlyTrends []struct {
+						Revenue string `json:"revenue"`
+					} `json:"monthly_trends"`
+				} `json:"data"`
+			}
+			if err := json.NewDecoder(resp.Body).Decode(&env); err != nil {
+				resp.Body.Close()
+				t.Fatal(err)
+			}
+			resp.Body.Close()
+			want := 12
+			if months != "" {
+				fmt.Sscan(months, &want)
+			}
+			if resp.StatusCode != http.StatusOK || env.Data.Months != want || len(env.Data.MonthlyTrends) != want {
+				t.Errorf("months=%q: status=%d data=%+v", months, resp.StatusCode, env.Data)
+			}
+			if len(env.Data.MonthlyTrends) > 0 && env.Data.MonthlyTrends[0].Revenue == "" {
+				t.Errorf("months=%q: trend currency fields must be strings", months)
+			}
+		}
+	})
+
+	t.Run("unsupported range returns 400", func(t *testing.T) {
+		resp := doReqPath(t, ts, tok, "/api/v1/dashboard?months=18")
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Fatalf("expected 400, got %d", resp.StatusCode)
 		}
 	})
 }

@@ -220,3 +220,37 @@ func TestCashFlow(t *testing.T) {
 		t.Errorf("expected closing cash 7000000, got %d", report.ClosingCash)
 	}
 }
+
+func TestCashFlow_UsesClassificationAndCompatibilityAliases(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	var cash, bank, ar, revenue int
+	for code, target := range map[string]*int{
+		"1-1001": &cash, "1-1002": &bank, "1-1100": &ar, "4-1001": &revenue,
+	} {
+		if err := db.QueryRow(`SELECT id FROM accounts WHERE code = ?`, code).Scan(target); err != nil {
+			t.Fatal(err)
+		}
+	}
+	post := func(date string, lines ...model.JournalLine) {
+		t.Helper()
+		if _, err := model.CreateJournalEntry(db, &model.JournalEntry{
+			EntryDate: date, Description: "cash fixture", IsPosted: true, CreatedBy: 1,
+		}, lines); err != nil {
+			t.Fatal(err)
+		}
+	}
+	post("2026-03-01", model.JournalLine{AccountID: cash, Debit: 1000}, model.JournalLine{AccountID: revenue, Credit: 1000})
+	post("2026-03-02", model.JournalLine{AccountID: ar, Debit: 500}, model.JournalLine{AccountID: revenue, Credit: 500})
+	post("2026-03-03", model.JournalLine{AccountID: bank, Debit: 300}, model.JournalLine{AccountID: cash, Credit: 300})
+
+	report, err := model.CashFlow(db, "2026-03-01", "2026-03-31")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !report.CashConfigured || report.TotalMovement != 1000 || report.NetCashChange != 1000 || report.ClosingCash != 1000 {
+		t.Fatalf("cash report totals: %+v", report)
+	}
+	if report.TotalOperating != report.TotalMovement || len(report.Operating) != len(report.Movements) {
+		t.Fatalf("deprecated aliases must match: %+v", report)
+	}
+}

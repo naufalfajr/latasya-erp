@@ -2,8 +2,11 @@ package model
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 )
+
+var ErrInvalidCashAccount = errors.New("cash accounts must be debit-normal assets")
 
 type Account struct {
 	ID            int    `json:"id"`
@@ -14,6 +17,7 @@ type Account struct {
 	ParentID      *int   `json:"parent_id,omitempty"`
 	IsSystem      bool   `json:"is_system"`
 	IsActive      bool   `json:"is_active"`
+	IsCash        bool   `json:"is_cash"`
 	Description   string `json:"description"`
 	CreatedAt     string `json:"created_at"`
 	UpdatedAt     string `json:"updated_at"`
@@ -26,7 +30,7 @@ type AccountFilter struct {
 }
 
 func ListAccounts(db *sql.DB, f AccountFilter) ([]Account, error) {
-	query := "SELECT id, code, name, account_type, normal_balance, parent_id, is_system, is_active, COALESCE(description,''), created_at, updated_at FROM accounts WHERE 1=1"
+	query := "SELECT id, code, name, account_type, normal_balance, parent_id, is_system, is_active, is_cash, COALESCE(description,''), created_at, updated_at FROM accounts WHERE 1=1"
 	var args []any
 
 	if f.Type != "" {
@@ -58,7 +62,7 @@ func ListAccounts(db *sql.DB, f AccountFilter) ([]Account, error) {
 	for rows.Next() {
 		var a Account
 		err := rows.Scan(&a.ID, &a.Code, &a.Name, &a.AccountType, &a.NormalBalance,
-			&a.ParentID, &a.IsSystem, &a.IsActive, &a.Description, &a.CreatedAt, &a.UpdatedAt)
+			&a.ParentID, &a.IsSystem, &a.IsActive, &a.IsCash, &a.Description, &a.CreatedAt, &a.UpdatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("scan account: %w", err)
 		}
@@ -70,10 +74,10 @@ func ListAccounts(db *sql.DB, f AccountFilter) ([]Account, error) {
 func GetAccount(db *sql.DB, id int) (*Account, error) {
 	a := &Account{}
 	err := db.QueryRow(
-		"SELECT id, code, name, account_type, normal_balance, parent_id, is_system, is_active, COALESCE(description,''), created_at, updated_at FROM accounts WHERE id = ?",
+		"SELECT id, code, name, account_type, normal_balance, parent_id, is_system, is_active, is_cash, COALESCE(description,''), created_at, updated_at FROM accounts WHERE id = ?",
 		id,
 	).Scan(&a.ID, &a.Code, &a.Name, &a.AccountType, &a.NormalBalance,
-		&a.ParentID, &a.IsSystem, &a.IsActive, &a.Description, &a.CreatedAt, &a.UpdatedAt)
+		&a.ParentID, &a.IsSystem, &a.IsActive, &a.IsCash, &a.Description, &a.CreatedAt, &a.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("get account: %w", err)
 	}
@@ -81,23 +85,40 @@ func GetAccount(db *sql.DB, id int) (*Account, error) {
 }
 
 func CreateAccount(db *sql.DB, a *Account) error {
-	_, err := db.Exec(
-		"INSERT INTO accounts (code, name, account_type, normal_balance, parent_id, is_system, is_active, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-		a.Code, a.Name, a.AccountType, a.NormalBalance, a.ParentID, a.IsSystem, a.IsActive, a.Description,
+	if err := ValidateCashAccount(a); err != nil {
+		return err
+	}
+	result, err := db.Exec(
+		"INSERT INTO accounts (code, name, account_type, normal_balance, parent_id, is_system, is_active, is_cash, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		a.Code, a.Name, a.AccountType, a.NormalBalance, a.ParentID, a.IsSystem, a.IsActive, a.IsCash, a.Description,
 	)
 	if err != nil {
 		return fmt.Errorf("create account: %w", err)
+	}
+	id, err := result.LastInsertId()
+	if err == nil {
+		a.ID = int(id)
 	}
 	return nil
 }
 
 func UpdateAccount(db *sql.DB, a *Account) error {
+	if err := ValidateCashAccount(a); err != nil {
+		return err
+	}
 	_, err := db.Exec(
-		"UPDATE accounts SET code=?, name=?, account_type=?, normal_balance=?, parent_id=?, is_active=?, description=?, updated_at=datetime('now') WHERE id=?",
-		a.Code, a.Name, a.AccountType, a.NormalBalance, a.ParentID, a.IsActive, a.Description, a.ID,
+		"UPDATE accounts SET code=?, name=?, account_type=?, normal_balance=?, parent_id=?, is_active=?, is_cash=?, description=?, updated_at=datetime('now') WHERE id=?",
+		a.Code, a.Name, a.AccountType, a.NormalBalance, a.ParentID, a.IsActive, a.IsCash, a.Description, a.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("update account: %w", err)
+	}
+	return nil
+}
+
+func ValidateCashAccount(a *Account) error {
+	if a.IsCash && (a.AccountType != AccountTypeAsset || a.NormalBalance != "debit") {
+		return ErrInvalidCashAccount
 	}
 	return nil
 }

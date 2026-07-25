@@ -202,6 +202,8 @@ type cashFlowRowResp struct {
 }
 
 type cashFlowResp struct {
+	Movements      []cashFlowRowResp `json:"movements"`
+	TotalMovement  string            `json:"total_movement"`
 	Operating      []cashFlowRowResp `json:"operating"`
 	TotalOperating string            `json:"total_operating"`
 	NetCashChange  string            `json:"net_cash_change"`
@@ -209,6 +211,7 @@ type cashFlowResp struct {
 	ClosingCash    string            `json:"closing_cash"`
 	From           string            `json:"from"`
 	To             string            `json:"to"`
+	CashConfigured bool              `json:"cash_configured"`
 }
 
 func (h *Handler) CashFlow(w http.ResponseWriter, r *http.Request) {
@@ -223,18 +226,23 @@ func (h *Handler) CashFlow(w http.ResponseWriter, r *http.Request) {
 	resp := cashFlowResp{
 		From:           from,
 		To:             to,
+		TotalMovement:  idr(report.TotalMovement),
 		TotalOperating: idr(report.TotalOperating),
 		NetCashChange:  idr(report.NetCashChange),
 		OpeningCash:    idr(report.OpeningCash),
 		ClosingCash:    idr(report.ClosingCash),
 		Operating:      make([]cashFlowRowResp, 0, len(report.Operating)),
+		Movements:      make([]cashFlowRowResp, 0, len(report.Movements)),
+		CashConfigured: report.CashConfigured,
 	}
-	for _, row := range report.Operating {
-		resp.Operating = append(resp.Operating, cashFlowRowResp{
+	for _, row := range report.Movements {
+		item := cashFlowRowResp{
 			AccountCode: row.AccountCode,
 			AccountName: row.AccountName,
 			Amount:      idr(row.Amount),
-		})
+		}
+		resp.Movements = append(resp.Movements, item)
+		resp.Operating = append(resp.Operating, item)
 	}
 
 	v1.WriteJSON(w, http.StatusOK, map[string]any{"data": resp})

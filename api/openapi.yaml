@@ -164,6 +164,9 @@ components:
           type: string
         is_active:
           type: boolean
+        is_cash:
+          type: boolean
+          description: True for Cash/Bank accounts. Only debit-normal asset accounts may be classified.
         is_system:
           type: boolean
         parent_id:
@@ -193,6 +196,10 @@ components:
         is_active:
           type: boolean
           default: true
+        is_cash:
+          type: boolean
+          default: false
+          description: Classify as Cash/Bank. Valid only when account_type is asset and normal_balance is debit.
 
     Meta:
       type: object
@@ -960,18 +967,35 @@ components:
     CashFlowReport:
       type: object
       properties:
+        movements:
+          type: array
+          description: Debit-minus-credit activity grouped by explicitly classified Cash/Bank account.
+          items:
+            $ref: '#/components/schemas/CashFlowRow'
+        total_movement:
+          allOf:
+            - $ref: '#/components/schemas/IDR'
+          description: Net debit-minus-credit movement across all classified Cash/Bank accounts.
         operating:
           type: array
+          deprecated: true
+          description: Deprecated compatibility alias for movements. This data is not classified by operating/investing/financing activity.
           items:
             $ref: '#/components/schemas/CashFlowRow'
         total_operating:
-          $ref: '#/components/schemas/IDR'
+          allOf:
+            - $ref: '#/components/schemas/IDR'
+          deprecated: true
+          description: Deprecated compatibility alias for total_movement.
         net_cash_change:
           $ref: '#/components/schemas/IDR'
         opening_cash:
           $ref: '#/components/schemas/IDR'
         closing_cash:
           $ref: '#/components/schemas/IDR'
+        cash_configured:
+          type: boolean
+          description: False when no accounts are classified as Cash/Bank and cash figures are unavailable.
         from:
           $ref: '#/components/schemas/BusinessDate'
         to:
@@ -1153,7 +1177,12 @@ components:
       type: object
       properties:
         cash_balance:
-          $ref: '#/components/schemas/IDR'
+          allOf:
+            - $ref: '#/components/schemas/IDR'
+          nullable: true
+          description: Null when cash_configured is false.
+        cash_configured:
+          type: boolean
         monthly_revenue:
           $ref: '#/components/schemas/IDR'
         monthly_expenses:
@@ -1166,6 +1195,44 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/RecentTransaction'
+        months:
+          type: integer
+          enum: [6, 12, 24]
+        as_of:
+          $ref: '#/components/schemas/BusinessDate'
+        monthly_trends:
+          type: array
+          items:
+            $ref: '#/components/schemas/MonthlyFinancialTrend'
+
+    MonthlyFinancialTrend:
+      type: object
+      properties:
+        month:
+          type: string
+          pattern: '^\d{4}-\d{2}$'
+        start_date:
+          $ref: '#/components/schemas/BusinessDate'
+        end_date:
+          $ref: '#/components/schemas/BusinessDate'
+        is_partial:
+          type: boolean
+        revenue:
+          $ref: '#/components/schemas/IDR'
+        expenses:
+          $ref: '#/components/schemas/IDR'
+        net_income:
+          $ref: '#/components/schemas/IDR'
+        net_cash_movement:
+          allOf:
+            - $ref: '#/components/schemas/IDR'
+          nullable: true
+          description: Null when no accounts are classified as Cash/Bank.
+        closing_cash:
+          allOf:
+            - $ref: '#/components/schemas/IDR'
+          nullable: true
+          description: Cumulative classified cash balance at the period end; null when unconfigured.
 
     APIToken:
       type: object
@@ -3479,6 +3546,14 @@ paths:
     get:
       operationId: getDashboard
       summary: Dashboard summary (any authenticated user)
+      parameters:
+        - name: months
+          in: query
+          description: Number of calendar months to return, including the current MTD month.
+          schema:
+            type: integer
+            enum: [6, 12, 24]
+            default: 12
       responses:
         '200':
           description: Dashboard data with IDR currency strings
@@ -3491,6 +3566,8 @@ paths:
                     $ref: '#/components/schemas/DashboardData'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
 
   /api-tokens:
     get:

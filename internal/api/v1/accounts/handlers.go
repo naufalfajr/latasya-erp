@@ -80,6 +80,7 @@ type accountInput struct {
 	NormalBalance string `json:"normal_balance"`
 	Description   string `json:"description"`
 	IsActive      *bool  `json:"is_active"`
+	IsCash        bool   `json:"is_cash"`
 }
 
 var validAccountTypes = map[string]bool{
@@ -108,6 +109,9 @@ func validateInput(inp *accountInput) map[string]string {
 		fields["normal_balance"] = "required"
 	} else if !validNormalBalances[inp.NormalBalance] {
 		fields["normal_balance"] = "must be one of: debit, credit"
+	}
+	if inp.IsCash && (inp.AccountType != model.AccountTypeAsset || inp.NormalBalance != "debit") {
+		fields["is_cash"] = "cash accounts must be debit-normal assets"
 	}
 	if len(fields) == 0 {
 		return nil
@@ -146,6 +150,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		NormalBalance: inp.NormalBalance,
 		Description:   inp.Description,
 		IsActive:      isActive,
+		IsCash:        inp.IsCash,
 	}
 
 	if err := model.CreateAccount(h.DB, a); err != nil {
@@ -178,6 +183,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 				"account_type":   created.AccountType,
 				"normal_balance": created.NormalBalance,
 				"is_active":      created.IsActive,
+				"is_cash":        created.IsCash,
 			},
 		},
 	})
@@ -233,6 +239,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		NormalBalance: inp.NormalBalance,
 		Description:   inp.Description,
 		IsActive:      isActive,
+		IsCash:        inp.IsCash,
 		IsSystem:      existing.IsSystem,
 		ParentID:      existing.ParentID,
 	}
@@ -255,6 +262,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		"normal_balance": existing.NormalBalance,
 		"description":    existing.Description,
 		"is_active":      existing.IsActive,
+		"is_cash":        existing.IsCash,
 	}
 	newFields := map[string]any{
 		"code":           updated.Code,
@@ -263,9 +271,10 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		"normal_balance": updated.NormalBalance,
 		"description":    updated.Description,
 		"is_active":      updated.IsActive,
+		"is_cash":        updated.IsCash,
 	}
 	if metadata := audit.Diff(oldFields, newFields,
-		[]string{"code", "name", "account_type", "normal_balance", "description", "is_active"}); metadata != nil {
+		[]string{"code", "name", "account_type", "normal_balance", "description", "is_active", "is_cash"}); metadata != nil {
 		audit.Log(r.Context(), h.DB, audit.Event{
 			Action:      "account.update",
 			TargetType:  "account",
@@ -328,6 +337,7 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 				"name":           account.Name,
 				"account_type":   account.AccountType,
 				"normal_balance": account.NormalBalance,
+				"is_cash":        account.IsCash,
 			},
 		},
 	})

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -268,6 +269,43 @@ func TestCreateAccount(t *testing.T) {
 		}
 		if !envelope.Data.IsActive {
 			t.Error("expected is_active=true by default")
+		}
+	})
+
+	t.Run("cash classification is returned and validated", func(t *testing.T) {
+		body := map[string]any{
+			"code": "9-CASH-API", "name": "API Cash", "account_type": "asset",
+			"normal_balance": "debit", "is_cash": true,
+		}
+		resp := doRequest(t, ts, http.MethodPost, "/api/v1/accounts", token, body)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusCreated {
+			t.Fatalf("expected 201, got %d", resp.StatusCode)
+		}
+		var envelope struct {
+			Data model.Account `json:"data"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&envelope); err != nil {
+			t.Fatal(err)
+		}
+		if !envelope.Data.IsCash {
+			t.Fatal("expected is_cash=true in response")
+		}
+		var metadata string
+		if err := db.QueryRow(`SELECT metadata FROM audit_log WHERE action = 'account.create' AND target_id = ? ORDER BY id DESC LIMIT 1`, envelope.Data.ID).Scan(&metadata); err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(metadata, "is_cash") {
+			t.Fatalf("audit metadata should include is_cash: %s", metadata)
+		}
+
+		body["code"] = "9-BAD-CASH"
+		body["account_type"] = "liability"
+		body["normal_balance"] = "credit"
+		resp = doRequest(t, ts, http.MethodPost, "/api/v1/accounts", token, body)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusUnprocessableEntity {
+			t.Fatalf("expected 422 for invalid cash account, got %d", resp.StatusCode)
 		}
 	})
 }

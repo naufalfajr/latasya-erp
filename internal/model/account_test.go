@@ -96,6 +96,47 @@ func TestCreateAccount(t *testing.T) {
 	}
 }
 
+func TestCashAccountClassificationValidation(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+
+	valid := &model.Account{
+		Code: "9-CASH", Name: "Petty Cash", AccountType: "asset",
+		NormalBalance: "debit", IsCash: true, IsActive: true,
+	}
+	if err := model.CreateAccount(db, valid); err != nil {
+		t.Fatalf("create valid cash account: %v", err)
+	}
+	got, err := model.GetAccount(db, valid.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.IsCash {
+		t.Fatal("created account should retain is_cash")
+	}
+
+	for _, tc := range []struct {
+		name, accountType, normalBalance string
+	}{
+		{"liability", "liability", "credit"},
+		{"credit normal asset", "asset", "credit"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			a := &model.Account{
+				Code: "9-BAD-" + tc.name, Name: tc.name, AccountType: tc.accountType,
+				NormalBalance: tc.normalBalance, IsCash: true, IsActive: true,
+			}
+			if err := model.CreateAccount(db, a); err == nil {
+				t.Fatal("expected cash classification validation error")
+			}
+		})
+	}
+
+	got.AccountType = "revenue"
+	if err := model.UpdateAccount(db, got); err == nil {
+		t.Fatal("expected update to reject conflicting cash classification")
+	}
+}
+
 func TestCreateAccount_DuplicateCode(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 
