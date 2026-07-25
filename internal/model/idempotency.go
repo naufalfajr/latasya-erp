@@ -38,7 +38,7 @@ func LookupIdempotency(db *sql.DB, key string, userID int) (*IdempotencyRecord, 
 	if err != nil {
 		return nil, fmt.Errorf("lookup idempotency: %w", err)
 	}
-	if ts, err := time.Parse(time.RFC3339, expiresAt); err == nil {
+	if ts, err := time.Parse(time.DateTime, expiresAt); err == nil {
 		rec.ExpiresAt = ts
 	}
 	return &rec, nil
@@ -48,7 +48,7 @@ func LookupIdempotency(db *sql.DB, key string, userID int) (*IdempotencyRecord, 
 // so a concurrent winner's row is preserved (the loser silently no-ops).
 // TTL is fixed at 24h from now and is NOT extended on replay.
 func StoreIdempotency(db *sql.DB, key string, userID int, requestHash string, status int, body []byte) error {
-	expiresAt := time.Now().UTC().Add(24 * time.Hour).Format(time.RFC3339)
+	expiresAt := time.Now().UTC().Add(24 * time.Hour).Format(time.DateTime)
 	_, err := db.Exec(`
         INSERT OR IGNORE INTO idempotency_keys (key, user_id, request_hash, response_status, response_body, expires_at)
         VALUES (?, ?, ?, ?, ?, ?)
