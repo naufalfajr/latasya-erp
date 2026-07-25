@@ -51,7 +51,7 @@ func testServer(t *testing.T, basePath ...string) (*httptest.Server, *sql.DB) {
 	protected.HandleFunc("GET /contacts/{id}/edit", h.EditContact)
 	protected.HandleFunc("POST /contacts/{id}", auth.CapabilityOnly("contacts.manage", h.UpdateContact))
 	protected.HandleFunc("DELETE /contacts/{id}", auth.CapabilityOnly("contacts.manage", h.DeleteContact))
-	protected.HandleFunc("POST /contacts/{id}/reset-token", auth.CapabilityOnly("contacts.manage", h.ResetContactPortalToken))
+	protected.HandleFunc("POST /contacts/{id}/portal-code", auth.AdminOnly(h.SaveContactPortalCode))
 	protected.HandleFunc("GET /journals", h.ListJournals)
 	protected.HandleFunc("GET /journals/new", h.NewJournal)
 	protected.HandleFunc("POST /journals", auth.CapabilityOnly("journals.manage", h.CreateJournal))

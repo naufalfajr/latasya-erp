@@ -235,8 +235,11 @@ func main() {
 	// Public site: company profile at the bare domain, plus the parent
 	// invoice portal. No auth required.
 	mux.HandleFunc("GET /{$}", h.PublicHome)
-	mux.HandleFunc("GET /i/{token}", h.PortalIndex)
-	mux.HandleFunc("GET /i/{token}/invoice/{id}/pdf", h.PortalInvoicePDF)
+	// Short parent link. Rate limited: guessable code, no login behind it.
+	// One limiter instance, so both routes share a bucket per IP.
+	portalLimiter := v1.PortalCodeLimiter()
+	mux.Handle("GET /p/{code}", portalLimiter(http.HandlerFunc(h.PortalIndex)))
+	mux.Handle("GET /p/{code}/invoice/{id}/pdf", portalLimiter(http.HandlerFunc(h.PortalInvoicePDF)))
 
 	// Auth routes (no auth required)
 	mux.HandleFunc("GET /dashboard/login", h.LoginPage)
@@ -266,7 +269,8 @@ func main() {
 	protected.HandleFunc("GET /contacts/{id}/edit", h.EditContact)
 	protected.HandleFunc("POST /contacts/{id}", auth.CapabilityOnly(model.CapContactsManage, h.UpdateContact))
 	protected.HandleFunc("DELETE /contacts/{id}", auth.CapabilityOnly(model.CapContactsManage, h.DeleteContact))
-	protected.HandleFunc("POST /contacts/{id}/reset-token", auth.CapabilityOnly(model.CapContactsManage, h.ResetContactPortalToken))
+	// Admin-only: choosing a weak code weakens an unauthenticated portal.
+	protected.HandleFunc("POST /contacts/{id}/portal-code", auth.AdminOnly(h.SaveContactPortalCode))
 
 	// Journal Entries
 	protected.HandleFunc("GET /journals", h.ListJournals)

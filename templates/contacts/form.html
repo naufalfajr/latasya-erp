@@ -155,18 +155,31 @@
                 <button type="button" class="btn btn-ghost btn-sm"
                     onclick="navigator.clipboard.writeText('{{$data.PortalURL}}')">Salin</button>
             </div>
-            <p class="text-xs opacity-60 mt-1">Kirim link ini ke orang tua via WhatsApp agar mereka bisa mengecek tagihan sendiri.</p>
             {{else}}
             <p class="text-sm opacity-60">Belum ada link portal untuk kontak ini.</p>
             {{end}}
-            <div class="mt-2">
+
+            {{if $.User.IsAdmin}}
+            <div class="flex items-end gap-2 mt-3">
+                <label class="form-control flex-1">
+                    <span class="label-text text-xs opacity-60">Kode link</span>
+                    <div class="join">
+                        <span class="join-item btn btn-sm btn-disabled font-mono">/p/</span>
+                        <input type="text" id="portal-code-input" name="portal_code"
+                            value="{{$data.Contact.PortalCode}}" placeholder="andi-829"
+                            class="join-item input input-sm input-bordered font-mono flex-1">
+                    </div>
+                </label>
                 <button type="button" class="btn btn-warning btn-sm"
-                    hx-post="{{$.BasePath}}/contacts/{{$data.Contact.ID}}/reset-token"
+                    hx-post="{{$.BasePath}}/contacts/{{$data.Contact.ID}}/portal-code"
+                    hx-include="#portal-code-input"
                     hx-target="body"
-                    hx-confirm="{{if $data.PortalURL}}Buat link baru? Link lama akan langsung tidak berlaku.{{else}}Buat link portal untuk kontak ini?{{end}}">
-                    {{if $data.PortalURL}}Reset Link{{else}}Buat Link Portal{{end}}
+                    hx-confirm="Simpan link baru? Link lama akan langsung tidak berlaku.">
+                    Simpan Link Baru
                 </button>
             </div>
+            <p class="text-xs opacity-60 mt-1">Huruf, angka dan strip. Kosongkan untuk dibuatkan acak. Makin mudah ditebak, makin mudah orang lain membukanya.</p>
+            {{end}}
         </div>
     </div>
     {{end}}

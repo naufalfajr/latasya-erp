@@ -12,12 +12,11 @@ import (
 )
 
 // portalInvoiceView is one invoice row on a parent's portal page, with the
-// display logic (who it's for, whether it's overdue, how to pay it)
-// precomputed so the template stays dumb.
+// display logic (who it's for, how to pay it) precomputed so the template
+// stays dumb.
 type portalInvoiceView struct {
 	model.Invoice
 	ChildName string
-	Overdue   bool
 	Remark    string
 	ConfirmWA string
 	PDFPath   string
@@ -29,6 +28,7 @@ type portalData struct {
 	Invoices        []portalInvoiceView
 	HasCurrentMonth bool
 	TotalDue        int
+	ShortURL        string
 	Company         *model.CompanyProfile
 }
 
@@ -41,14 +41,13 @@ func portalRemark(childName, invoiceDate string) string {
 	return fmt.Sprintf("%s %s %d", childName, model.MonthNameID(month), year)
 }
 
-// PortalIndex is the parent-facing invoice page at GET /i/{token}. A token
-// resolves to a family (the token's contact plus any siblings sharing its
-// phone number) and shows every non-draft invoice across that family.
+// PortalIndex is the parent-facing invoice page at GET /p/{code}, showing
+// every non-draft invoice for that child and any siblings.
 func (h *Handler) PortalIndex(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "private, no-store")
 
-	token := r.PathValue("token")
-	family, err := model.ContactsByPortalToken(h.DB, token)
+	code := r.PathValue("code")
+	family, err := model.ContactsByPortalCode(h.DB, code)
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
@@ -61,6 +60,8 @@ func (h *Handler) PortalIndex(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if family == nil {
+		// 404, not 200: PortalCodeLimiter only counts non-2xx as a guess.
+		w.WriteHeader(http.StatusNotFound)
 		t.ExecuteTemplate(w, "index.html", PageData{
 			Title: "Link Tidak Valid",
 			Data:  portalData{Invalid: true},
@@ -86,7 +87,6 @@ func (h *Handler) PortalIndex(w http.ResponseWriter, r *http.Request) {
 		names[i] = c.Name
 	}
 
-	today := time.Now().Format("2006-01-02")
 	currentMonth := time.Now().Format("2006-01")
 
 	views := make([]portalInvoiceView, 0, len(invoices))
@@ -105,8 +105,8 @@ func (h *Handler) PortalIndex(w http.ResponseWriter, r *http.Request) {
 		v := portalInvoiceView{
 			Invoice:   inv,
 			ChildName: childName,
-			Overdue:   due > 0 && inv.DueDate < today && (inv.Status == model.StatusSent || inv.Status == model.StatusPartial),
-			PDFPath:   fmt.Sprintf("/i/%s/invoice/%d/pdf", token, inv.ID),
+			// family.Code, not what was typed: links stay canonical.
+			PDFPath: fmt.Sprintf("/p/%s/invoice/%d/pdf", family.Code, inv.ID),
 		}
 		if due > 0 {
 			v.Remark = portalRemark(childName, inv.InvoiceDate)
@@ -119,32 +119,32 @@ func (h *Handler) PortalIndex(w http.ResponseWriter, r *http.Request) {
 	}
 
 	t.ExecuteTemplate(w, "index.html", PageData{
-		Title: "Tagihan " + strings.Join(names, " & "),
+		Title: "Invoice " + strings.Join(names, " & "),
 		Data: portalData{
 			FamilyLabel:     strings.Join(names, " & "),
 			Invoices:        views,
 			HasCurrentMonth: hasCurrentMonth,
 			TotalDue:        totalDue,
-			Company:         company,
+			// Canonical spelling, so the parent saves the tidy one.
+			ShortURL: h.publicOrigin(r) + "/p/" + family.Code,
+			Company:  company,
 		},
 	})
 }
 
-// PortalInvoicePDF serves one invoice's PDF at GET
-// /i/{token}/invoice/{id}/pdf. The token must resolve to a family that
-// actually owns the invoice, and drafts are never served — both guard
-// against a parent enumerating another family's or an unfinalized invoice.
+// PortalInvoicePDF serves one invoice's PDF. The code must own the invoice
+// and drafts are never served, so neither can be enumerated.
 func (h *Handler) PortalInvoicePDF(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "private, no-store")
 
-	token := r.PathValue("token")
+	code := r.PathValue("code")
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
 
-	family, err := model.ContactsByPortalToken(h.DB, token)
+	family, err := model.ContactsByPortalCode(h.DB, code)
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return

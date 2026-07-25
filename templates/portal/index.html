@@ -13,18 +13,23 @@
     <div class="card bg-base-100 shadow">
         <div class="card-body text-center py-10">
             <h1 class="text-xl font-bold">Link Tidak Valid</h1>
-            <p class="opacity-70 mt-2">Link ini sudah tidak berlaku atau salah ketik. Hubungi Latasya Transport untuk mendapatkan link tagihan terbaru.</p>
+            <p class="opacity-70 mt-2">Link ini sudah tidak berlaku atau salah ketik. Hubungi Latasya Transport untuk mendapatkan link invoice terbaru.</p>
         </div>
     </div>
 {{else}}
     <div class="mb-6">
         <p class="text-sm opacity-60">{{$d.Company.Name}}</p>
-        <h1 class="text-2xl font-bold">Tagihan {{$d.FamilyLabel}}</h1>
+        <h1 class="text-2xl font-bold">Invoice {{$d.FamilyLabel}}</h1>
+    </div>
+
+    <div class="alert alert-info mb-4 text-sm">
+        <span>Simpan link ini: <span class="font-mono font-semibold">{{$d.ShortURL}}</span> — akan terus aktif sesuai masa keikutsertaan antar jemput, berisi invoice terbaru.</span>
+        <button type="button" class="btn btn-ghost btn-xs" data-copy="{{$d.ShortURL}}" onclick="copyText(this)">Salin</button>
     </div>
 
     {{if not $d.HasCurrentMonth}}
     <div class="alert mb-4">
-        <span>Belum ada tagihan bulan ini.</span>
+        <span>Belum ada invoice bulan ini.</span>
     </div>
     {{end}}
 
@@ -37,7 +42,7 @@
                 <span>{{$d.Company.BankName}} — <span class="font-mono font-semibold">{{$d.Company.BankAccountNumber}}</span> (a.n. {{$d.Company.BankAccountHolder}})</span>
                 <button type="button" class="btn btn-ghost btn-xs" data-copy="{{$d.Company.BankAccountNumber}}" onclick="copyText(this)">Salin</button>
             </div>
-            <p class="text-xs opacity-60 mt-2">Cantumkan berita transfer sesuai yang tertera di masing-masing tagihan di bawah, agar mudah kami cocokkan pembayarannya.</p>
+            <p class="text-xs opacity-60 mt-2">Cantumkan berita transfer sesuai yang tertera di masing-masing invoice di bawah, agar mudah kami cocokkan pembayarannya.</p>
         </div>
     </div>
     {{end}}
@@ -52,13 +57,11 @@
                         <p class="text-xs opacity-60">{{.InvoiceNumber}} &middot; {{formatDate .InvoiceDate}}</p>
                     </div>
                     <span class="badge
-                        {{if .Overdue}}badge-error
-                        {{else if eq .Status "paid"}}badge-success
+                        {{if eq .Status "paid"}}badge-success
                         {{else if eq .Status "partial"}}badge-warning
                         {{else if eq .Status "cancelled"}}badge-ghost
                         {{else}}badge-info{{end}}">
-                        {{if .Overdue}}Terlambat
-                        {{else if eq .Status "sent"}}Belum Lunas
+                        {{if eq .Status "sent"}}Belum Lunas
                         {{else if eq .Status "partial"}}Sebagian
                         {{else if eq .Status "paid"}}Lunas
                         {{else if eq .Status "cancelled"}}Dibatalkan
@@ -71,7 +74,8 @@
                     {{if eq .Status "paid"}}
                     <p class="text-success mt-1">Lunas pada {{formatDate .PaidDate}} &check;</p>
                     {{else if gt .AmountDue 0}}
-                    <p>Sisa tagihan: <span class="font-mono font-semibold">{{formatIDR .AmountDue}}</span></p>
+                    <p>Sisa pembayaran: <span class="font-mono font-semibold">{{formatIDR .AmountDue}}</span></p>
+                    <p class="text-xs opacity-60 mt-1">Jatuh tempo {{formatDate .DueDate}}</p>
                     {{end}}
                 </div>
 

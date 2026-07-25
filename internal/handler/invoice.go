@@ -436,14 +436,18 @@ func (h *Handler) InvoiceWhatsApp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := model.GetOrCreatePortalToken(h.DB, contact.ID)
+	code, err := model.GetOrCreatePortalCode(h.DB, contact.ID)
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
-	portalURL := h.publicOrigin(r) + "/i/" + token
-	message := fmt.Sprintf("Halo, kami dari Antar Jemput Latasya. Berikut link invoice layanan antar jemput Ananda %s (%s): %s", contact.Name, inv.InvoiceNumber, portalURL)
+	portalURL := h.publicOrigin(r) + "/p/" + code
+	message := fmt.Sprintf(
+		"Halo, kami dari Antar Jemput Latasya. Berikut link invoice Ananda %s (%s):\n%s\n\n"+
+			"Link ini akan terus aktif sesuai masa keikutsertaan antar jemput, "+
+			"link berisi invoice terbaru. Terima kasih",
+		contact.Name, inv.InvoiceNumber, portalURL)
 	http.Redirect(w, r, buildWALink(contact.Phone, message), http.StatusFound)
 }
 

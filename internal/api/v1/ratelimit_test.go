@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/naufal/latasya-erp/internal/audit"
@@ -20,9 +21,11 @@ func wrapWithAuditAndRateLimit(handler http.Handler) http.Handler {
 	return audit.RequestContext(LoginRateLimiter()(handler))
 }
 
+// Identifies the caller the way the limiter does: CF-Connecting-IP, not the
+// forgeable X-Forwarded-For.
 func loginRequest(ip, username string) *http.Request {
 	r := httptest.NewRequest(http.MethodPost, "/login", nil)
-	r.Header.Set("X-Forwarded-For", ip)
+	r.Header.Set("CF-Connecting-IP", ip)
 	if username != "" {
 		r.Form = map[string][]string{"username": {username}}
 	}
@@ -133,5 +136,135 @@ func TestLoginRateLimiter_RetryAfterHeader(t *testing.T) {
 	}
 	if val <= 0 {
 		t.Errorf("Retry-After should be positive, got %d", val)
+	}
+}
+
+// Identifies the caller the way the limiter does: CF-Connecting-IP, not the
+// forgeable X-Forwarded-For.
+func portalRequest(ip, path string) *http.Request {
+	r := httptest.NewRequest(http.MethodGet, path, nil)
+	r.Header.Set("CF-Connecting-IP", ip)
+	return r
+}
+
+// What keeps the short portal code from being swept by brute force.
+func TestPortalCodeLimiter_BlocksAfterMisses(t *testing.T) {
+	h := audit.RequestContext(PortalCodeLimiter()(makeLoginHandler(http.StatusNotFound)))
+
+	for i := range portalCodeBucketSize {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, portalRequest("5.6.7.8", "/p/zzzz-000"))
+		if w.Code != http.StatusNotFound {
+			t.Fatalf("miss %d: expected 404 to pass through, got %d", i+1, w.Code)
+		}
+	}
+
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, portalRequest("5.6.7.8", "/p/zzzz-000"))
+	if w.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429 after %d misses, got %d", portalCodeBucketSize, w.Code)
+	}
+	if ra := w.Header().Get("Retry-After"); ra != strconv.Itoa(int(portalCodeWindow.Seconds())) {
+		t.Errorf("expected Retry-After %d, got %q", int(portalCodeWindow.Seconds()), ra)
+	}
+	if ct := w.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/plain") {
+		t.Errorf("parents get an HTML page, not the JSON API: expected a text/plain 429 body, got %q", ct)
+	}
+}
+
+// A parent refreshing their own page must never be throttled.
+func TestPortalCodeLimiter_SuccessDoesNotConsumeQuota(t *testing.T) {
+	h := audit.RequestContext(PortalCodeLimiter()(makeLoginHandler(http.StatusOK)))
+
+	for i := range portalCodeBucketSize * 3 {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, portalRequest("9.9.9.9", "/p/andi-829"))
+		if w.Code != http.StatusOK {
+			t.Fatalf("request %d: a valid code should never be throttled, got %d", i+1, w.Code)
+		}
+	}
+}
+
+func TestPortalCodeLimiter_DifferentIPsIndependent(t *testing.T) {
+	h := audit.RequestContext(PortalCodeLimiter()(makeLoginHandler(http.StatusNotFound)))
+
+	for range portalCodeBucketSize + 1 {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, portalRequest("1.1.1.1", "/p/zzzz-000"))
+	}
+
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, portalRequest("2.2.2.2", "/p/zzzz-000"))
+	if w.Code != http.StatusNotFound {
+		t.Errorf("a second IP has its own bucket: expected 404, got %d", w.Code)
+	}
+}
+
+// Regression: keying on the forgeable X-Forwarded-For let one caller spend a
+// fresh guess budget per request, making the code space sweepable in minutes.
+func TestPortalCodeLimiter_XFFCannotMintFreshBuckets(t *testing.T) {
+	h := audit.RequestContext(PortalCodeLimiter()(makeLoginHandler(http.StatusNotFound)))
+
+	blocked := 0
+	for i := range portalCodeBucketSize * 3 {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, "/p/zzzz-000", nil)
+		r.RemoteAddr = "198.51.100.9:1234" // one real socket throughout
+		r.Header.Set("X-Forwarded-For", strconv.Itoa(i)+".0.0.1, 198.51.100.9")
+		h.ServeHTTP(w, r)
+		if w.Code == http.StatusTooManyRequests {
+			blocked++
+		}
+	}
+	if blocked == 0 {
+		t.Fatal("varying X-Forwarded-For bypassed the limiter entirely: the portal code is brute-forceable")
+	}
+}
+
+// Behind Cloudflare the socket is Cloudflare's, so without CF-Connecting-IP
+// every parent would share one bucket.
+func TestPortalCodeLimiter_CFConnectingIPSeparatesClients(t *testing.T) {
+	h := audit.RequestContext(PortalCodeLimiter()(makeLoginHandler(http.StatusNotFound)))
+
+	drain := func(cfip string) {
+		for range portalCodeBucketSize + 1 {
+			w := httptest.NewRecorder()
+			r := httptest.NewRequest(http.MethodGet, "/p/zzzz-000", nil)
+			r.RemoteAddr = "172.16.0.1:443" // same Cloudflare edge socket
+			r.Header.Set("CF-Connecting-IP", cfip)
+			h.ServeHTTP(w, r)
+		}
+	}
+	drain("203.0.113.7")
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/p/zzzz-000", nil)
+	r.RemoteAddr = "172.16.0.1:443"
+	r.Header.Set("CF-Connecting-IP", "203.0.113.8")
+	h.ServeHTTP(w, r)
+	if w.Code == http.StatusTooManyRequests {
+		t.Error("a second real client behind the same Cloudflare edge must have its own bucket")
+	}
+}
+
+// Regression: keyed on X-Forwarded-For, varying one header gave unlimited
+// password guesses against a known username.
+func TestLoginRateLimiter_XFFCannotMintFreshBuckets(t *testing.T) {
+	h := wrapWithAuditAndRateLimit(makeLoginHandler(http.StatusUnauthorized))
+
+	blocked := 0
+	for i := range rateLimitBucketSize * 4 {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodPost, "/login", nil)
+		r.RemoteAddr = "198.51.100.9:1234" // one real socket throughout
+		r.Header.Set("X-Forwarded-For", strconv.Itoa(i)+".0.0.1, 198.51.100.9")
+		r.Form = map[string][]string{"username": {"admin"}}
+		h.ServeHTTP(w, r)
+		if w.Code == http.StatusTooManyRequests {
+			blocked++
+		}
+	}
+	if blocked == 0 {
+		t.Fatal("varying X-Forwarded-For bypassed the login limiter: passwords are brute-forceable")
 	}
 }
