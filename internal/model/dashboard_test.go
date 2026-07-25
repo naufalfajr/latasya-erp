@@ -166,12 +166,12 @@ func TestDashboardQuarterlyTrends_AlignToCalendarQuarters(t *testing.T) {
 	}
 }
 
-// TestGetDashboardData covers the thin GetDashboardData wrapper, which just
-// calls GetDashboardDataAt with "monthly" granularity and BusinessNow().
-func TestGetDashboardData(t *testing.T) {
+// TestGetDashboardDataNow covers the default path the handlers take: monthly
+// granularity at the current business instant.
+func TestGetDashboardDataNow(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 
-	got, err := model.GetDashboardData(db)
+	got, err := model.GetDashboardDataAt(db, "monthly", model.BusinessNow())
 	if err != nil {
 		t.Fatal(err)
 	}

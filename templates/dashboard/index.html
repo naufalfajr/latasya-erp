@@ -151,7 +151,10 @@
 
     function initCharts() {
         const profitEl = document.getElementById("profitability-chart");
-        if (!profitEl) return;
+        // htmx:load fires ~3x per boosted swap and this script re-registers its
+        // listeners each visit; the flag collapses that to one draw per page.
+        if (!profitEl || profitEl.dataset.charted) return;
+        profitEl.dataset.charted = "1";
         FinancialCharts.profitability(profitEl, trends, basePath);
         {{if $d.CashConfigured}}FinancialCharts.cashPosition(document.getElementById("cash-chart"), trends, basePath);{{end}}
     }

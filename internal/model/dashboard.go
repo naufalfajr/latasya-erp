@@ -77,10 +77,6 @@ func ParseDashboardGranularity(raw string, present bool) (string, error) {
 	return raw, nil
 }
 
-func GetDashboardData(db *sql.DB) (*DashboardData, error) {
-	return GetDashboardDataAt(db, "monthly", BusinessNow())
-}
-
 // GetDashboardDataAt returns dashboard values through the supplied instant,
 // interpreted in the Asia/Jakarta business timezone. It always returns the
 // most recent dashboardPeriods periods (monthly or quarterly), including the
