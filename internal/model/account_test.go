@@ -258,3 +258,23 @@ func TestListAccounts_OrderedByCode(t *testing.T) {
 		}
 	}
 }
+
+func TestAccountTypeLabel(t *testing.T) {
+	cases := []struct {
+		accountType string
+		want        string
+	}{
+		{"asset", "Asset"},
+		{"liability", "Liability"},
+		{"equity", "Equity"},
+		{"revenue", "Revenue"},
+		{"expense", "Expense"},
+		{"unknown", "unknown"},
+		{"", ""},
+	}
+	for _, c := range cases {
+		if got := model.AccountTypeLabel(c.accountType); got != c.want {
+			t.Errorf("AccountTypeLabel(%q) = %q, want %q", c.accountType, got, c.want)
+		}
+	}
+}

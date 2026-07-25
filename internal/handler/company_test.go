@@ -88,6 +88,54 @@ func TestCompanyProfilePage_ViewerForbidden(t *testing.T) {
 	}
 }
 
+func TestCompanyProfilePage_LoadError_StillRenders(t *testing.T) {
+	ts, db := testServerWithCompany(t)
+	cookies := loginAsAdmin(t, ts)
+
+	// Remove the single company_profile row so GetCompanyProfile errors
+	// (sql.ErrNoRows); the handler should still render 200 with an error
+	// banner rather than fail the request outright.
+	if _, err := db.Exec("DELETE FROM company_profile WHERE id = 1"); err != nil {
+		t.Fatalf("delete company_profile: %v", err)
+	}
+
+	req, _ := requestWithCookies(db, "GET", ts.URL+"/settings/company", cookies, "")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(body), "Failed to load company profile") {
+		t.Error("expected the load-failure banner in the body")
+	}
+}
+
+func TestUpdateCompanyProfile_ValidationError_EmptyName(t *testing.T) {
+	ts, db := testServerWithCompany(t)
+	cookies := loginAsAdmin(t, ts)
+
+	form := url.Values{"name": {""}}.Encode()
+	req, _ := requestWithCookies(db, "POST", ts.URL+"/settings/company", cookies, form)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 (validation error), got %d", resp.StatusCode)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(body), "Company name is required") {
+		t.Error("expected 'Company name is required' error in body")
+	}
+}
+
 func TestUpdateCompanyProfile_HTTP(t *testing.T) {
 	ts, db := testServerWithCompany(t)
 	cookies := loginAsAdmin(t, ts)

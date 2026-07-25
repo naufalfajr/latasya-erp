@@ -28,6 +28,31 @@ func TestRequireAuth_NoSession(t *testing.T) {
 	}
 }
 
+// TestSetLoginPath overrides the package-level redirect target and verifies
+// RequireAuth honors it, then restores the default so other tests in this
+// package (which all expect "/login") aren't affected.
+func TestSetLoginPath(t *testing.T) {
+	auth.SetLoginPath("/custom-login")
+	t.Cleanup(func() { auth.SetLoginPath("/login") })
+
+	db := testutil.SetupTestDB(t)
+
+	handler := auth.RequireAuth(db, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest("GET", "/", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusSeeOther {
+		t.Errorf("expected 303 redirect, got %d", rr.Code)
+	}
+	if loc := rr.Header().Get("Location"); loc != "/custom-login" {
+		t.Errorf("expected redirect to /custom-login, got %q", loc)
+	}
+}
+
 func TestRequireAuth_InvalidSession(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 

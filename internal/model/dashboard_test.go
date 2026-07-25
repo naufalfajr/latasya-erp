@@ -165,3 +165,20 @@ func TestDashboardQuarterlyTrends_AlignToCalendarQuarters(t *testing.T) {
 		t.Fatalf("preceding quarter should be the complete Q4 2025: %+v", prevQ)
 	}
 }
+
+// TestGetDashboardData covers the thin GetDashboardData wrapper, which just
+// calls GetDashboardDataAt with "monthly" granularity and BusinessNow().
+func TestGetDashboardData(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+
+	got, err := model.GetDashboardData(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Granularity != "monthly" {
+		t.Errorf("granularity: got %q, want %q", got.Granularity, "monthly")
+	}
+	if len(got.Trends) != 6 {
+		t.Errorf("trends: got %d want 6", len(got.Trends))
+	}
+}

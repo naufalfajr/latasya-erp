@@ -430,6 +430,199 @@ func TestCreateExpense_Idempotency(t *testing.T) {
 	}
 }
 
+func TestUpdateExpense(t *testing.T) {
+	ts, db := setupServer(t)
+
+	expID := expenseAccountID(t, db)
+	payID := assetAccountID(t, db)
+
+	createExpense := func(t *testing.T, token string) int {
+		t.Helper()
+		resp := doRequest(t, ts, http.MethodPost, "/api/v1/expenses", token, map[string]any{
+			"entry_date":      "2026-05-10",
+			"description":     "To update",
+			"amount":          "60000",
+			"expense_account": expID,
+			"payment_account": payID,
+		})
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusCreated {
+			t.Fatalf("create: status %d", resp.StatusCode)
+		}
+		var env struct {
+			Data struct {
+				ID int `json:"id"`
+			} `json:"data"`
+		}
+		json.NewDecoder(resp.Body).Decode(&env) //nolint:errcheck
+		return env.Data.ID
+	}
+
+	t.Run("success_200", func(t *testing.T) {
+		token := adminToken(t, db)
+		id := createExpense(t, token)
+
+		resp := doRequest(t, ts, http.MethodPut, fmt.Sprintf("/api/v1/expenses/%d", id), token, map[string]any{
+			"entry_date":      "2026-05-15",
+			"description":     "Updated fuel purchase",
+			"amount":          "90000",
+			"expense_account": expID,
+			"payment_account": payID,
+		})
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			var errEnv v1.ErrorEnvelope
+			json.NewDecoder(resp.Body).Decode(&errEnv) //nolint:errcheck
+			t.Fatalf("status: got %d, want 200: %v", resp.StatusCode, errEnv)
+		}
+		var env struct {
+			Data struct {
+				ID          int    `json:"id"`
+				Description string `json:"description"`
+				Amount      string `json:"amount"`
+			} `json:"data"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&env); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if env.Data.Description != "Updated fuel purchase" {
+			t.Errorf("description: got %q, want %q", env.Data.Description, "Updated fuel purchase")
+		}
+		if env.Data.Amount != "90000" {
+			t.Errorf("amount: got %q, want 90000", env.Data.Amount)
+		}
+
+		var desc string
+		var amount int
+		err := db.QueryRow("SELECT description FROM journal_entries WHERE id = ?", id).Scan(&desc)
+		if err != nil {
+			t.Fatalf("query entry: %v", err)
+		}
+		if desc != "Updated fuel purchase" {
+			t.Errorf("db description: got %q, want %q", desc, "Updated fuel purchase")
+		}
+		err = db.QueryRow("SELECT SUM(debit) FROM journal_lines WHERE entry_id = ?", id).Scan(&amount)
+		if err != nil {
+			t.Fatalf("query lines: %v", err)
+		}
+		if amount != 90000 {
+			t.Errorf("db amount: got %d, want 90000", amount)
+		}
+	})
+
+	t.Run("no_capability_403", func(t *testing.T) {
+		adminTok := adminToken(t, db)
+		id := createExpense(t, adminTok)
+
+		token := noScopeToken(t, db)
+		resp := doRequest(t, ts, http.MethodPut, fmt.Sprintf("/api/v1/expenses/%d", id), token, map[string]any{
+			"entry_date":      "2026-05-15",
+			"description":     "Should not update",
+			"amount":          "90000",
+			"expense_account": expID,
+			"payment_account": payID,
+		})
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusForbidden {
+			t.Fatalf("status: got %d, want 403", resp.StatusCode)
+		}
+	})
+
+	t.Run("not_found_404", func(t *testing.T) {
+		token := adminToken(t, db)
+		resp := doRequest(t, ts, http.MethodPut, "/api/v1/expenses/999999", token, map[string]any{
+			"entry_date":      "2026-05-15",
+			"description":     "No such entry",
+			"amount":          "90000",
+			"expense_account": expID,
+			"payment_account": payID,
+		})
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusNotFound {
+			t.Fatalf("status: got %d, want 404", resp.StatusCode)
+		}
+	})
+
+	t.Run("wrong_source_type_404", func(t *testing.T) {
+		token := adminToken(t, db)
+		// Create an income entry (different source_type) and try to update it via the expenses endpoint.
+		var revID, adminID int
+		if err := db.QueryRow("SELECT id FROM accounts WHERE account_type = 'revenue' LIMIT 1").Scan(&revID); err != nil {
+			t.Fatalf("find revenue account: %v", err)
+		}
+		if err := db.QueryRow("SELECT id FROM users WHERE username = 'admin'").Scan(&adminID); err != nil {
+			t.Fatalf("get admin: %v", err)
+		}
+		je := &model.JournalEntry{
+			EntryDate:   "2026-05-10",
+			Description: "Income entry",
+			SourceType:  model.SourceIncome,
+			IsPosted:    true,
+			CreatedBy:   adminID,
+		}
+		lines := []model.JournalLine{
+			{AccountID: payID, Debit: 10000, Credit: 0},
+			{AccountID: revID, Debit: 0, Credit: 10000},
+		}
+		id, err := model.CreateJournalEntry(db, je, lines)
+		if err != nil {
+			t.Fatalf("create income entry: %v", err)
+		}
+
+		resp := doRequest(t, ts, http.MethodPut, fmt.Sprintf("/api/v1/expenses/%d", id), token, map[string]any{
+			"entry_date":      "2026-05-15",
+			"description":     "Should not update",
+			"amount":          "90000",
+			"expense_account": expID,
+			"payment_account": payID,
+		})
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusNotFound {
+			t.Fatalf("status: got %d, want 404", resp.StatusCode)
+		}
+	})
+
+	t.Run("validation_failure_422", func(t *testing.T) {
+		token := adminToken(t, db)
+		id := createExpense(t, token)
+
+		resp := doRequest(t, ts, http.MethodPut, fmt.Sprintf("/api/v1/expenses/%d", id), token, map[string]any{
+			"description": "Missing required fields",
+		})
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusUnprocessableEntity {
+			t.Fatalf("status: got %d, want 422", resp.StatusCode)
+		}
+		var errEnv v1.ErrorEnvelope
+		if err := json.NewDecoder(resp.Body).Decode(&errEnv); err != nil {
+			t.Fatalf("decode error: %v", err)
+		}
+		if errEnv.Fields["entry_date"] == "" {
+			t.Error("expected field error for entry_date")
+		}
+	})
+
+	t.Run("invalid_json_400", func(t *testing.T) {
+		token := adminToken(t, db)
+		id := createExpense(t, token)
+
+		req, err := http.NewRequest(http.MethodPut, ts.URL+fmt.Sprintf("/api/v1/expenses/%d", id), bytes.NewBufferString("{not json"))
+		if err != nil {
+			t.Fatalf("new request: %v", err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+token)
+		resp, err := ts.Client().Do(req)
+		if err != nil {
+			t.Fatalf("do request: %v", err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Fatalf("status: got %d, want 400", resp.StatusCode)
+		}
+	})
+}
+
 func TestDeleteExpense(t *testing.T) {
 	ts, db := setupServer(t)
 

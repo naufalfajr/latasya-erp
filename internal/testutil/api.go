@@ -3,7 +3,6 @@ package testutil
 import (
 	"bytes"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -229,68 +228,6 @@ func APIMatrix(t *testing.T, ts *httptest.Server, db *sql.DB, method, path, body
 			}
 		})
 	}
-}
-
-// ParityCheck fetches the same resource via the HTML route (session cookie auth)
-// and the API route (Bearer token auth), asserting both return HTTP 200.
-// It logs the number of items returned in the API response's "data" field.
-//
-// htmlPath: e.g., "/accounts"
-// apiPath:  e.g., "/api/v1/accounts"
-func ParityCheck(t *testing.T, ts *httptest.Server, sessionCookie, csrfToken, bearerToken, htmlPath, apiPath string) {
-	t.Helper()
-
-	// Fetch HTML route.
-	htmlReq, err := http.NewRequest(http.MethodGet, ts.URL+htmlPath, nil)
-	if err != nil {
-		t.Fatalf("ParityCheck: create html request: %v", err)
-	}
-	htmlReq.AddCookie(&http.Cookie{Name: "session_id", Value: sessionCookie})
-	if csrfToken != "" {
-		htmlReq.Header.Set("X-CSRF-Token", csrfToken)
-	}
-	htmlResp, err := ts.Client().Do(htmlReq)
-	if err != nil {
-		t.Fatalf("ParityCheck: html request: %v", err)
-	}
-	defer htmlResp.Body.Close()
-
-	if htmlResp.StatusCode != http.StatusOK {
-		t.Errorf("ParityCheck: html route %s: expected 200, got %d", htmlPath, htmlResp.StatusCode)
-	}
-
-	// Fetch API route.
-	apiReq, err := http.NewRequest(http.MethodGet, ts.URL+apiPath, nil)
-	if err != nil {
-		t.Fatalf("ParityCheck: create api request: %v", err)
-	}
-	apiReq.Header.Set("Authorization", "Bearer "+bearerToken)
-	apiResp, err := ts.Client().Do(apiReq)
-	if err != nil {
-		t.Fatalf("ParityCheck: api request: %v", err)
-	}
-	defer apiResp.Body.Close()
-
-	if apiResp.StatusCode != http.StatusOK {
-		t.Errorf("ParityCheck: api route %s: expected 200, got %d", apiPath, apiResp.StatusCode)
-	}
-
-	// Decode API response and report item count.
-	var apiData map[string]any
-	if err := json.NewDecoder(apiResp.Body).Decode(&apiData); err == nil {
-		t.Logf("ParityCheck %s vs %s: API returned %d items", htmlPath, apiPath, countDataItems(apiData))
-	}
-}
-
-// countDataItems counts the number of items in the "data" array of an API response envelope.
-// Returns -1 if the key is absent or is not a slice.
-func countDataItems(data map[string]any) int {
-	if d, ok := data["data"]; ok {
-		if arr, ok := d.([]any); ok {
-			return len(arr)
-		}
-	}
-	return -1
 }
 
 // contractMu guards contractChecks for concurrent test usage.

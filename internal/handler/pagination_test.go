@@ -5,8 +5,19 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/naufal/latasya-erp/internal/handler"
 	"github.com/naufal/latasya-erp/internal/model"
 )
+
+// TestPageNav_PrevURL is a direct unit test of the PageNav.PrevURL method
+// (the NextURL sibling is already covered indirectly through
+// TestListIncome_PaginationPartial's rendered "Next" link).
+func TestPageNav_PrevURL(t *testing.T) {
+	nav := handler.PageNav{Pagination: handler.Pagination{Page: 3, PageSize: 50, Total: 120, TotalPages: 3}}
+	if got, want := nav.PrevURL(), "?page=2"; got != want {
+		t.Errorf("PrevURL() = %q, want %q", got, want)
+	}
+}
 
 // TestListJournals_Pagination seeds more than one page of entries and verifies
 // the journals list paginates: page 1 shows 50 rows + "Page 1 of 2", page 2

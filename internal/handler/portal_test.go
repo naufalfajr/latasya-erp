@@ -62,6 +62,22 @@ func TestPublicHome_ShowsCompanyProfile(t *testing.T) {
 	}
 }
 
+func TestPublicHome_CompanyProfileLoadError(t *testing.T) {
+	ts, db := publicTestServer(t)
+	if _, err := db.Exec("DELETE FROM company_profile WHERE id = 1"); err != nil {
+		t.Fatalf("delete company_profile: %v", err)
+	}
+
+	resp, err := http.Get(ts.URL + "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Errorf("expected 500 when the company profile can't be loaded, got %d", resp.StatusCode)
+	}
+}
+
 func TestPortalIndex_UnknownToken_ShowsInvalid(t *testing.T) {
 	ts, _ := publicTestServer(t)
 
@@ -156,6 +172,39 @@ func TestPortalInvoicePDF_WrongFamily_NotFound(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusNotFound {
 		t.Errorf("expected 404 fetching another family's invoice PDF, got %d", resp.StatusCode)
+	}
+}
+
+func TestPortalInvoicePDF_InvalidID_NotFound(t *testing.T) {
+	ts, db := publicTestServer(t)
+	contactID := mustContact(t, db, "Bad ID Family", "081111111111")
+	token, _ := model.GetOrCreatePortalToken(db, contactID)
+
+	resp, err := http.Get(ts.URL + "/i/" + token + "/invoice/not-a-number/pdf")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("expected 404 for a non-numeric invoice id, got %d", resp.StatusCode)
+	}
+}
+
+func TestPortalInvoicePDF_UnknownToken_NotFound(t *testing.T) {
+	ts, db := publicTestServer(t)
+	contactID := mustContact(t, db, "Unknown Token Family", "081111111111")
+	invID := mustInvoice(t, db, contactID)
+	if err := model.SendInvoice(db, invID, 1); err != nil {
+		t.Fatalf("send invoice: %v", err)
+	}
+
+	resp, err := http.Get(ts.URL + "/i/does-not-exist/invoice/" + strconv.Itoa(invID) + "/pdf")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("expected 404 for an unknown portal token, got %d", resp.StatusCode)
 	}
 }
 
