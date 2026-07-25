@@ -72,6 +72,7 @@ func mustCreateIncomeJournal(t *testing.T, db *sql.DB, description string) int {
 // --- ViewJournal ---------------------------------------------------------------
 
 func TestViewJournal_InvalidID(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -88,6 +89,7 @@ func TestViewJournal_InvalidID(t *testing.T) {
 }
 
 func TestViewJournal_NotFound(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -106,6 +108,7 @@ func TestViewJournal_NotFound(t *testing.T) {
 // --- EditJournal -----------------------------------------------------------
 
 func TestEditJournal_Success(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 	id := mustCreateManualJournal(t, db, "Edit form test")
@@ -127,6 +130,7 @@ func TestEditJournal_Success(t *testing.T) {
 }
 
 func TestEditJournal_InvalidID(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -143,6 +147,7 @@ func TestEditJournal_InvalidID(t *testing.T) {
 }
 
 func TestEditJournal_NotFound(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -159,6 +164,7 @@ func TestEditJournal_NotFound(t *testing.T) {
 }
 
 func TestEditJournal_NonManualForbidden(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 	id := mustCreateIncomeJournal(t, db, "Auto-generated income entry")
@@ -181,6 +187,7 @@ func TestEditJournal_NonManualForbidden(t *testing.T) {
 // --- UpdateJournal ---------------------------------------------------------
 
 func TestUpdateJournal_Success(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 	id := mustCreateManualJournal(t, db, "Original description")
@@ -220,6 +227,7 @@ func TestUpdateJournal_Success(t *testing.T) {
 }
 
 func TestUpdateJournal_InvalidID(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -236,6 +244,7 @@ func TestUpdateJournal_InvalidID(t *testing.T) {
 }
 
 func TestUpdateJournal_NotFound(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -252,6 +261,7 @@ func TestUpdateJournal_NotFound(t *testing.T) {
 }
 
 func TestUpdateJournal_ValidationError(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 	id := mustCreateManualJournal(t, db, "Needs valid update")
@@ -278,6 +288,7 @@ func TestUpdateJournal_ValidationError(t *testing.T) {
 }
 
 func TestUpdateJournal_ModelErrorBadAccount(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 	id := mustCreateManualJournal(t, db, "Needs model error")
@@ -300,6 +311,7 @@ func TestUpdateJournal_ModelErrorBadAccount(t *testing.T) {
 // --- DeleteJournal ---------------------------------------------------------
 
 func TestDeleteJournal_InvalidID(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -316,6 +328,7 @@ func TestDeleteJournal_InvalidID(t *testing.T) {
 }
 
 func TestDeleteJournal_NonManualErrors(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 	id := mustCreateIncomeJournal(t, db, "Cannot delete me")
@@ -346,6 +359,7 @@ func TestDeleteJournal_NonManualErrors(t *testing.T) {
 }
 
 func TestDeleteJournal_HTMX(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 	id := mustCreateManualJournal(t, db, "HTMX delete test")

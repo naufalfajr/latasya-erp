@@ -7,6 +7,7 @@ import (
 )
 
 func TestNormalizePhoneID(t *testing.T) {
+	t.Parallel()
 	tests := []struct{ in, want string }{
 		{"081234567890", "6281234567890"},
 		{"6281234567890", "6281234567890"},

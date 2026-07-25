@@ -55,6 +55,7 @@ func testServerWithAPITokens(t *testing.T) (*httptest.Server, *sql.DB) {
 // --- API Tokens List Tests ---
 
 func TestListAPITokens_RendersTable(t *testing.T) {
+	t.Parallel()
 	ts, db := testServerWithAPITokens(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -89,6 +90,7 @@ func TestListAPITokens_RendersTable(t *testing.T) {
 }
 
 func TestListAPITokens_EmptyState(t *testing.T) {
+	t.Parallel()
 	ts, db := testServerWithAPITokens(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -116,6 +118,7 @@ func TestListAPITokens_EmptyState(t *testing.T) {
 // --- New Token Form Tests ---
 
 func TestNewAPIToken_RendersForm(t *testing.T) {
+	t.Parallel()
 	ts, db := testServerWithAPITokens(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -161,6 +164,7 @@ func TestNewAPIToken_RendersForm(t *testing.T) {
 // --- Create Token Tests ---
 
 func TestCreateAPIToken_HappyPath(t *testing.T) {
+	t.Parallel()
 	ts, db := testServerWithAPITokens(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -212,6 +216,7 @@ func TestCreateAPIToken_HappyPath(t *testing.T) {
 }
 
 func TestCreateAPIToken_DuplicateName(t *testing.T) {
+	t.Parallel()
 	ts, db := testServerWithAPITokens(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -255,6 +260,7 @@ func TestCreateAPIToken_DuplicateName(t *testing.T) {
 }
 
 func TestCreateAPIToken_EmptyScopes(t *testing.T) {
+	t.Parallel()
 	ts, db := testServerWithAPITokens(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -290,6 +296,7 @@ func TestCreateAPIToken_EmptyScopes(t *testing.T) {
 }
 
 func TestCreateAPIToken_EmptyName(t *testing.T) {
+	t.Parallel()
 	ts, db := testServerWithAPITokens(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -324,6 +331,7 @@ func TestCreateAPIToken_EmptyName(t *testing.T) {
 }
 
 func TestCreateAPIToken_UnauthorizedScope(t *testing.T) {
+	t.Parallel()
 	ts, db := testServerWithAPITokens(t)
 	// Admin attempts to use an unrecognized scope
 	cookies := loginAsAdmin(t, ts)
@@ -359,6 +367,7 @@ func TestCreateAPIToken_UnauthorizedScope(t *testing.T) {
 }
 
 func TestCreateAPIToken_NoCSRF(t *testing.T) {
+	t.Parallel()
 	ts, _ := testServerWithAPITokens(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -391,6 +400,7 @@ func TestCreateAPIToken_NoCSRF(t *testing.T) {
 // --- Created Page Tests ---
 
 func TestCreatedPage_WithFlash(t *testing.T) {
+	t.Parallel()
 	ts, _ := testServerWithAPITokens(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -442,6 +452,7 @@ func TestCreatedPage_WithFlash(t *testing.T) {
 }
 
 func TestCreatedPage_NoFlash(t *testing.T) {
+	t.Parallel()
 	ts, db := testServerWithAPITokens(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -473,6 +484,7 @@ func TestCreatedPage_NoFlash(t *testing.T) {
 // --- Revoke Token Tests ---
 
 func TestRevokeAPIToken_HappyPath(t *testing.T) {
+	t.Parallel()
 	ts, db := testServerWithAPITokens(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -522,6 +534,7 @@ func TestRevokeAPIToken_HappyPath(t *testing.T) {
 }
 
 func TestRevokeAPIToken_NotOwner(t *testing.T) {
+	t.Parallel()
 	ts, db := testServerWithAPITokens(t)
 
 	// Seed a token owned by admin (user_id=1)
@@ -568,6 +581,7 @@ func TestRevokeAPIToken_NotOwner(t *testing.T) {
 }
 
 func TestRevokeAPIToken_NonexistentID(t *testing.T) {
+	t.Parallel()
 	ts, db := testServerWithAPITokens(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -598,6 +612,7 @@ func TestRevokeAPIToken_NonexistentID(t *testing.T) {
 }
 
 func TestRevokeAPIToken_NoCSRF(t *testing.T) {
+	t.Parallel()
 	ts, _ := testServerWithAPITokens(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -626,6 +641,7 @@ func TestRevokeAPIToken_NoCSRF(t *testing.T) {
 }
 
 func TestAPITokens_NonAdminForbidden(t *testing.T) {
+	t.Parallel()
 	ts, db := testServerWithAPITokens(t)
 	cookies := loginAsBookkeeper(t, ts, db)
 

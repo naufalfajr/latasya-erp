@@ -9,6 +9,7 @@ import (
 )
 
 func TestListRoles_Admin(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -26,6 +27,7 @@ func TestListRoles_Admin(t *testing.T) {
 }
 
 func TestListRoles_ViewerDenied(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsViewer(t, ts, db)
 
@@ -43,6 +45,7 @@ func TestListRoles_ViewerDenied(t *testing.T) {
 }
 
 func TestCreateRole_Success(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -74,6 +77,7 @@ func TestCreateRole_Success(t *testing.T) {
 }
 
 func TestCreateRole_ValidationErrors(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -108,6 +112,7 @@ func TestCreateRole_ValidationErrors(t *testing.T) {
 }
 
 func TestCreateRole_DuplicateName(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -129,6 +134,7 @@ func TestCreateRole_DuplicateName(t *testing.T) {
 }
 
 func TestEditRole_AdminRoleBlocked(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -146,6 +152,7 @@ func TestEditRole_AdminRoleBlocked(t *testing.T) {
 }
 
 func TestUpdateRole_BookkeeperCapabilities(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -176,6 +183,7 @@ func TestUpdateRole_BookkeeperCapabilities(t *testing.T) {
 }
 
 func TestDeleteRole_SystemBlocked(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -199,6 +207,7 @@ func TestDeleteRole_SystemBlocked(t *testing.T) {
 }
 
 func TestDeleteRole_WithAssignedUsersBlocked(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -228,6 +237,7 @@ func TestDeleteRole_WithAssignedUsersBlocked(t *testing.T) {
 }
 
 func TestDeleteRole_CustomUnassignedSucceeds(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -255,6 +265,7 @@ func TestDeleteRole_CustomUnassignedSucceeds(t *testing.T) {
 }
 
 func TestNewRole_RendersForm(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -272,6 +283,7 @@ func TestNewRole_RendersForm(t *testing.T) {
 }
 
 func TestEditRole_RendersFormForSystemRole(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -289,6 +301,7 @@ func TestEditRole_RendersFormForSystemRole(t *testing.T) {
 }
 
 func TestEditRole_NotFound(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -306,6 +319,7 @@ func TestEditRole_NotFound(t *testing.T) {
 }
 
 func TestUpdateRole_NotFound(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -326,6 +340,7 @@ func TestUpdateRole_NotFound(t *testing.T) {
 }
 
 func TestUpdateRole_AdminBlocked(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -346,6 +361,7 @@ func TestUpdateRole_AdminBlocked(t *testing.T) {
 }
 
 func TestUpdateRole_InvalidCapabilityReRenders(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -366,6 +382,7 @@ func TestUpdateRole_InvalidCapabilityReRenders(t *testing.T) {
 }
 
 func TestDeleteRole_NotFound(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -385,6 +402,7 @@ func TestDeleteRole_NotFound(t *testing.T) {
 }
 
 func TestDeleteRole_HTMXResponse(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -413,6 +431,7 @@ func TestDeleteRole_HTMXResponse(t *testing.T) {
 // --- Capability integration tests: real write routes gated by capability ---
 
 func TestBookkeeper_CanCreateIncome(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsBookkeeper(t, ts, db)
 
@@ -440,6 +459,7 @@ func TestBookkeeper_CanCreateIncome(t *testing.T) {
 }
 
 func TestBookkeeper_CanCreateInvoice(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsBookkeeper(t, ts, db)
 
@@ -468,6 +488,7 @@ func TestBookkeeper_CanCreateInvoice(t *testing.T) {
 }
 
 func TestBookkeeper_CannotCreateAccount(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsBookkeeper(t, ts, db)
 
@@ -488,6 +509,7 @@ func TestBookkeeper_CannotCreateAccount(t *testing.T) {
 }
 
 func TestBookkeeper_CannotAccessUsers(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsBookkeeper(t, ts, db)
 
@@ -505,6 +527,7 @@ func TestBookkeeper_CannotAccessUsers(t *testing.T) {
 }
 
 func TestBookkeeper_CannotAccessRoles(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsBookkeeper(t, ts, db)
 
@@ -522,6 +545,7 @@ func TestBookkeeper_CannotAccessRoles(t *testing.T) {
 }
 
 func TestViewer_CannotCreateInvoice(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsViewer(t, ts, db)
 
@@ -542,6 +566,7 @@ func TestViewer_CannotCreateInvoice(t *testing.T) {
 }
 
 func TestCapabilityChange_TakesEffectOnNextRequest(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	adminCookies := loginAsAdmin(t, ts)
 	bkCookies := loginAsBookkeeper(t, ts, db)

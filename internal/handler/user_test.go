@@ -31,6 +31,7 @@ func mustUser(t *testing.T, db *sql.DB, username, role string) int {
 }
 
 func TestNewUser_RendersForm(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -51,6 +52,7 @@ func TestNewUser_RendersForm(t *testing.T) {
 }
 
 func TestEditUser_RendersForm(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 	id := mustUser(t, db, "editme", "viewer")
@@ -72,6 +74,7 @@ func TestEditUser_RendersForm(t *testing.T) {
 }
 
 func TestEditUser_InvalidID_NotFound(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -88,6 +91,7 @@ func TestEditUser_InvalidID_NotFound(t *testing.T) {
 }
 
 func TestEditUser_UnknownID_NotFound(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -104,6 +108,7 @@ func TestEditUser_UnknownID_NotFound(t *testing.T) {
 }
 
 func TestUpdateUser_InvalidID_NotFound(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -121,6 +126,7 @@ func TestUpdateUser_InvalidID_NotFound(t *testing.T) {
 }
 
 func TestUpdateUser_UnknownID_NotFound(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -138,6 +144,7 @@ func TestUpdateUser_UnknownID_NotFound(t *testing.T) {
 }
 
 func TestUpdateUser_ValidationError_EmptyFullName(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 	id := mustUser(t, db, "blankname", "viewer")
@@ -160,6 +167,7 @@ func TestUpdateUser_ValidationError_EmptyFullName(t *testing.T) {
 }
 
 func TestUpdateUser_ValidationError_InvalidRole(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 	id := mustUser(t, db, "badrole", "viewer")
@@ -182,6 +190,7 @@ func TestUpdateUser_ValidationError_InvalidRole(t *testing.T) {
 }
 
 func TestUpdateUser_ValidationError_ShortPassword(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 	id := mustUser(t, db, "shortpass", "viewer")
@@ -206,6 +215,7 @@ func TestUpdateUser_ValidationError_ShortPassword(t *testing.T) {
 // The handler forces IsActive back to true when an admin tries to
 // deactivate their own account via the edit form (is_active box unchecked).
 func TestUpdateUser_CannotDeactivateSelf(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -234,6 +244,7 @@ func TestUpdateUser_CannotDeactivateSelf(t *testing.T) {
 // Resetting another user's password should force must_change_password=1;
 // resetting one's own should not.
 func TestUpdateUser_PasswordReset_ForcesChangeForOtherUser(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 	id := mustUser(t, db, "resetme", "viewer")
@@ -260,6 +271,7 @@ func TestUpdateUser_PasswordReset_ForcesChangeForOtherUser(t *testing.T) {
 }
 
 func TestUpdateUser_PasswordReset_SelfNotForced(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -285,6 +297,7 @@ func TestUpdateUser_PasswordReset_SelfNotForced(t *testing.T) {
 }
 
 func TestDeleteUser_InvalidID_NotFound(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -301,6 +314,7 @@ func TestDeleteUser_InvalidID_NotFound(t *testing.T) {
 }
 
 func TestDeleteUser_UnknownID_NotFound(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -317,6 +331,7 @@ func TestDeleteUser_UnknownID_NotFound(t *testing.T) {
 }
 
 func TestDeleteUser_CannotDeleteSelf(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -341,6 +356,7 @@ func TestDeleteUser_CannotDeleteSelf(t *testing.T) {
 }
 
 func TestDeleteUser_HTMX_Deactivates(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 	id := mustUser(t, db, "deactivateme", "viewer")
@@ -367,6 +383,7 @@ func TestDeleteUser_HTMX_Deactivates(t *testing.T) {
 }
 
 func TestCreateUser_DuplicateUsername(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 	mustUser(t, db, "dupeuser", "viewer")

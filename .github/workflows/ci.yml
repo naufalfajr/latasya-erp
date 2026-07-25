@@ -52,7 +52,7 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
 
@@ -61,7 +61,5 @@ jobs:
           go-version: stable
           cache: true
 
-      # internal/handler runs 315 serial tests and takes ~7min under -race on
-      # fast hardware, well past go's 10m default. Raise until it runs parallel.
       - name: Test (race detector)
-        run: go test -race -timeout=30m ./...
+        run: go test -race -timeout=10m ./...

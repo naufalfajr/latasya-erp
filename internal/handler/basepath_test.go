@@ -18,6 +18,7 @@ import (
 // right after action=" — a blind sed sweep for action="/ doesn't catch it,
 // and the resulting form silently 404s once mounted under /dashboard.
 func TestAdminFormActions_RespectBasePath(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t, "/dashboard")
 	cookies := loginAsAdmin(t, ts, "/dashboard")
 
@@ -62,6 +63,7 @@ func TestAdminFormActions_RespectBasePath(t *testing.T) {
 // a href/action/hx-* sweep can't catch since it's plain JS in an attribute
 // value, not a routed template attribute.
 func TestDashboard_RecentTransactionRow_RespectsBasePath(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t, "/dashboard")
 	cookies := loginAsAdmin(t, ts, "/dashboard")
 

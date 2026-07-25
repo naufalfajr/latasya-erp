@@ -9,6 +9,7 @@ import (
 )
 
 func TestCleanExpiredIdempotencyKeys(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	var userID int
@@ -54,6 +55,7 @@ func TestCleanExpiredIdempotencyKeys(t *testing.T) {
 // SQLite's datetime('now') ("... ...", space separator): 'T' sorts after
 // ' ', so a same-day expiry that had already passed was never detected.
 func TestLookupIdempotency_ExpiresSameCalendarDay(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	var userID int

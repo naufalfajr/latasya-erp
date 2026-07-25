@@ -99,6 +99,7 @@ func accountID(t *testing.T, db *sql.DB, code string) int {
 // --- GenerateRecurringInvoices ------------------------------------------------
 
 func TestGenerateRecurringInvoices_CreatesDraftsForActiveCustomers(t *testing.T) {
+	t.Parallel()
 	ts, db := testServerForInvoiceBulkActions(t)
 	cookies := loginAsAdmin(t, ts)
 	seedCustomer(t, db, "Recurring Customer")
@@ -129,6 +130,7 @@ func TestGenerateRecurringInvoices_CreatesDraftsForActiveCustomers(t *testing.T)
 }
 
 func TestGenerateRecurringInvoices_NoDefaultRevenueAccount(t *testing.T) {
+	t.Parallel()
 	ts, db := testServerForInvoiceBulkActions(t)
 	cookies := loginAsAdmin(t, ts)
 	seedCustomer(t, db, "No Default Account Customer")
@@ -159,6 +161,7 @@ func TestGenerateRecurringInvoices_NoDefaultRevenueAccount(t *testing.T) {
 }
 
 func TestGenerateRecurringInvoices_PerCustomerFailureReported(t *testing.T) {
+	t.Parallel()
 	ts, db := testServerForInvoiceBulkActions(t)
 	cookies := loginAsAdmin(t, ts)
 	seedCustomer(t, db, "Dangling Account Customer")
@@ -197,6 +200,7 @@ func TestGenerateRecurringInvoices_PerCustomerFailureReported(t *testing.T) {
 // --- BulkDeleteInvoices --------------------------------------------------------
 
 func TestBulkDeleteInvoices_NoneSelected(t *testing.T) {
+	t.Parallel()
 	ts, db := testServerForInvoiceBulkActions(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -216,6 +220,7 @@ func TestBulkDeleteInvoices_NoneSelected(t *testing.T) {
 }
 
 func TestBulkDeleteInvoices_DeletesDraftsSkipsRest(t *testing.T) {
+	t.Parallel()
 	ts, db := testServerForInvoiceBulkActions(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -267,6 +272,7 @@ func TestBulkDeleteInvoices_DeletesDraftsSkipsRest(t *testing.T) {
 // --- BulkSendInvoices ----------------------------------------------------------
 
 func TestBulkSendInvoices_NoneSelected(t *testing.T) {
+	t.Parallel()
 	ts, db := testServerForInvoiceBulkActions(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -286,6 +292,7 @@ func TestBulkSendInvoices_NoneSelected(t *testing.T) {
 }
 
 func TestBulkSendInvoices_SendsSkipsAndReportsFailures(t *testing.T) {
+	t.Parallel()
 	ts, db := testServerForInvoiceBulkActions(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -342,6 +349,7 @@ func TestBulkSendInvoices_SendsSkipsAndReportsFailures(t *testing.T) {
 // --- CreateInvoice --------------------------------------------------------------
 
 func TestCreateInvoice_ValidationErrors(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 	revenueID := accountID(t, db, "4-1001")
@@ -387,6 +395,7 @@ func TestCreateInvoice_ValidationErrors(t *testing.T) {
 }
 
 func TestCreateInvoice_ValidationError_NoLines(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 	contactID := seedCustomer(t, db, "No Lines Customer")
@@ -405,6 +414,7 @@ func TestCreateInvoice_ValidationError_NoLines(t *testing.T) {
 }
 
 func TestCreateInvoice_ModelError_BadAccount(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 	contactID := seedCustomer(t, db, "Bad Account Customer")
@@ -434,6 +444,7 @@ func TestCreateInvoice_ModelError_BadAccount(t *testing.T) {
 // --- EditInvoice ------------------------------------------------------------
 
 func TestEditInvoice_InvalidID(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -450,6 +461,7 @@ func TestEditInvoice_InvalidID(t *testing.T) {
 }
 
 func TestEditInvoice_NotFound(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -466,6 +478,7 @@ func TestEditInvoice_NotFound(t *testing.T) {
 }
 
 func TestEditInvoice_NonDraftRedirects(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 	contactID := seedCustomer(t, db, "Sent Invoice Customer")
@@ -496,6 +509,7 @@ func TestEditInvoice_NonDraftRedirects(t *testing.T) {
 // --- UpdateInvoice ----------------------------------------------------------
 
 func TestUpdateInvoice_InvalidID(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -512,6 +526,7 @@ func TestUpdateInvoice_InvalidID(t *testing.T) {
 }
 
 func TestUpdateInvoice_NotFound(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -528,6 +543,7 @@ func TestUpdateInvoice_NotFound(t *testing.T) {
 }
 
 func TestUpdateInvoice_ValidationError(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 	contactID := seedCustomer(t, db, "Update Validation Customer")
@@ -548,6 +564,7 @@ func TestUpdateInvoice_ValidationError(t *testing.T) {
 }
 
 func TestUpdateInvoice_ModelErrorOnNonDraft(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 	contactID := seedCustomer(t, db, "Update Model Error Customer")
@@ -583,6 +600,7 @@ func TestUpdateInvoice_ModelErrorOnNonDraft(t *testing.T) {
 // --- PrintInvoice ------------------------------------------------------------
 
 func TestPrintInvoice_Success(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 	contactID := seedCustomer(t, db, "Print Customer")
@@ -606,6 +624,7 @@ func TestPrintInvoice_Success(t *testing.T) {
 }
 
 func TestPrintInvoice_InvalidID(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -622,6 +641,7 @@ func TestPrintInvoice_InvalidID(t *testing.T) {
 }
 
 func TestPrintInvoice_NotFound(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -638,6 +658,7 @@ func TestPrintInvoice_NotFound(t *testing.T) {
 }
 
 func TestPrintInvoice_CompanyProfileMissing(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 	contactID := seedCustomer(t, db, "No Profile Customer")
@@ -663,6 +684,7 @@ func TestPrintInvoice_CompanyProfileMissing(t *testing.T) {
 // --- InvoicePDF ---------------------------------------------------------------
 
 func TestInvoicePDF_InvalidID(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -679,6 +701,7 @@ func TestInvoicePDF_InvalidID(t *testing.T) {
 }
 
 func TestInvoicePDF_NotFound(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -695,6 +718,7 @@ func TestInvoicePDF_NotFound(t *testing.T) {
 }
 
 func TestInvoicePDF_CompanyProfileMissing(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 	contactID := seedCustomer(t, db, "PDF No Profile Customer")
@@ -720,6 +744,7 @@ func TestInvoicePDF_CompanyProfileMissing(t *testing.T) {
 // --- InvoiceLinePartial (HTMX) ------------------------------------------------
 
 func TestInvoiceLinePartial_HTMX(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 

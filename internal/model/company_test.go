@@ -8,6 +8,7 @@ import (
 )
 
 func TestGetCompanyProfile_SeededDefaults(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	co, err := model.GetCompanyProfile(db)
@@ -23,6 +24,7 @@ func TestGetCompanyProfile_SeededDefaults(t *testing.T) {
 }
 
 func TestUpdateCompanyProfile_RoundTrip(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	want := &model.CompanyProfile{

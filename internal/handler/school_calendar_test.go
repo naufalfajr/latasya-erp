@@ -119,6 +119,7 @@ func flashCookieValue(resp *http.Response) string {
 }
 
 func TestSchoolCalendarPage_AdminRenders(t *testing.T) {
+	t.Parallel()
 	ts, db := testServerWithSchoolCalendar(t, googlecalendar.Config{})
 	cookies := loginAsAdmin(t, ts)
 
@@ -145,6 +146,7 @@ func TestSchoolCalendarPage_AdminRenders(t *testing.T) {
 }
 
 func TestSchoolCalendarPage_ViewerForbidden(t *testing.T) {
+	t.Parallel()
 	ts, db := testServerWithSchoolCalendar(t, googlecalendar.Config{})
 	cookies := loginAsViewer(t, ts, db)
 
@@ -161,6 +163,7 @@ func TestSchoolCalendarPage_ViewerForbidden(t *testing.T) {
 }
 
 func TestCreateSchoolClosure_PersistsAndRedirects(t *testing.T) {
+	t.Parallel()
 	ts, db := testServerWithSchoolCalendar(t, googlecalendar.Config{})
 	cookies := loginAsAdmin(t, ts)
 
@@ -193,6 +196,7 @@ func TestCreateSchoolClosure_PersistsAndRedirects(t *testing.T) {
 }
 
 func TestSaveGoogleCalendarID_PreservesRefreshToken(t *testing.T) {
+	t.Parallel()
 	ts, db := testServerWithSchoolCalendar(t, googlecalendar.Config{})
 	cookies := loginAsAdmin(t, ts)
 
@@ -232,6 +236,7 @@ func TestSaveGoogleCalendarID_PreservesRefreshToken(t *testing.T) {
 }
 
 func TestGoogleCalendarConnect_MissingConfigDisabledAndRedirects(t *testing.T) {
+	t.Parallel()
 	ts, db := testServerWithSchoolCalendar(t, googlecalendar.Config{})
 	cookies := loginAsAdmin(t, ts)
 
@@ -263,6 +268,7 @@ func TestGoogleCalendarConnect_MissingConfigDisabledAndRedirects(t *testing.T) {
 // --- SchoolCalendarPage -----------------------------------------------------
 
 func TestSchoolCalendarPage_LoadErrorRendersFallback(t *testing.T) {
+	t.Parallel()
 	ts, db := testServerWithSchoolCalendar(t, googlecalendar.Config{})
 	cookies := loginAsAdmin(t, ts)
 
@@ -289,6 +295,7 @@ func TestSchoolCalendarPage_LoadErrorRendersFallback(t *testing.T) {
 // --- CreateSchoolClosure -----------------------------------------------------
 
 func TestCreateSchoolClosure_ValidationErrorsRerenderForm(t *testing.T) {
+	t.Parallel()
 	ts, db := testServerWithSchoolCalendar(t, googlecalendar.Config{})
 	cookies := loginAsAdmin(t, ts)
 
@@ -325,6 +332,7 @@ func TestCreateSchoolClosure_ValidationErrorsRerenderForm(t *testing.T) {
 }
 
 func TestCreateSchoolClosure_InvalidFormReturns400(t *testing.T) {
+	t.Parallel()
 	ts, db := testServerWithSchoolCalendar(t, googlecalendar.Config{})
 	cookies := loginAsAdmin(t, ts)
 
@@ -341,6 +349,7 @@ func TestCreateSchoolClosure_InvalidFormReturns400(t *testing.T) {
 }
 
 func TestCreateSchoolClosure_DBErrorRendersFallback(t *testing.T) {
+	t.Parallel()
 	ts, db := testServerWithSchoolCalendar(t, googlecalendar.Config{})
 	cookies := loginAsAdmin(t, ts)
 
@@ -368,6 +377,7 @@ func TestCreateSchoolClosure_DBErrorRendersFallback(t *testing.T) {
 // --- DeleteSchoolClosure -----------------------------------------------------
 
 func TestDeleteSchoolClosure_RemovesRowAndRedirects(t *testing.T) {
+	t.Parallel()
 	ts, db := testServerWithSchoolCalendar(t, googlecalendar.Config{})
 	cookies := loginAsAdmin(t, ts)
 
@@ -416,6 +426,7 @@ func TestDeleteSchoolClosure_RemovesRowAndRedirects(t *testing.T) {
 }
 
 func TestDeleteSchoolClosure_UnknownIDStillRedirects(t *testing.T) {
+	t.Parallel()
 	ts, db := testServerWithSchoolCalendar(t, googlecalendar.Config{})
 	cookies := loginAsAdmin(t, ts)
 
@@ -435,6 +446,7 @@ func TestDeleteSchoolClosure_UnknownIDStillRedirects(t *testing.T) {
 }
 
 func TestDeleteSchoolClosure_InvalidIDReturns404(t *testing.T) {
+	t.Parallel()
 	ts, db := testServerWithSchoolCalendar(t, googlecalendar.Config{})
 	cookies := loginAsAdmin(t, ts)
 
@@ -453,6 +465,7 @@ func TestDeleteSchoolClosure_InvalidIDReturns404(t *testing.T) {
 // --- SaveGoogleCalendarID ----------------------------------------------------
 
 func TestSaveGoogleCalendarID_InvalidFormReturns400(t *testing.T) {
+	t.Parallel()
 	ts, db := testServerWithSchoolCalendar(t, googlecalendar.Config{})
 	cookies := loginAsAdmin(t, ts)
 
@@ -469,6 +482,7 @@ func TestSaveGoogleCalendarID_InvalidFormReturns400(t *testing.T) {
 }
 
 func TestSaveGoogleCalendarID_LoadErrorSetsFlash(t *testing.T) {
+	t.Parallel()
 	ts, db := testServerWithSchoolCalendar(t, googlecalendar.Config{})
 	cookies := loginAsAdmin(t, ts)
 
@@ -496,6 +510,7 @@ func TestSaveGoogleCalendarID_LoadErrorSetsFlash(t *testing.T) {
 // --- ConnectGoogleCalendar ----------------------------------------------------
 
 func TestConnectGoogleCalendar_EnabledRedirectsWithPersistedState(t *testing.T) {
+	t.Parallel()
 	ts, db := testServerWithSchoolCalendar(t, enabledConfig())
 	cookies := loginAsAdmin(t, ts)
 
@@ -539,6 +554,7 @@ func TestConnectGoogleCalendar_EnabledRedirectsWithPersistedState(t *testing.T) 
 }
 
 func TestConnectGoogleCalendar_StateCreateErrorSetsFlash(t *testing.T) {
+	t.Parallel()
 	ts, db := testServerWithSchoolCalendar(t, enabledConfig())
 	cookies := loginAsAdmin(t, ts)
 
@@ -573,6 +589,7 @@ func TestConnectGoogleCalendar_StateCreateErrorSetsFlash(t *testing.T) {
 // a production DI change.
 
 func TestGoogleCalendarCallback_DisabledConfigRedirects(t *testing.T) {
+	t.Parallel()
 	ts, db := testServerWithSchoolCalendar(t, googlecalendar.Config{})
 	cookies := loginAsAdmin(t, ts)
 
@@ -592,6 +609,7 @@ func TestGoogleCalendarCallback_DisabledConfigRedirects(t *testing.T) {
 }
 
 func TestGoogleCalendarCallback_ErrorParamCancelled(t *testing.T) {
+	t.Parallel()
 	ts, db := testServerWithSchoolCalendar(t, enabledConfig())
 	cookies := loginAsAdmin(t, ts)
 
@@ -611,6 +629,7 @@ func TestGoogleCalendarCallback_ErrorParamCancelled(t *testing.T) {
 }
 
 func TestGoogleCalendarCallback_MissingCodeOrState(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name  string
 		query string
@@ -641,6 +660,7 @@ func TestGoogleCalendarCallback_MissingCodeOrState(t *testing.T) {
 }
 
 func TestGoogleCalendarCallback_UnknownStateExpiredMessage(t *testing.T) {
+	t.Parallel()
 	ts, db := testServerWithSchoolCalendar(t, enabledConfig())
 	cookies := loginAsAdmin(t, ts)
 
@@ -660,6 +680,7 @@ func TestGoogleCalendarCallback_UnknownStateExpiredMessage(t *testing.T) {
 }
 
 func TestGoogleCalendarCallback_StateConsumeErrorSetsFlash(t *testing.T) {
+	t.Parallel()
 	ts, db := testServerWithSchoolCalendar(t, enabledConfig())
 	cookies := loginAsAdmin(t, ts)
 	adminID := adminUserID(t, db)
@@ -685,6 +706,7 @@ func TestGoogleCalendarCallback_StateConsumeErrorSetsFlash(t *testing.T) {
 }
 
 func TestGoogleCalendarCallback_ExchangeFailureSetsFlash(t *testing.T) {
+	t.Parallel()
 	mockClient := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 		return jsonRoundTrip(400, `{"error":"invalid_grant"}`), nil
 	})}
@@ -709,6 +731,7 @@ func TestGoogleCalendarCallback_ExchangeFailureSetsFlash(t *testing.T) {
 }
 
 func TestGoogleCalendarCallback_SuccessSavesConnection(t *testing.T) {
+	t.Parallel()
 	mockClient := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 		return jsonRoundTrip(200, `{"access_token":"fake-access","refresh_token":"fake-refresh","token_type":"Bearer","expires_in":3600}`), nil
 	})}
@@ -745,6 +768,7 @@ func TestGoogleCalendarCallback_SuccessSavesConnection(t *testing.T) {
 }
 
 func TestGoogleCalendarCallback_MissingRefreshTokenFallsBackToExisting(t *testing.T) {
+	t.Parallel()
 	mockClient := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 		return jsonRoundTrip(200, `{"access_token":"fake-access","token_type":"Bearer","expires_in":3600}`), nil
 	})}
@@ -782,6 +806,7 @@ func TestGoogleCalendarCallback_MissingRefreshTokenFallsBackToExisting(t *testin
 }
 
 func TestGoogleCalendarCallback_NoRefreshTokenSetsFlash(t *testing.T) {
+	t.Parallel()
 	mockClient := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 		return jsonRoundTrip(200, `{"access_token":"fake-access","token_type":"Bearer","expires_in":3600}`), nil
 	})}
@@ -810,6 +835,7 @@ func TestGoogleCalendarCallback_NoRefreshTokenSetsFlash(t *testing.T) {
 }
 
 func TestGoogleCalendarCallback_LoadConnectionErrorSetsFlash(t *testing.T) {
+	t.Parallel()
 	mockClient := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 		return jsonRoundTrip(200, `{"access_token":"fake-access","refresh_token":"fake-refresh","token_type":"Bearer","expires_in":3600}`), nil
 	})}
@@ -837,6 +863,7 @@ func TestGoogleCalendarCallback_LoadConnectionErrorSetsFlash(t *testing.T) {
 // --- SyncGoogleCalendar -------------------------------------------------------
 
 func TestSyncGoogleCalendar_NotConnectedSetsFlash(t *testing.T) {
+	t.Parallel()
 	ts, db := testServerWithSchoolCalendar(t, googlecalendar.Config{})
 	cookies := loginAsAdmin(t, ts)
 
@@ -856,6 +883,7 @@ func TestSyncGoogleCalendar_NotConnectedSetsFlash(t *testing.T) {
 }
 
 func TestSyncGoogleCalendar_SuccessStoresClosureAndSetsFlash(t *testing.T) {
+	t.Parallel()
 	eventDate := time.Now().UTC().Format("2006-01-02")
 	nextDay := time.Now().UTC().AddDate(0, 0, 1).Format("2006-01-02")
 	mockClient := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
@@ -902,6 +930,7 @@ func TestSyncGoogleCalendar_SuccessStoresClosureAndSetsFlash(t *testing.T) {
 // --- DisconnectGoogleCalendar --------------------------------------------------
 
 func TestDisconnectGoogleCalendar_RemovesConnectionAndRedirects(t *testing.T) {
+	t.Parallel()
 	ts, db := testServerWithSchoolCalendar(t, googlecalendar.Config{})
 	cookies := loginAsAdmin(t, ts)
 
@@ -937,6 +966,7 @@ func TestDisconnectGoogleCalendar_RemovesConnectionAndRedirects(t *testing.T) {
 }
 
 func TestDisconnectGoogleCalendar_DBErrorSetsFlash(t *testing.T) {
+	t.Parallel()
 	ts, db := testServerWithSchoolCalendar(t, googlecalendar.Config{})
 	cookies := loginAsAdmin(t, ts)
 

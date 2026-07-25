@@ -8,6 +8,7 @@ import (
 )
 
 func TestListRoles_SeededDefaults(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	roles, err := model.ListRoles(db)
@@ -32,6 +33,7 @@ func TestListRoles_SeededDefaults(t *testing.T) {
 }
 
 func TestGetRoleByName_Bookkeeper(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	r, err := model.GetRoleByName(db, "bookkeeper")
@@ -61,6 +63,7 @@ func TestGetRoleByName_Bookkeeper(t *testing.T) {
 }
 
 func TestRoleHasCapability_AdminAlwaysTrue(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	r, err := model.GetRoleByName(db, "admin")
@@ -79,6 +82,7 @@ func TestRoleHasCapability_AdminAlwaysTrue(t *testing.T) {
 }
 
 func TestCreateRole_RoundTrip(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	newRole := &model.Role{
@@ -107,6 +111,7 @@ func TestCreateRole_RoundTrip(t *testing.T) {
 }
 
 func TestUpdateRole_ReplacesCapabilities(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	newRole := &model.Role{Name: "auditor", Capabilities: []string{model.CapReportsView}}
@@ -127,6 +132,7 @@ func TestUpdateRole_ReplacesCapabilities(t *testing.T) {
 }
 
 func TestDeleteRole(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	if err := model.CreateRole(db, &model.Role{Name: "temp"}); err != nil {
@@ -141,6 +147,7 @@ func TestDeleteRole(t *testing.T) {
 }
 
 func TestCountUsersWithRole(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	n, err := model.CountUsersWithRole(db, "admin")
@@ -161,6 +168,7 @@ func TestCountUsersWithRole(t *testing.T) {
 }
 
 func TestUserHasCapability_AdminAlwaysTrue(t *testing.T) {
+	t.Parallel()
 	u := &model.User{Role: model.RoleAdmin}
 	if !u.HasCapability("anything.at.all") {
 		t.Error("admin user should always have any capability")
@@ -168,6 +176,7 @@ func TestUserHasCapability_AdminAlwaysTrue(t *testing.T) {
 }
 
 func TestUserHasCapability_FromList(t *testing.T) {
+	t.Parallel()
 	u := &model.User{
 		Role:         "custom",
 		Capabilities: []string{model.CapInvoicesManage},
@@ -181,6 +190,7 @@ func TestUserHasCapability_FromList(t *testing.T) {
 }
 
 func TestUserHasCapability_NilReceiver(t *testing.T) {
+	t.Parallel()
 	var u *model.User
 	if u.HasCapability(model.CapInvoicesManage) {
 		t.Error("nil user should not have any capability")
@@ -188,6 +198,7 @@ func TestUserHasCapability_NilReceiver(t *testing.T) {
 }
 
 func TestRoleHasCapability_NilReceiver(t *testing.T) {
+	t.Parallel()
 	var r *model.Role
 	if r.HasCapability(model.CapInvoicesManage) {
 		t.Error("nil role should not have any capability")

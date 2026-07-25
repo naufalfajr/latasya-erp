@@ -23,7 +23,7 @@
     </div>
 
     <div class="alert alert-info mb-4 text-sm">
-        <span>Simpan link ini: <span class="font-mono font-semibold">{{$d.ShortURL}}</span> — akan terus aktif sesuai masa keikutsertaan antar jemput, berisi invoice terbaru.</span>
+        <span>Simpan link ini: <span class="font-mono font-semibold">{{$d.ShortURL}}</span>. Link berisi daftar invoice akan terus aktif sesuai masa keikutsertaan antar jemput.</span>
         <button type="button" class="btn btn-ghost btn-xs" data-copy="{{$d.ShortURL}}" onclick="copyText(this)">Salin</button>
     </div>
 
@@ -42,7 +42,7 @@
                 <span>{{$d.Company.BankName}} — <span class="font-mono font-semibold">{{$d.Company.BankAccountNumber}}</span> (a.n. {{$d.Company.BankAccountHolder}})</span>
                 <button type="button" class="btn btn-ghost btn-xs" data-copy="{{$d.Company.BankAccountNumber}}" onclick="copyText(this)">Salin</button>
             </div>
-            <p class="text-xs opacity-60 mt-2">Cantumkan berita transfer sesuai yang tertera di masing-masing invoice di bawah, agar mudah kami cocokkan pembayarannya.</p>
+            <p class="text-xs opacity-60 mt-2">Cantumkan berita/keterangan transfer sesuai yang tertera di masing-masing invoice di bawah, agar mudah kami cocokkan pembayarannya.</p>
         </div>
     </div>
     {{end}}

@@ -41,6 +41,7 @@ func latestAuditFor(t *testing.T, db *sql.DB, action string) auditRow {
 // --- Auth: login / logout / password ----------------------------------------
 
 func TestAudit_LoginSuccess(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	_ = loginAsAdmin(t, ts)
 
@@ -57,6 +58,7 @@ func TestAudit_LoginSuccess(t *testing.T) {
 }
 
 func TestAudit_LoginFailedUnknownUser(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	client := noRedirectClient()
 	form := url.Values{"username": {"nobody"}, "password": {"whatever"}}
@@ -79,6 +81,7 @@ func TestAudit_LoginFailedUnknownUser(t *testing.T) {
 }
 
 func TestAudit_LoginFailedBadPassword(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	client := noRedirectClient()
 	form := url.Values{"username": {"admin"}, "password": {"totally-wrong"}}
@@ -98,6 +101,7 @@ func TestAudit_LoginFailedBadPassword(t *testing.T) {
 }
 
 func TestAudit_Logout(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -115,6 +119,7 @@ func TestAudit_Logout(t *testing.T) {
 }
 
 func TestAudit_PasswordChange(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -142,6 +147,7 @@ func TestAudit_PasswordChange(t *testing.T) {
 // --- User CRUD --------------------------------------------------------------
 
 func TestAudit_UserCreate(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -172,6 +178,7 @@ func TestAudit_UserCreate(t *testing.T) {
 }
 
 func TestAudit_UserUpdate_DiffsChangedFields(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -212,6 +219,7 @@ func TestAudit_UserUpdate_DiffsChangedFields(t *testing.T) {
 }
 
 func TestAudit_UserDelete(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -245,6 +253,7 @@ func TestAudit_UserDelete(t *testing.T) {
 // --- Role CRUD --------------------------------------------------------------
 
 func TestAudit_RoleCreate(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -267,6 +276,7 @@ func TestAudit_RoleCreate(t *testing.T) {
 }
 
 func TestAudit_RoleUpdate_CapabilityDiff(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -288,6 +298,7 @@ func TestAudit_RoleUpdate_CapabilityDiff(t *testing.T) {
 }
 
 func TestAudit_RoleDelete(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -309,6 +320,7 @@ func TestAudit_RoleDelete(t *testing.T) {
 // --- Invoice ----------------------------------------------------------------
 
 func TestAudit_InvoiceCreateAndDelete(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -347,6 +359,7 @@ func TestAudit_InvoiceCreateAndDelete(t *testing.T) {
 }
 
 func TestAudit_InvoiceUpdate_DiffsChangedFields(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -385,6 +398,7 @@ func TestAudit_InvoiceUpdate_DiffsChangedFields(t *testing.T) {
 }
 
 func TestAudit_InvoiceSend(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -417,6 +431,7 @@ func TestAudit_InvoiceSend(t *testing.T) {
 // --- Bill -------------------------------------------------------------------
 
 func TestAudit_BillCreateUpdateDelete(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -467,6 +482,7 @@ func TestAudit_BillCreateUpdateDelete(t *testing.T) {
 // --- Journal ----------------------------------------------------------------
 
 func TestAudit_JournalCreateAndDelete(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -514,6 +530,7 @@ func TestAudit_JournalCreateAndDelete(t *testing.T) {
 // --- Income / Expense -------------------------------------------------------
 
 func TestAudit_IncomeCreateAndDelete(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -548,6 +565,7 @@ func TestAudit_IncomeCreateAndDelete(t *testing.T) {
 }
 
 func TestAudit_ExpenseUpdate_DiffsAmount(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -586,6 +604,7 @@ func TestAudit_ExpenseUpdate_DiffsAmount(t *testing.T) {
 // --- Account (master data) --------------------------------------------------
 
 func TestAudit_AccountCreateAndDelete(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -625,6 +644,7 @@ func TestAudit_AccountCreateAndDelete(t *testing.T) {
 }
 
 func TestAudit_AccountUpdate_DiffsChangedFields(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -666,6 +686,7 @@ func TestAudit_AccountUpdate_DiffsChangedFields(t *testing.T) {
 // --- Contact (master data) --------------------------------------------------
 
 func TestAudit_ContactCreateAndDelete(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -701,6 +722,7 @@ func TestAudit_ContactCreateAndDelete(t *testing.T) {
 }
 
 func TestAudit_ContactUpdate_DiffsChangedFields(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -744,6 +766,7 @@ func TestAudit_ContactUpdate_DiffsChangedFields(t *testing.T) {
 // --- Credit Note ------------------------------------------------------------
 
 func TestAudit_CreditNoteCreate(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -770,6 +793,7 @@ func TestAudit_CreditNoteCreate(t *testing.T) {
 }
 
 func TestAudit_CreditNoteIssue(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -807,6 +831,7 @@ func TestAudit_CreditNoteIssue(t *testing.T) {
 }
 
 func TestAudit_CreditNoteDelete(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 

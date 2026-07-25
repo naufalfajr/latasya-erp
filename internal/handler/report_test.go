@@ -13,26 +13,32 @@ import (
 // these only guard the handler/template/routing seam from regressions.
 
 func TestReport_TrialBalance_Renders(t *testing.T) {
+	t.Parallel()
 	assertReportRenders(t, "/reports/trial-balance", "Trial Balance")
 }
 
 func TestReport_ProfitLoss_Renders(t *testing.T) {
+	t.Parallel()
 	assertReportRenders(t, "/reports/profit-loss", "Profit")
 }
 
 func TestReport_BalanceSheet_Renders(t *testing.T) {
+	t.Parallel()
 	assertReportRenders(t, "/reports/balance-sheet", "Balance Sheet")
 }
 
 func TestReport_CashFlow_Renders(t *testing.T) {
+	t.Parallel()
 	assertReportRenders(t, "/reports/cash-flow", "Cash Flow")
 }
 
 func TestReport_GeneralLedger_Renders(t *testing.T) {
+	t.Parallel()
 	assertReportRenders(t, "/reports/general-ledger", "General Ledger")
 }
 
 func TestReport_GeneralLedger_WithAccountFilter(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -95,14 +101,17 @@ func TestReport_GeneralLedger_WithAccountFilter(t *testing.T) {
 // exercise the zero-rows path); TrialBalance's totals-accumulation loop in
 // particular never runs otherwise.
 func TestReport_TrialBalance_WithData(t *testing.T) {
+	t.Parallel()
 	assertReportWithData(t, "/reports/trial-balance", "", 250000, "250.000")
 }
 
 func TestReport_ProfitLoss_WithData(t *testing.T) {
+	t.Parallel()
 	assertReportWithData(t, "/reports/profit-loss", model.SourceIncome, 750000, "750.000")
 }
 
 func TestReport_CashFlow_WithData(t *testing.T) {
+	t.Parallel()
 	assertReportWithData(t, "/reports/cash-flow", model.SourceIncome, 300000, "300.000")
 }
 

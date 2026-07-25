@@ -13,6 +13,7 @@ import (
 // (the NextURL sibling is already covered indirectly through
 // TestListIncome_PaginationPartial's rendered "Next" link).
 func TestPageNav_PrevURL(t *testing.T) {
+	t.Parallel()
 	nav := handler.PageNav{Pagination: handler.Pagination{Page: 3, PageSize: 50, Total: 120, TotalPages: 3}}
 	if got, want := nav.PrevURL(), "?page=2"; got != want {
 		t.Errorf("PrevURL() = %q, want %q", got, want)
@@ -23,6 +24,7 @@ func TestPageNav_PrevURL(t *testing.T) {
 // the journals list paginates: page 1 shows 50 rows + "Page 1 of 2", page 2
 // shows the remaining row.
 func TestListJournals_Pagination(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -75,6 +77,7 @@ func TestListJournals_Pagination(t *testing.T) {
 // partial (PageNav.NextURL + the <a href> link), which the journals htmx test
 // does not cover.
 func TestListIncome_PaginationPartial(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -107,6 +110,7 @@ func TestListIncome_PaginationPartial(t *testing.T) {
 // TestListCreditNotes_Renders guards the credit-notes list template, which
 // gained a pagination block (no dedicated render test existed before).
 func TestListCreditNotes_Renders(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 

@@ -8,6 +8,7 @@ import (
 )
 
 func TestNewIncome_Form(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -25,6 +26,7 @@ func TestNewIncome_Form(t *testing.T) {
 }
 
 func TestEditIncome_NotFound(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -45,6 +47,7 @@ func TestEditIncome_NotFound(t *testing.T) {
 // confirms EditIncome 404s on it — the handler requires SourceType ==
 // income, distinct from a plain "no such id" 404.
 func TestEditIncome_WrongSourceType(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -83,6 +86,7 @@ func TestEditIncome_WrongSourceType(t *testing.T) {
 }
 
 func TestUpdateIncome_NotFound(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -102,6 +106,7 @@ func TestUpdateIncome_NotFound(t *testing.T) {
 }
 
 func TestUpdateIncome_ValidationError(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -141,6 +146,7 @@ func TestUpdateIncome_ValidationError(t *testing.T) {
 }
 
 func TestUpdateIncome_SuccessWithEditForm(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -202,6 +208,7 @@ func TestUpdateIncome_SuccessWithEditForm(t *testing.T) {
 }
 
 func TestDeleteIncome_NotFound(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -223,6 +230,7 @@ func TestDeleteIncome_NotFound(t *testing.T) {
 }
 
 func TestDeleteIncome_WrongSourceType(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -262,6 +270,7 @@ func TestDeleteIncome_WrongSourceType(t *testing.T) {
 }
 
 func TestDeleteIncome_Success_HTMX(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -303,6 +312,7 @@ func TestDeleteIncome_Success_HTMX(t *testing.T) {
 }
 
 func TestIncome_ViewerDenied(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsViewer(t, ts, db)
 

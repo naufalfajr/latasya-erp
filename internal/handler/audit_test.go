@@ -11,6 +11,7 @@ import (
 )
 
 func TestAuditList_Admin(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -42,6 +43,7 @@ func TestAuditList_Admin(t *testing.T) {
 }
 
 func TestAuditList_ViewerDenied(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsViewer(t, ts, db)
 
@@ -59,6 +61,7 @@ func TestAuditList_ViewerDenied(t *testing.T) {
 }
 
 func TestAuditList_BookkeeperDenied(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsBookkeeper(t, ts, db)
 
@@ -76,6 +79,7 @@ func TestAuditList_BookkeeperDenied(t *testing.T) {
 }
 
 func TestAuditList_FilterByActor(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -105,6 +109,7 @@ func TestAuditList_FilterByActor(t *testing.T) {
 }
 
 func TestAuditList_Pagination(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -128,6 +133,7 @@ func TestAuditList_Pagination(t *testing.T) {
 }
 
 func TestAuditList_FilterByDateRange_Included(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -152,6 +158,7 @@ func TestAuditList_FilterByDateRange_Included(t *testing.T) {
 }
 
 func TestAuditList_FilterByDateRange_Excluded(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -176,6 +183,7 @@ func TestAuditList_FilterByDateRange_Excluded(t *testing.T) {
 }
 
 func TestAuditList_FilterNoMatches(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 

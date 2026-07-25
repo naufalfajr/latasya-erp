@@ -8,6 +8,7 @@ import (
 )
 
 func TestGetUserByUsername(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	user, err := model.GetUserByUsername(db, "admin")
@@ -26,6 +27,7 @@ func TestGetUserByUsername(t *testing.T) {
 }
 
 func TestGetUserByUsername_NotFound(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	_, err := model.GetUserByUsername(db, "nonexistent")
@@ -35,6 +37,7 @@ func TestGetUserByUsername_NotFound(t *testing.T) {
 }
 
 func TestGetUserByID(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	// Get admin by username first to find the ID
@@ -50,6 +53,7 @@ func TestGetUserByID(t *testing.T) {
 }
 
 func TestGetUserByID_NotFound(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	_, err := model.GetUserByID(db, 99999)
@@ -59,6 +63,7 @@ func TestGetUserByID_NotFound(t *testing.T) {
 }
 
 func TestUserIsAdmin(t *testing.T) {
+	t.Parallel()
 	admin := &model.User{Role: "admin"}
 	viewer := &model.User{Role: "viewer"}
 
