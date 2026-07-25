@@ -1373,4 +1373,7 @@ func TestDashboard_NoCashConfigurationWarning(t *testing.T) {
 	if !strings.Contains(body, "Cash figures are unavailable") || !strings.Contains(body, "Configure accounts") {
 		t.Fatal("expected administrator cash configuration warning and link")
 	}
+	if got := strings.Count(body, "Not enough history"); got != 2 {
+		t.Fatalf("brand-new ledger should show two insufficient-history signals, got %d", got)
+	}
 }

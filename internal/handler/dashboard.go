@@ -1,9 +1,7 @@
 package handler
 
 import (
-	"fmt"
 	"net/http"
-	"strconv"
 
 	"github.com/naufal/latasya-erp/internal/model"
 )
@@ -22,7 +20,7 @@ type dashboardPageData struct {
 }
 
 func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
-	months, err := htmlDashboardMonths(r)
+	months, err := model.ParseDashboardMonths(r.URL.Query().Get("months"))
 	if err != nil {
 		http.Error(w, "Invalid months parameter: use 6, 12, or 24", http.StatusBadRequest)
 		return
@@ -33,31 +31,22 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	page := dashboardPageData{DashboardData: data}
-	page.NetIncomeSignal = completedSignal(data.MonthlyTrends, func(t model.MonthlyTrend) *int {
+	page.NetIncomeSignal = completedSignal(data.MonthlyTrends, data.ProfitHistoryStart, func(t model.MonthlyTrend) *int {
 		return &t.NetIncome
 	})
-	page.CashSignal = completedSignal(data.MonthlyTrends, func(t model.MonthlyTrend) *int {
+	page.CashSignal = completedSignal(data.MonthlyTrends, data.CashHistoryStart, func(t model.MonthlyTrend) *int {
 		return t.ClosingCash
 	})
 	h.render(w, r, "templates/dashboard/index.html", "Dashboard", page)
 }
 
-func htmlDashboardMonths(r *http.Request) (int, error) {
-	raw := r.URL.Query().Get("months")
-	if raw == "" {
-		return 12, nil
+func completedSignal(trends []model.MonthlyTrend, historyStart string, value func(model.MonthlyTrend) *int) directionalSignal {
+	if historyStart == "" {
+		return directionalSignal{}
 	}
-	months, err := strconv.Atoi(raw)
-	if err != nil || (months != 6 && months != 12 && months != 24) {
-		return 0, fmt.Errorf("unsupported dashboard range")
-	}
-	return months, nil
-}
-
-func completedSignal(trends []model.MonthlyTrend, value func(model.MonthlyTrend) *int) directionalSignal {
 	values := make([]int, 0, 2)
 	for i := len(trends) - 1; i >= 0 && len(values) < 2; i-- {
-		if trends[i].IsPartial {
+		if trends[i].IsPartial || trends[i].EndDate < historyStart {
 			continue
 		}
 		if v := value(trends[i]); v != nil {

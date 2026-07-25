@@ -80,7 +80,7 @@ type accountInput struct {
 	NormalBalance string `json:"normal_balance"`
 	Description   string `json:"description"`
 	IsActive      *bool  `json:"is_active"`
-	IsCash        bool   `json:"is_cash"`
+	IsCash        *bool  `json:"is_cash"`
 }
 
 var validAccountTypes = map[string]bool{
@@ -110,7 +110,7 @@ func validateInput(inp *accountInput) map[string]string {
 	} else if !validNormalBalances[inp.NormalBalance] {
 		fields["normal_balance"] = "must be one of: debit, credit"
 	}
-	if inp.IsCash && (inp.AccountType != model.AccountTypeAsset || inp.NormalBalance != "debit") {
+	if inp.IsCash != nil && *inp.IsCash && (inp.AccountType != model.AccountTypeAsset || inp.NormalBalance != "debit") {
 		fields["is_cash"] = "cash accounts must be debit-normal assets"
 	}
 	if len(fields) == 0 {
@@ -142,6 +142,10 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	if inp.IsActive != nil {
 		isActive = *inp.IsActive
 	}
+	isCash := false
+	if inp.IsCash != nil {
+		isCash = *inp.IsCash
+	}
 
 	a := &model.Account{
 		Code:          inp.Code,
@@ -150,7 +154,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		NormalBalance: inp.NormalBalance,
 		Description:   inp.Description,
 		IsActive:      isActive,
-		IsCash:        inp.IsCash,
+		IsCash:        isCash,
 	}
 
 	if err := model.CreateAccount(h.DB, a); err != nil {
@@ -230,6 +234,10 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	if inp.IsActive != nil {
 		isActive = *inp.IsActive
 	}
+	isCash := existing.IsCash
+	if inp.IsCash != nil {
+		isCash = *inp.IsCash
+	}
 
 	a := &model.Account{
 		ID:            id,
@@ -239,7 +247,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		NormalBalance: inp.NormalBalance,
 		Description:   inp.Description,
 		IsActive:      isActive,
-		IsCash:        inp.IsCash,
+		IsCash:        isCash,
 		IsSystem:      existing.IsSystem,
 		ParentID:      existing.ParentID,
 	}

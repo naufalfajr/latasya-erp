@@ -360,6 +360,27 @@ func TestUpdateAccount(t *testing.T) {
 		}
 	})
 
+	t.Run("omitted is_cash preserves classification", func(t *testing.T) {
+		if _, err := db.Exec(`UPDATE accounts SET is_cash = 1 WHERE id = ?`, testID); err != nil {
+			t.Fatal(err)
+		}
+		body := map[string]any{
+			"code": "UPD-1", "name": "Still Cash", "account_type": "asset", "normal_balance": "debit",
+		}
+		resp := doRequest(t, ts, http.MethodPut, fmt.Sprintf("/api/v1/accounts/%d", testID), token, body)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("expected 200, got %d", resp.StatusCode)
+		}
+		var isCash bool
+		if err := db.QueryRow(`SELECT is_cash FROM accounts WHERE id = ?`, testID).Scan(&isCash); err != nil {
+			t.Fatal(err)
+		}
+		if !isCash {
+			t.Fatal("omitting is_cash must not erase existing classification")
+		}
+	})
+
 	t.Run("missing account returns 404", func(t *testing.T) {
 		body := map[string]any{
 			"code":           "X",

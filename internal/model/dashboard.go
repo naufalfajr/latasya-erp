@@ -3,6 +3,7 @@ package model
 import (
 	"database/sql"
 	"fmt"
+	"strconv"
 	"time"
 )
 
@@ -19,6 +20,8 @@ type DashboardData struct {
 	Months              int                 `json:"months"`
 	AsOf                string              `json:"as_of"`
 	MonthlyTrends       []MonthlyTrend      `json:"monthly_trends"`
+	ProfitHistoryStart  string              `json:"-"`
+	CashHistoryStart    string              `json:"-"`
 }
 
 type MonthlyTrend struct {
@@ -44,6 +47,17 @@ type RecentTransaction struct {
 
 func BusinessNow() time.Time {
 	return time.Now().In(jakartaLocation)
+}
+
+func ParseDashboardMonths(raw string) (int, error) {
+	if raw == "" {
+		return 12, nil
+	}
+	months, err := strconv.Atoi(raw)
+	if err != nil || (months != 6 && months != 12 && months != 24) {
+		return 0, fmt.Errorf("unsupported dashboard range")
+	}
+	return months, nil
 }
 
 func GetDashboardData(db *sql.DB) (*DashboardData, error) {
@@ -77,6 +91,27 @@ func GetDashboardDataAt(db *sql.DB, months int, at time.Time) (*DashboardData, e
 	current := trends[len(trends)-1]
 	d.MonthlyRevenue = current.Revenue
 	d.MonthlyExpenses = current.Expenses
+	if err := db.QueryRow(`
+		SELECT COALESCE(MIN(je.entry_date), '')
+		FROM journal_entries je
+		JOIN journal_lines jl ON jl.entry_id = je.id
+		JOIN accounts a ON a.id = jl.account_id
+		WHERE je.is_posted = 1 AND je.entry_date <= ?
+			AND a.account_type IN ('revenue', 'expense')
+	`, asOfDate).Scan(&d.ProfitHistoryStart); err != nil {
+		return nil, fmt.Errorf("profitability history: %w", err)
+	}
+	if cashConfigured {
+		if err := db.QueryRow(`
+			SELECT COALESCE(MIN(je.entry_date), '')
+			FROM journal_entries je
+			JOIN journal_lines jl ON jl.entry_id = je.id
+			JOIN accounts a ON a.id = jl.account_id AND a.is_cash = 1
+			WHERE je.is_posted = 1 AND je.entry_date <= ?
+		`, asOfDate).Scan(&d.CashHistoryStart); err != nil {
+			return nil, fmt.Errorf("cash history: %w", err)
+		}
+	}
 
 	if err := db.QueryRow(`
 		SELECT COALESCE(SUM(total - amount_paid), 0)
@@ -166,6 +201,10 @@ func monthlyFinancialTrends(db *sql.DB, rangeStart, asOf time.Time, months int) 
 			trends[i].NetIncome = revenue - expenses
 		}
 	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, false, fmt.Errorf("iterate monthly profitability: %w", err)
+	}
 	if err := rows.Close(); err != nil {
 		return nil, false, err
 	}
@@ -209,6 +248,10 @@ func monthlyFinancialTrends(db *sql.DB, rangeStart, asOf time.Time, months int) 
 			return nil, false, fmt.Errorf("scan monthly cash movement: %w", err)
 		}
 		movements[month] = movement
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, false, fmt.Errorf("iterate monthly cash movement: %w", err)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, false, err

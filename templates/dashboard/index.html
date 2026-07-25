@@ -88,7 +88,7 @@
             <h2 id="profitability-heading" class="card-title">Monthly Profitability</h2>
             <p class="text-sm opacity-70">Accrual revenue, expenses, and net income on one IDR scale.</p>
         </div>
-        <div id="profitability-chart" class="w-full min-h-72" role="img" aria-label="Monthly revenue and expense bars with net income line"></div>
+        <div id="profitability-chart" class="w-full min-h-72" role="group" aria-label="Interactive monthly revenue and expense bars with net income line"></div>
         <details>
             <summary class="cursor-pointer font-medium">View exact monthly values</summary>
             <div class="overflow-x-auto mt-3">
@@ -115,7 +115,7 @@
             <p class="text-sm opacity-70">Closing cash and net movement use synchronized month labels and separate scales.</p>
         </div>
         {{if $d.CashConfigured}}
-        <div id="cash-chart" class="w-full min-h-96" role="img" aria-label="Closing cash line above monthly net cash movement bars"></div>
+        <div id="cash-chart" class="w-full min-h-96" role="group" aria-label="Interactive closing cash line above monthly net cash movement bars"></div>
         {{end}}
         <details>
             <summary class="cursor-pointer font-medium">View exact monthly values</summary>

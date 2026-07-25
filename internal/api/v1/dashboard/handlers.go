@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
-	"strconv"
 
 	v1 "github.com/naufal/latasya-erp/internal/api/v1"
 	"github.com/naufal/latasya-erp/internal/model"
@@ -53,7 +52,7 @@ type monthlyTrendResp struct {
 }
 
 func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
-	months, err := dashboardMonths(r)
+	months, err := model.ParseDashboardMonths(r.URL.Query().Get("months"))
 	if err != nil {
 		v1.WriteError(w, r, http.StatusBadRequest, v1.CodeInvalidRequest, err.Error(), map[string]string{
 			"months": "must be one of: 6, 12, 24",
@@ -98,18 +97,6 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	v1.WriteJSON(w, http.StatusOK, map[string]any{"data": resp})
-}
-
-func dashboardMonths(r *http.Request) (int, error) {
-	raw := r.URL.Query().Get("months")
-	if raw == "" {
-		return 12, nil
-	}
-	months, err := strconv.Atoi(raw)
-	if err != nil || (months != 6 && months != 12 && months != 24) {
-		return 0, fmt.Errorf("unsupported dashboard range")
-	}
-	return months, nil
 }
 
 func idrPtr(n *int) *string {
