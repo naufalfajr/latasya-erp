@@ -3,6 +3,7 @@
 
     const NS = "http://www.w3.org/2000/svg";
     const money = new Intl.NumberFormat("id-ID", {style: "currency", currency: "IDR", maximumFractionDigits: 0});
+    const compactMoney = new Intl.NumberFormat("id-ID", {style: "currency", currency: "IDR", notation: "compact", maximumFractionDigits: 1, minimumFractionDigits: 0});
     const surface = getComputedStyle(document.documentElement).getPropertyValue("--color-base-100").trim() || "#fcfcfb";
     const colors = {revenue: "#0ca30c", expense: "#d03b3b", accent: "#2a78d6"};
 
@@ -30,15 +31,6 @@
         const clamp = c => Math.max(0, c - amount);
         const r = clamp(n >> 16), g = clamp((n >> 8) & 0xff), b = clamp(n & 0xff);
         return `rgb(${r},${g},${b})`;
-    }
-
-    function compactIDR(n) {
-        const sign = n < 0 ? "-" : "";
-        const abs = Math.abs(n);
-        const [scale, suffix] = abs >= 1e9 ? [1e9, "M"] : abs >= 1e6 ? [1e6, "jt"] : abs >= 1e3 ? [1e3, "rb"] : [1, ""];
-        if (scale === 1) return `${sign}Rp ${abs}`;
-        const value = Math.round((abs / scale) * 10) / 10;
-        return `${sign}Rp ${String(value).replace(".", ",")}${suffix}`;
     }
 
     function niceTicks(min, max, count) {
@@ -88,7 +80,7 @@
                 x: d.left - 8, y: ty, "text-anchor": "end", "dominant-baseline": "middle",
                 "font-size": 10, fill: "currentColor", opacity: 0.55,
             });
-            label.textContent = compactIDR(tick);
+            label.textContent = compactMoney.format(tick);
             svg.appendChild(label);
         });
         svg.appendChild(svgNode("line", {

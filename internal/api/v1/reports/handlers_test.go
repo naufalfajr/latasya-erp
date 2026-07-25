@@ -176,29 +176,6 @@ func TestCashFlow(t *testing.T) {
 	}
 }
 
-func TestCashFlowCompatibilityAliases(t *testing.T) {
-	db := testutil.SetupTestDB(t)
-	ts := newTestServer(t, db)
-	tok := adminToken(t, db)
-	resp := doReq(t, ts, http.MethodGet, "/api/v1/reports/cash-flow?from=2026-01-01&to=2026-12-31", tok)
-	defer resp.Body.Close()
-
-	var env struct {
-		Data struct {
-			Movements      []map[string]any `json:"movements"`
-			Operating      []map[string]any `json:"operating"`
-			TotalMovement  string           `json:"total_movement"`
-			TotalOperating string           `json:"total_operating"`
-		} `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&env); err != nil {
-		t.Fatal(err)
-	}
-	if env.Data.TotalMovement != env.Data.TotalOperating || len(env.Data.Movements) != len(env.Data.Operating) {
-		t.Fatalf("compatibility aliases differ: %+v", env.Data)
-	}
-}
-
 func TestCashFlowWithoutConfigurationReturnsUnavailableFigures(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	if _, err := db.Exec(`UPDATE accounts SET is_cash = 0`); err != nil {

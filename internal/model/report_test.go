@@ -221,7 +221,7 @@ func TestCashFlow(t *testing.T) {
 	}
 }
 
-func TestCashFlow_UsesClassificationAndCompatibilityAliases(t *testing.T) {
+func TestCashFlow_UsesClassification(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	var cash, bank, ar, revenue int
 	for code, target := range map[string]*int{
@@ -249,8 +249,5 @@ func TestCashFlow_UsesClassificationAndCompatibilityAliases(t *testing.T) {
 	}
 	if !report.CashConfigured || report.TotalMovement != 1000 || report.NetCashChange != 1000 || report.ClosingCash != 1000 {
 		t.Fatalf("cash report totals: %+v", report)
-	}
-	if report.TotalOperating != report.TotalMovement || len(report.Operating) != len(report.Movements) {
-		t.Fatalf("deprecated aliases must match: %+v", report)
 	}
 }

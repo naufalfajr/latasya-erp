@@ -976,18 +976,6 @@ components:
             - $ref: '#/components/schemas/IDR'
           description: Net debit-minus-credit movement across all classified Cash/Bank accounts.
           nullable: true
-        operating:
-          type: array
-          deprecated: true
-          description: Deprecated compatibility alias for movements. This data is not classified by operating/investing/financing activity.
-          items:
-            $ref: '#/components/schemas/CashFlowRow'
-        total_operating:
-          allOf:
-            - $ref: '#/components/schemas/IDR'
-          deprecated: true
-          description: Deprecated compatibility alias for total_movement.
-          nullable: true
         net_cash_change:
           allOf:
             - $ref: '#/components/schemas/IDR'

@@ -293,8 +293,6 @@ type CashFlowRow struct {
 type CashFlowReport struct {
 	Movements      []CashFlowRow `json:"movements"`
 	TotalMovement  int           `json:"total_movement"`
-	Operating      []CashFlowRow `json:"operating"`       // Deprecated: use Movements.
-	TotalOperating int           `json:"total_operating"` // Deprecated: use TotalMovement.
 	NetCashChange  int           `json:"net_cash_change"`
 	OpeningCash    int           `json:"opening_cash"`
 	ClosingCash    int           `json:"closing_cash"`
@@ -382,7 +380,5 @@ func CashFlow(db *sql.DB, dateFrom, dateTo string) (*CashFlowReport, error) {
 	}
 
 	report.NetCashChange = report.ClosingCash - report.OpeningCash
-	report.Operating = report.Movements
-	report.TotalOperating = report.TotalMovement
 	return report, nil
 }
