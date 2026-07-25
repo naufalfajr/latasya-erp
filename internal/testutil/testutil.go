@@ -65,4 +65,3 @@ func CreateTestSession(t *testing.T, db *sql.DB, userID int) string {
 	}
 	return sessionID
 }
-
