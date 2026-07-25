@@ -28,3 +28,9 @@ latasya-*.json
 
 # Playwright
 .playwright-mcp/
+
+AGENTS.md
+CLAUDE.md
+.claude/
+docs/
+
