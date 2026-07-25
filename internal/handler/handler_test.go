@@ -1331,4 +1331,55 @@ func TestDashboard_WithData(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("expected 200, got %d", resp.StatusCode)
 	}
+	body := readBody(t, resp)
+	for _, want := range []string{
+		"Profitability Trend", "Cash Position", "financial-charts.js",
+		"View exact values", "/reports/profit-loss?from=", "/reports/cash-flow?from=",
+		"?granularity=monthly", "?granularity=quarterly",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("dashboard should contain %q", want)
+		}
+	}
+	for _, unwanted := range []string{
+		"MTD through", "Latest completed-month net income", "Latest completed-month closing cash",
+	} {
+		if strings.Contains(body, unwanted) {
+			t.Errorf("dashboard should no longer contain %q", unwanted)
+		}
+	}
+}
+
+func TestDashboard_InvalidGranularity(t *testing.T) {
+	ts, db := testServer(t)
+	cookies := loginAsAdmin(t, ts)
+	for _, query := range []string{"?granularity=weekly", "?granularity="} {
+		req, _ := requestWithCookies(db, "GET", ts.URL+"/"+query, cookies, "")
+		resp, err := (&http.Client{}).Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Errorf("%s: expected 400, got %d", query, resp.StatusCode)
+		}
+	}
+}
+
+func TestDashboard_NoCashConfigurationWarning(t *testing.T) {
+	ts, db := testServer(t)
+	cookies := loginAsAdmin(t, ts)
+	if _, err := db.Exec(`UPDATE accounts SET is_cash = 0`); err != nil {
+		t.Fatal(err)
+	}
+	req, _ := requestWithCookies(db, "GET", ts.URL+"/", cookies, "")
+	resp, err := (&http.Client{}).Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	body := readBody(t, resp)
+	if !strings.Contains(body, "Cash figures are unavailable") || !strings.Contains(body, "Configure accounts") {
+		t.Fatal("expected administrator cash configuration warning and link")
+	}
 }

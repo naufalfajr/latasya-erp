@@ -4,9 +4,16 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
+	"sync"
 
 	"golang.org/x/crypto/bcrypt"
 )
+
+// Production seeds one database per process, so hashing once costs nothing
+// there; tests seed hundreds and this is 83% of their setup time.
+var defaultAdminHash = sync.OnceValues(func() ([]byte, error) {
+	return bcrypt.GenerateFromPassword([]byte("admin"), bcrypt.DefaultCost)
+})
 
 func Seed(db *sql.DB) error {
 	// Check if admin user exists
@@ -21,7 +28,7 @@ func Seed(db *sql.DB) error {
 
 	slog.Info("seeding default admin user (password change required on first login)")
 
-	hash, err := bcrypt.GenerateFromPassword([]byte("admin"), bcrypt.DefaultCost)
+	hash, err := defaultAdminHash()
 	if err != nil {
 		return fmt.Errorf("hash password: %w", err)
 	}

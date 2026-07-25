@@ -25,6 +25,7 @@ func setupServer(t *testing.T) (*httptest.Server, *sql.DB) {
 	idem := v1.Idempotency(db)
 	apiMux.HandleFunc("GET /api/v1/invoices", h.List)
 	apiMux.HandleFunc("GET /api/v1/invoices/{id}", h.Get)
+	apiMux.HandleFunc("GET /api/v1/invoices/{id}/pdf", h.PDF)
 	apiMux.Handle("POST /api/v1/invoices", idem(http.HandlerFunc(h.Create)))
 	apiMux.Handle("PUT /api/v1/invoices/{id}", idem(http.HandlerFunc(h.Update)))
 	apiMux.HandleFunc("DELETE /api/v1/invoices/{id}", h.Delete)
@@ -680,4 +681,47 @@ func readBody(r *http.Response) ([]byte, error) {
 	buf := new(bytes.Buffer)
 	_, err := buf.ReadFrom(r.Body)
 	return buf.Bytes(), err
+}
+
+func TestInvoicePDF(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+	cid := seedContact(t, db)
+	rev := accountID(t, db, "4-1001")
+
+	id, _ := createInvoice(t, ts, token, defaultInvoiceBody(cid, rev))
+
+	t.Run("success", func(t *testing.T) {
+		resp := doRequest(t, ts, http.MethodGet, fmt.Sprintf("/api/v1/invoices/%d/pdf", id), token, nil, nil)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("status: got %d, want 200", resp.StatusCode)
+		}
+		if ct := resp.Header.Get("Content-Type"); ct != "application/pdf" {
+			t.Errorf("Content-Type: got %q, want application/pdf", ct)
+		}
+		body, err := readBody(resp)
+		if err != nil {
+			t.Fatalf("read body: %v", err)
+		}
+		if len(body) == 0 {
+			t.Error("expected non-empty PDF body")
+		}
+	})
+
+	t.Run("not_found", func(t *testing.T) {
+		resp := doRequest(t, ts, http.MethodGet, "/api/v1/invoices/999999/pdf", token, nil, nil)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusNotFound {
+			t.Fatalf("status: got %d, want 404", resp.StatusCode)
+		}
+	})
+
+	t.Run("invalid_id", func(t *testing.T) {
+		resp := doRequest(t, ts, http.MethodGet, "/api/v1/invoices/notanumber/pdf", token, nil, nil)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusNotFound {
+			t.Fatalf("status: got %d, want 404", resp.StatusCode)
+		}
+	})
 }

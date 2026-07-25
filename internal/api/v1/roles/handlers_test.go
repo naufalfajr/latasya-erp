@@ -167,6 +167,229 @@ func TestCreateRole(t *testing.T) {
 			t.Errorf("expected 422, got %d", resp.StatusCode)
 		}
 	})
+
+	t.Run("forbidden returns 403", func(t *testing.T) {
+		viewerID := testutil.CreateTestUser(t, db, "viewer-create-role", "pw", "viewer")
+		_, noCapTok, err := model.CreateAPIToken(db, viewerID, "no-cap-create-role", []string{}, nil)
+		if err != nil {
+			t.Fatalf("create token: %v", err)
+		}
+		body := map[string]any{"name": "shouldnotcreate", "capabilities": []string{}}
+		resp := doReq(t, ts, http.MethodPost, "/api/v1/roles", noCapTok, body)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusForbidden {
+			t.Errorf("expected 403, got %d", resp.StatusCode)
+		}
+	})
+
+	t.Run("invalid JSON body returns 400", func(t *testing.T) {
+		body := map[string]any{"name": "badbody", "unexpected_field": "boom"}
+		resp := doReq(t, ts, http.MethodPost, "/api/v1/roles", tok, body)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Errorf("expected 400, got %d", resp.StatusCode)
+		}
+	})
+
+	t.Run("empty name returns 422", func(t *testing.T) {
+		body := map[string]any{"name": "", "capabilities": []string{}}
+		resp := doReq(t, ts, http.MethodPost, "/api/v1/roles", tok, body)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusUnprocessableEntity {
+			t.Errorf("expected 422, got %d", resp.StatusCode)
+		}
+		var errEnv v1.ErrorEnvelope
+		json.NewDecoder(resp.Body).Decode(&errEnv) //nolint:errcheck
+		if errEnv.Fields["name"] == "" {
+			t.Errorf("expected name field error, got %v", errEnv.Fields)
+		}
+	})
+
+	t.Run("invalid name format returns 422", func(t *testing.T) {
+		body := map[string]any{"name": "InvalidName", "capabilities": []string{}}
+		resp := doReq(t, ts, http.MethodPost, "/api/v1/roles", tok, body)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusUnprocessableEntity {
+			t.Errorf("expected 422, got %d", resp.StatusCode)
+		}
+	})
+
+	t.Run("unknown capability returns 422", func(t *testing.T) {
+		body := map[string]any{"name": "hascapissue", "capabilities": []string{"not.a.real.capability"}}
+		resp := doReq(t, ts, http.MethodPost, "/api/v1/roles", tok, body)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusUnprocessableEntity {
+			t.Errorf("expected 422, got %d", resp.StatusCode)
+		}
+	})
+}
+
+func TestGetRole(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	ts := newTestServer(t, db)
+	tok := adminToken(t, db)
+
+	t.Run("forbidden returns 403", func(t *testing.T) {
+		viewerID := testutil.CreateTestUser(t, db, "viewer-get-role", "pw", "viewer")
+		_, noCapTok, err := model.CreateAPIToken(db, viewerID, "no-cap-get-role", []string{}, nil)
+		if err != nil {
+			t.Fatalf("create token: %v", err)
+		}
+		resp := doReq(t, ts, http.MethodGet, "/api/v1/roles/viewer", noCapTok, nil)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusForbidden {
+			t.Errorf("expected 403, got %d", resp.StatusCode)
+		}
+	})
+
+	t.Run("missing role returns 404", func(t *testing.T) {
+		resp := doReq(t, ts, http.MethodGet, "/api/v1/roles/doesnotexist", tok, nil)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusNotFound {
+			t.Errorf("expected 404, got %d", resp.StatusCode)
+		}
+	})
+
+	t.Run("existing role returns 200", func(t *testing.T) {
+		resp := doReq(t, ts, http.MethodGet, "/api/v1/roles/viewer", tok, nil)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("expected 200, got %d", resp.StatusCode)
+		}
+		var env struct {
+			Data model.Role `json:"data"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&env); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if env.Data.Name != "viewer" {
+			t.Errorf("expected name viewer, got %s", env.Data.Name)
+		}
+	})
+}
+
+func TestUpdateRole(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	ts := newTestServer(t, db)
+	tok := adminToken(t, db)
+
+	if err := model.CreateRole(db, &model.Role{Name: "editable-role", Description: "original", Capabilities: []string{model.CapReportsView}}); err != nil {
+		t.Fatalf("create role: %v", err)
+	}
+
+	t.Run("forbidden returns 403", func(t *testing.T) {
+		viewerID := testutil.CreateTestUser(t, db, "viewer-update-role", "pw", "viewer")
+		_, noCapTok, err := model.CreateAPIToken(db, viewerID, "no-cap-update-role", []string{}, nil)
+		if err != nil {
+			t.Fatalf("create token: %v", err)
+		}
+		body := map[string]any{"description": "hack", "capabilities": []string{}}
+		resp := doReq(t, ts, http.MethodPut, "/api/v1/roles/editable-role", noCapTok, body)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusForbidden {
+			t.Errorf("expected 403, got %d", resp.StatusCode)
+		}
+	})
+
+	t.Run("missing role returns 404", func(t *testing.T) {
+		body := map[string]any{"description": "x", "capabilities": []string{}}
+		resp := doReq(t, ts, http.MethodPut, "/api/v1/roles/doesnotexist", tok, body)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusNotFound {
+			t.Errorf("expected 404, got %d", resp.StatusCode)
+		}
+	})
+
+	t.Run("unknown capability returns 422", func(t *testing.T) {
+		body := map[string]any{"description": "x", "capabilities": []string{"not.a.real.capability"}}
+		resp := doReq(t, ts, http.MethodPut, "/api/v1/roles/editable-role", tok, body)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusUnprocessableEntity {
+			t.Errorf("expected 422, got %d", resp.StatusCode)
+		}
+	})
+
+	t.Run("invalid JSON body returns 400", func(t *testing.T) {
+		body := map[string]any{"description": "x", "capabilities": []string{}, "unexpected_field": "boom"}
+		resp := doReq(t, ts, http.MethodPut, "/api/v1/roles/editable-role", tok, body)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Errorf("expected 400, got %d", resp.StatusCode)
+		}
+	})
+
+	t.Run("valid update returns 200 and persists changes", func(t *testing.T) {
+		body := map[string]any{
+			"description":  "updated description",
+			"capabilities": []string{model.CapReportsView, model.CapAuditView},
+		}
+		resp := doReq(t, ts, http.MethodPut, "/api/v1/roles/editable-role", tok, body)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			var errBody map[string]any
+			json.NewDecoder(resp.Body).Decode(&errBody) //nolint:errcheck
+			t.Fatalf("expected 200, got %d: %v", resp.StatusCode, errBody)
+		}
+		var env struct {
+			Data model.Role `json:"data"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&env); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if env.Data.Description != "updated description" {
+			t.Errorf("expected updated description, got %q", env.Data.Description)
+		}
+		if len(env.Data.Capabilities) != 2 {
+			t.Errorf("expected 2 capabilities, got %v", env.Data.Capabilities)
+		}
+	})
+}
+
+func TestDeleteRole(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	ts := newTestServer(t, db)
+	tok := adminToken(t, db)
+
+	t.Run("forbidden returns 403", func(t *testing.T) {
+		if err := model.CreateRole(db, &model.Role{Name: "forbidden-del-role", Capabilities: []string{}}); err != nil {
+			t.Fatalf("create role: %v", err)
+		}
+		viewerID := testutil.CreateTestUser(t, db, "viewer-delete-role", "pw", "viewer")
+		_, noCapTok, err := model.CreateAPIToken(db, viewerID, "no-cap-delete-role", []string{}, nil)
+		if err != nil {
+			t.Fatalf("create token: %v", err)
+		}
+		resp := doReq(t, ts, http.MethodDelete, "/api/v1/roles/forbidden-del-role", noCapTok, nil)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusForbidden {
+			t.Errorf("expected 403, got %d", resp.StatusCode)
+		}
+	})
+
+	t.Run("missing role returns 404", func(t *testing.T) {
+		resp := doReq(t, ts, http.MethodDelete, "/api/v1/roles/doesnotexist", tok, nil)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusNotFound {
+			t.Errorf("expected 404, got %d", resp.StatusCode)
+		}
+	})
+
+	t.Run("unused role deletes successfully returns 204", func(t *testing.T) {
+		if err := model.CreateRole(db, &model.Role{Name: "deleteme-role", Capabilities: []string{}}); err != nil {
+			t.Fatalf("create role: %v", err)
+		}
+		resp := doReq(t, ts, http.MethodDelete, "/api/v1/roles/deleteme-role", tok, nil)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusNoContent {
+			t.Errorf("expected 204, got %d", resp.StatusCode)
+		}
+
+		getResp := doReq(t, ts, http.MethodGet, "/api/v1/roles/deleteme-role", tok, nil)
+		defer getResp.Body.Close()
+		if getResp.StatusCode != http.StatusNotFound {
+			t.Errorf("expected role to be gone, got %d", getResp.StatusCode)
+		}
+	})
 }
 
 func TestCapabilityEnforcement(t *testing.T) {

@@ -128,10 +128,18 @@ func DeleteUserSessions(db *sql.DB, userID int) error {
 func CleanExpiredSessions(db *sql.DB) {
 	for {
 		time.Sleep(1 * time.Hour)
-		db.Exec(
-			`DELETE FROM sessions
-			 WHERE expires_at < datetime('now')
-			    OR absolute_expires_at < datetime('now')`,
-		)
+		CleanExpiredSessionsOnce(db)
 	}
+}
+
+// CleanExpiredSessionsOnce deletes session rows past their idle or absolute
+// expiry. Split out from CleanExpiredSessions (which loops forever and is
+// meant to run as a background goroutine) so the deletion logic itself can
+// be exercised directly, e.g. from tests.
+func CleanExpiredSessionsOnce(db *sql.DB) {
+	db.Exec(
+		`DELETE FROM sessions
+		 WHERE expires_at < datetime('now')
+		    OR absolute_expires_at < datetime('now')`,
+	)
 }

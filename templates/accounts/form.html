@@ -74,6 +74,19 @@
                     class="textarea" rows="2">{{$data.Account.Description}}</textarea>
             </div>
 
+            <!-- Cash / Bank -->
+            <div class="flex flex-col gap-1 mt-2">
+                <label class="label cursor-pointer justify-start gap-2">
+                    <input type="checkbox" name="is_cash" class="checkbox checkbox-sm"
+                        {{if $data.Account.IsCash}}checked{{end}}>
+                    <span>Cash / Bank account</span>
+                </label>
+                <span class="text-xs opacity-70">Only debit-normal asset accounts can be classified as cash.</span>
+                {{if index $data.Errors "is_cash"}}
+                <span class="text-xs text-error">{{index $data.Errors "is_cash"}}</span>
+                {{end}}
+            </div>
+
             <!-- Active -->
             <div class="flex flex-col gap-1 mt-2">
                 <label class="label cursor-pointer justify-start gap-2">

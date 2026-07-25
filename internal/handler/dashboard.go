@@ -7,7 +7,13 @@ import (
 )
 
 func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
-	data, err := model.GetDashboardData(h.DB)
+	query := r.URL.Query()
+	granularity, err := model.ParseDashboardGranularity(query.Get("granularity"), query.Has("granularity"))
+	if err != nil {
+		http.Error(w, "Invalid granularity parameter: use monthly or quarterly", http.StatusBadRequest)
+		return
+	}
+	data, err := model.GetDashboardDataAt(h.DB, granularity, model.BusinessNow())
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return

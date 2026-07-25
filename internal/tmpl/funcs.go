@@ -1,6 +1,7 @@
 package tmpl
 
 import (
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"strings"
@@ -12,8 +13,13 @@ func FuncMap() template.FuncMap {
 		"formatIDR":  formatIDR,
 		"formatQty":  formatQty,
 		"formatDate": formatDate,
-		"add":        func(a, b int) int { return a + b },
-		"sub":        func(a, b int) int { return a - b },
+		"isNegative": func(n *int) bool { return n != nil && *n < 0 },
+		"toJSON": func(v any) template.JS {
+			b, _ := json.Marshal(v)
+			return template.JS(b) //nolint:gosec // JSON encoding escapes script-breaking characters.
+		},
+		"add": func(a, b int) int { return a + b },
+		"sub": func(a, b int) int { return a - b },
 		// Go templates have built-in eq that handles multiple types
 		"seq": func(n int) []int {
 			s := make([]int, n)

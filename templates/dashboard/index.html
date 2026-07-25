@@ -7,7 +7,11 @@
 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
     <div class="stat bg-base-100 rounded-box shadow p-4">
         <div class="stat-title text-xs">Cash Balance</div>
+        {{if $d.CashConfigured}}
         <div class="stat-value text-lg font-mono">{{formatIDR $d.CashBalance}}</div>
+        {{else}}
+        <div class="stat-value text-lg">Unavailable</div>
+        {{end}}
     </div>
     <div class="stat bg-base-100 rounded-box shadow p-4">
         <div class="stat-title text-xs">Monthly Revenue</div>
@@ -28,25 +32,90 @@
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
     {{if gt $d.OutstandingInvoices 0}}
     <div class="alert alert-warning shadow">
-        <div>
-            <span class="font-semibold">Outstanding Invoices:</span>
-            <span class="font-mono">{{formatIDR $d.OutstandingInvoices}}</span>
-        </div>
+        <div><span class="font-semibold">Outstanding Invoices:</span> <span class="font-mono">{{formatIDR $d.OutstandingInvoices}}</span></div>
         <a href="{{$.BasePath}}/invoices?status=sent" class="btn btn-sm btn-ghost">View</a>
     </div>
     {{end}}
     {{if gt $d.OutstandingBills 0}}
     <div class="alert alert-error shadow">
-        <div>
-            <span class="font-semibold">Outstanding Bills:</span>
-            <span class="font-mono">{{formatIDR $d.OutstandingBills}}</span>
-        </div>
+        <div><span class="font-semibold">Outstanding Bills:</span> <span class="font-mono">{{formatIDR $d.OutstandingBills}}</span></div>
         <a href="{{$.BasePath}}/bills?status=received" class="btn btn-sm btn-ghost">View</a>
     </div>
     {{end}}
 </div>
 
-<!-- Quick Actions -->
+<section class="mb-6" aria-labelledby="financial-history-heading">
+    <div class="flex flex-wrap items-end justify-between gap-4 mb-4">
+        <h2 id="financial-history-heading" class="text-xl font-bold">Financial history</h2>
+        <nav class="join" aria-label="Financial history granularity">
+            <a class="btn btn-sm join-item {{if eq $d.Granularity "monthly"}}btn-primary{{end}}" href="?granularity=monthly">Monthly</a>
+            <a class="btn btn-sm join-item {{if eq $d.Granularity "quarterly"}}btn-primary{{end}}" href="?granularity=quarterly">Quarterly</a>
+        </nav>
+    </div>
+
+    {{if not $d.CashConfigured}}
+    <div class="alert alert-warning mb-4">
+        <span>Cash figures are unavailable because no accounts are classified as Cash / Bank.</span>
+        {{if $.User.IsAdmin}}<a class="btn btn-sm" href="{{$.BasePath}}/accounts">Configure accounts</a>{{end}}
+    </div>
+    {{end}}
+</section>
+
+<section class="card bg-base-100 shadow mb-6" aria-labelledby="profitability-heading">
+    <div class="card-body">
+        <div>
+            <h2 id="profitability-heading" class="card-title">Profitability Trend</h2>
+            <p class="text-sm opacity-70">Accrual revenue, expenses, and net income for the last 6 {{if eq $d.Granularity "quarterly"}}quarters{{else}}months{{end}}, on one IDR scale.</p>
+        </div>
+        <div id="profitability-chart" class="w-full min-h-80" role="group" aria-label="Interactive revenue and expense bars with a net income line, one bar group per period"></div>
+        <details>
+            <summary class="cursor-pointer font-medium">View exact values</summary>
+            <div class="overflow-x-auto mt-3">
+                <table class="table table-sm">
+                    <thead><tr><th>Period</th><th class="text-right">Revenue</th><th class="text-right">Expenses</th><th class="text-right">Net income</th></tr></thead>
+                    <tbody>{{range $d.Trends}}
+                        <tr>
+                            <td><a class="link" href="{{$.BasePath}}/reports/profit-loss?from={{.StartDate}}&to={{.EndDate}}">{{.Label}}{{if .IsPartial}} (in progress){{end}}</a></td>
+                            <td class="text-right font-mono">{{formatIDR .Revenue}}</td>
+                            <td class="text-right font-mono">{{formatIDR .Expenses}}</td>
+                            <td class="text-right font-mono {{if lt .NetIncome 0}}text-error{{end}}">{{formatIDR .NetIncome}}</td>
+                        </tr>
+                    {{end}}</tbody>
+                </table>
+            </div>
+        </details>
+    </div>
+</section>
+
+<section class="card bg-base-100 shadow mb-6" aria-labelledby="cash-position-heading">
+    <div class="card-body">
+        <div>
+            <h2 id="cash-position-heading" class="card-title">Cash Position</h2>
+            <p class="text-sm opacity-70">Closing cash and net movement for the last 6 {{if eq $d.Granularity "quarterly"}}quarters{{else}}months{{end}}, on synchronized period labels.</p>
+        </div>
+        {{if $d.CashConfigured}}
+        <div id="cash-chart" class="w-full min-h-96" role="group" aria-label="Interactive closing cash line above net cash movement bars, one bar per period"></div>
+        {{end}}
+        <details>
+            <summary class="cursor-pointer font-medium">View exact values</summary>
+            <div class="overflow-x-auto mt-3">
+                <table class="table table-sm">
+                    <thead><tr><th>Period</th><th class="text-right">Closing cash</th><th class="text-right">Net cash movement</th></tr></thead>
+                    <tbody>{{range $d.Trends}}
+                        <tr>
+                            <td><a class="link" href="{{$.BasePath}}/reports/cash-flow?from={{.StartDate}}&to={{.EndDate}}">{{.Label}}{{if .IsPartial}} (in progress){{end}}</a></td>
+                            {{if $d.CashConfigured}}
+                            <td class="text-right font-mono {{if isNegative .ClosingCash}}text-error{{end}}">{{formatIDR .ClosingCash}}</td>
+                            <td class="text-right font-mono">{{formatIDR .NetCashMovement}}</td>
+                            {{else}}<td class="text-right">Unavailable</td><td class="text-right">Unavailable</td>{{end}}
+                        </tr>
+                    {{end}}</tbody>
+                </table>
+            </div>
+        </details>
+    </div>
+</section>
+
 {{if .User.IsAdmin}}
 <div class="flex flex-wrap gap-2 mb-6">
     <a href="{{$.BasePath}}/income/new" class="btn btn-success btn-sm">+ Record Income</a>
@@ -56,43 +125,45 @@
 </div>
 {{end}}
 
-<!-- Recent Transactions -->
 <div class="card bg-base-100 shadow">
     <div class="card-body">
         <div class="flex justify-between items-center mb-2">
             <h2 class="card-title text-lg">Recent Transactions</h2>
             <a href="{{$.BasePath}}/journals" class="btn btn-ghost btn-xs">View All</a>
         </div>
-        <div class="overflow-x-auto">
-            <table class="table table-sm">
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Reference</th>
-                        <th>Description</th>
-                        <th>Type</th>
-                        <th class="text-right">Amount</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {{range $d.RecentTransactions}}
-                    <tr class="hover cursor-pointer" onclick="window.location='{{$.BasePath}}/journals/{{.ID}}'">
-                        <td class="text-sm">{{formatDate .EntryDate}}</td>
-                        <td class="font-mono text-sm">{{.Reference}}</td>
-                        <td>{{.Description}}</td>
-                        <td><span class="badge badge-ghost badge-xs">{{.SourceType}}</span></td>
-                        <td class="text-right font-mono text-sm">{{formatIDR .Amount}}</td>
-                    </tr>
-                    {{else}}
-                    <tr>
-                        <td colspan="5" class="text-center py-8 opacity-60">
-                            No transactions yet. Start by recording income or expenses.
-                        </td>
-                    </tr>
-                    {{end}}
-                </tbody>
-            </table>
-        </div>
+        <div class="overflow-x-auto"><table class="table table-sm">
+            <thead><tr><th>Date</th><th>Reference</th><th>Description</th><th>Type</th><th class="text-right">Amount</th></tr></thead>
+            <tbody>{{range $d.RecentTransactions}}
+                <tr class="hover cursor-pointer" onclick="window.location='{{$.BasePath}}/journals/{{.ID}}'">
+                    <td class="text-sm">{{formatDate .EntryDate}}</td><td class="font-mono text-sm">{{.Reference}}</td>
+                    <td>{{.Description}}</td><td><span class="badge badge-ghost badge-xs">{{.SourceType}}</span></td>
+                    <td class="text-right font-mono text-sm">{{formatIDR .Amount}}</td>
+                </tr>
+            {{else}}<tr><td colspan="5" class="text-center py-8 opacity-60">No transactions yet. Start by recording income or expenses.</td></tr>{{end}}</tbody>
+        </table></div>
     </div>
 </div>
+
+<script>
+(() => {
+    const trends = {{toJSON $d.Trends}};
+    const basePath = {{toJSON $.BasePath}};
+
+    function initCharts() {
+        const profitEl = document.getElementById("profitability-chart");
+        // htmx:load fires ~3x per boosted swap and this script re-registers its
+        // listeners each visit; the flag collapses that to one draw per page.
+        if (!profitEl || profitEl.dataset.charted) return;
+        profitEl.dataset.charted = "1";
+        FinancialCharts.profitability(profitEl, trends, basePath);
+        {{if $d.CashConfigured}}FinancialCharts.cashPosition(document.getElementById("cash-chart"), trends, basePath);{{end}}
+    }
+
+    // The sidebar nav is hx-boost'd (swaps document.body innerHTML), which
+    // does not fire DOMContentLoaded on the way back to this page — hook
+    // htmx's own lifecycle event too, same pattern as invoices/index.html.
+    document.addEventListener("DOMContentLoaded", initCharts);
+    document.addEventListener("htmx:load", initCharts);
+})();
+</script>
 {{end}}

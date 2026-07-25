@@ -164,3 +164,34 @@ func TestMigration_SchoolCalendarSchema(t *testing.T) {
 		}
 	}
 }
+
+func TestMigration_CashAccountClassification(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+
+	var classified int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM accounts WHERE is_cash = 1`).Scan(&classified); err != nil {
+		t.Fatal(err)
+	}
+	if classified != 3 {
+		t.Fatalf("classified cash accounts: got %d want 3", classified)
+	}
+
+	for _, code := range []string{"1-1001", "1-1002", "1-1003"} {
+		var isCash bool
+		if err := db.QueryRow(`SELECT is_cash FROM accounts WHERE code = ?`, code).Scan(&isCash); err != nil {
+			t.Fatalf("%s: %v", code, err)
+		}
+		if !isCash {
+			t.Errorf("%s should be classified as cash", code)
+		}
+	}
+	for _, code := range []string{"1-1100", "1-1200", "1-1300"} {
+		var isCash bool
+		if err := db.QueryRow(`SELECT is_cash FROM accounts WHERE code = ?`, code).Scan(&isCash); err != nil {
+			t.Fatalf("%s: %v", code, err)
+		}
+		if isCash {
+			t.Errorf("%s must not be classified as cash", code)
+		}
+	}
+}

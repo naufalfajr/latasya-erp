@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/naufal/latasya-erp/internal/audit"
 )
@@ -123,6 +124,75 @@ func TestAuditList_Pagination(t *testing.T) {
 	// 55 events → 2 pages at size 50 → pager should render.
 	if !strings.Contains(body, "Page 1 of 2") {
 		t.Errorf("expected 'Page 1 of 2' in pager, got body length %d", len(body))
+	}
+}
+
+func TestAuditList_FilterByDateRange_Included(t *testing.T) {
+	ts, db := testServer(t)
+	cookies := loginAsAdmin(t, ts)
+
+	audit.Log(context.Background(), db, audit.Event{Action: "dated.event", ActorUsername: "admin"})
+
+	today := time.Now().Format("2006-01-02")
+	client := &http.Client{}
+	req, _ := requestWithCookies(db, "GET", ts.URL+"/audit?from="+today+"&to="+today, cookies, "")
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	body := readBody(t, resp)
+	if !strings.Contains(body, "dated.event") {
+		t.Errorf("expected today's event within an inclusive from/to range covering today")
+	}
+}
+
+func TestAuditList_FilterByDateRange_Excluded(t *testing.T) {
+	ts, db := testServer(t)
+	cookies := loginAsAdmin(t, ts)
+
+	audit.Log(context.Background(), db, audit.Event{Action: "excluded.event", ActorUsername: "admin"})
+
+	future := time.Now().AddDate(1, 0, 0).Format("2006-01-02")
+	client := &http.Client{}
+	req, _ := requestWithCookies(db, "GET", ts.URL+"/audit?from="+future+"&to="+future, cookies, "")
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	body := readBody(t, resp)
+	if strings.Contains(body, "excluded.event") {
+		t.Error("a from/to range a year in the future should exclude today's event")
+	}
+}
+
+func TestAuditList_FilterNoMatches(t *testing.T) {
+	ts, db := testServer(t)
+	cookies := loginAsAdmin(t, ts)
+
+	client := &http.Client{}
+	req, _ := requestWithCookies(db, "GET", ts.URL+"/audit?actor=no-such-user", cookies, "")
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	body := readBody(t, resp)
+	if strings.Contains(body, "Page 1 of 2") {
+		t.Error("a filter with zero matches should not paginate past page 1")
 	}
 }
 

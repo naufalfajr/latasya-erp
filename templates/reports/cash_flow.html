@@ -19,6 +19,12 @@
 
 <div class="card bg-base-100 shadow">
     <div class="card-body overflow-x-auto">
+        {{if not $report.CashConfigured}}
+        <div class="alert alert-warning mb-4">
+            <span>Cash figures are unavailable because no accounts are classified as Cash / Bank.</span>
+            {{if $.User.IsAdmin}}<a class="btn btn-sm" href="{{$.BasePath}}/accounts">Configure accounts</a>{{end}}
+        </div>
+        {{else}}
         <!-- Summary cards -->
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
             <div class="stat bg-base-200 rounded-box p-4">
@@ -36,6 +42,7 @@
         </div>
 
         <!-- Detail -->
+        <h2 class="font-semibold mb-2">Cash Movements</h2>
         <table class="table table-sm">
             <thead>
                 <tr class="bg-base-200">
@@ -45,7 +52,7 @@
                 </tr>
             </thead>
             <tbody>
-                {{range $report.Operating}}
+                {{range $report.Movements}}
                 <tr>
                     <td class="font-mono text-sm">{{.AccountCode}}</td>
                     <td>{{.AccountName}}</td>
@@ -57,11 +64,12 @@
             </tbody>
             <tfoot>
                 <tr class="font-bold">
-                    <td colspan="2" class="text-right">Total Cash Flow</td>
-                    <td class="text-right font-mono {{if ge $report.TotalOperating 0}}text-success{{else}}text-error{{end}}">{{formatIDR $report.TotalOperating}}</td>
+                    <td colspan="2" class="text-right">Total Cash Movements</td>
+                    <td class="text-right font-mono {{if ge $report.TotalMovement 0}}text-success{{else}}text-error{{end}}">{{formatIDR $report.TotalMovement}}</td>
                 </tr>
             </tfoot>
         </table>
+        {{end}}
     </div>
 </div>
 {{end}}

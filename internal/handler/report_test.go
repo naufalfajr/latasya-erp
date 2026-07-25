@@ -89,6 +89,62 @@ func TestReport_GeneralLedger_WithAccountFilter(t *testing.T) {
 	}
 }
 
+// TestReport_TrialBalance_WithData, TestReport_ProfitLoss_WithData and
+// TestReport_CashFlow_WithData each seed one posted journal entry so the
+// handler's non-empty-rows path renders (the smoke tests above only
+// exercise the zero-rows path); TrialBalance's totals-accumulation loop in
+// particular never runs otherwise.
+func TestReport_TrialBalance_WithData(t *testing.T) {
+	assertReportWithData(t, "/reports/trial-balance", "", 250000, "250.000")
+}
+
+func TestReport_ProfitLoss_WithData(t *testing.T) {
+	assertReportWithData(t, "/reports/profit-loss", model.SourceIncome, 750000, "750.000")
+}
+
+func TestReport_CashFlow_WithData(t *testing.T) {
+	assertReportWithData(t, "/reports/cash-flow", model.SourceIncome, 300000, "300.000")
+}
+
+func assertReportWithData(t *testing.T, path, sourceType string, amount int, wantSubstr string) {
+	t.Helper()
+	ts, db := testServer(t)
+	cookies := loginAsAdmin(t, ts)
+
+	var cashID, revenueID int
+	if err := db.QueryRow("SELECT id FROM accounts WHERE code = '1-1001'").Scan(&cashID); err != nil {
+		t.Fatalf("cash account not seeded: %v", err)
+	}
+	if err := db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID); err != nil {
+		t.Fatalf("revenue account not seeded: %v", err)
+	}
+	if _, err := model.CreateJournalEntry(db,
+		&model.JournalEntry{EntryDate: "2026-04-01", Description: "report test entry", SourceType: sourceType, IsPosted: true, CreatedBy: 1},
+		[]model.JournalLine{
+			{AccountID: cashID, Debit: amount},
+			{AccountID: revenueID, Credit: amount},
+		},
+	); err != nil {
+		t.Fatalf("seed journal entry: %v", err)
+	}
+
+	client := &http.Client{}
+	req, _ := requestWithCookies(db, "GET", ts.URL+path+"?from=2026-01-01&to=2026-12-31", cookies, "")
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("%s: expected 200, got %d", path, resp.StatusCode)
+	}
+	body := readBody(t, resp)
+	if !strings.Contains(body, wantSubstr) {
+		t.Errorf("%s: expected %q in body", path, wantSubstr)
+	}
+}
+
 func assertReportRenders(t *testing.T, path, keyword string) {
 	t.Helper()
 	ts, db := testServer(t)

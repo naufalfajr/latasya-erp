@@ -202,13 +202,14 @@ type cashFlowRowResp struct {
 }
 
 type cashFlowResp struct {
-	Operating      []cashFlowRowResp `json:"operating"`
-	TotalOperating string            `json:"total_operating"`
-	NetCashChange  string            `json:"net_cash_change"`
-	OpeningCash    string            `json:"opening_cash"`
-	ClosingCash    string            `json:"closing_cash"`
+	Movements      []cashFlowRowResp `json:"movements"`
+	TotalMovement  *string           `json:"total_movement"`
+	NetCashChange  *string           `json:"net_cash_change"`
+	OpeningCash    *string           `json:"opening_cash"`
+	ClosingCash    *string           `json:"closing_cash"`
 	From           string            `json:"from"`
 	To             string            `json:"to"`
+	CashConfigured bool              `json:"cash_configured"`
 }
 
 func (h *Handler) CashFlow(w http.ResponseWriter, r *http.Request) {
@@ -223,14 +224,17 @@ func (h *Handler) CashFlow(w http.ResponseWriter, r *http.Request) {
 	resp := cashFlowResp{
 		From:           from,
 		To:             to,
-		TotalOperating: idr(report.TotalOperating),
-		NetCashChange:  idr(report.NetCashChange),
-		OpeningCash:    idr(report.OpeningCash),
-		ClosingCash:    idr(report.ClosingCash),
-		Operating:      make([]cashFlowRowResp, 0, len(report.Operating)),
+		Movements:      make([]cashFlowRowResp, 0, len(report.Movements)),
+		CashConfigured: report.CashConfigured,
 	}
-	for _, row := range report.Operating {
-		resp.Operating = append(resp.Operating, cashFlowRowResp{
+	if report.CashConfigured {
+		resp.TotalMovement = reportIDRPtr(report.TotalMovement)
+		resp.NetCashChange = reportIDRPtr(report.NetCashChange)
+		resp.OpeningCash = reportIDRPtr(report.OpeningCash)
+		resp.ClosingCash = reportIDRPtr(report.ClosingCash)
+	}
+	for _, row := range report.Movements {
+		resp.Movements = append(resp.Movements, cashFlowRowResp{
 			AccountCode: row.AccountCode,
 			AccountName: row.AccountName,
 			Amount:      idr(row.Amount),
@@ -238,6 +242,11 @@ func (h *Handler) CashFlow(w http.ResponseWriter, r *http.Request) {
 	}
 
 	v1.WriteJSON(w, http.StatusOK, map[string]any{"data": resp})
+}
+
+func reportIDRPtr(n int) *string {
+	value := idr(n)
+	return &value
 }
 
 type generalLedgerEntryResp struct {

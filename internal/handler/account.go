@@ -71,6 +71,7 @@ func (h *Handler) CreateAccount(w http.ResponseWriter, r *http.Request) {
 		NormalBalance: r.FormValue("normal_balance"),
 		Description:   r.FormValue("description"),
 		IsActive:      r.FormValue("is_active") == "on",
+		IsCash:        r.FormValue("is_cash") == "on",
 	}
 
 	errors := validateAccount(a)
@@ -107,6 +108,7 @@ func (h *Handler) CreateAccount(w http.ResponseWriter, r *http.Request) {
 				"account_type":   a.AccountType,
 				"normal_balance": a.NormalBalance,
 				"is_active":      a.IsActive,
+				"is_cash":        a.IsCash,
 			},
 		},
 	})
@@ -155,6 +157,7 @@ func (h *Handler) UpdateAccount(w http.ResponseWriter, r *http.Request) {
 		NormalBalance: r.FormValue("normal_balance"),
 		Description:   r.FormValue("description"),
 		IsActive:      r.FormValue("is_active") == "on",
+		IsCash:        r.FormValue("is_cash") == "on",
 		IsSystem:      existing.IsSystem,
 	}
 
@@ -185,6 +188,7 @@ func (h *Handler) UpdateAccount(w http.ResponseWriter, r *http.Request) {
 		"normal_balance": existing.NormalBalance,
 		"description":    existing.Description,
 		"is_active":      existing.IsActive,
+		"is_cash":        existing.IsCash,
 	}
 	newFields := map[string]any{
 		"code":           a.Code,
@@ -193,9 +197,10 @@ func (h *Handler) UpdateAccount(w http.ResponseWriter, r *http.Request) {
 		"normal_balance": a.NormalBalance,
 		"description":    a.Description,
 		"is_active":      a.IsActive,
+		"is_cash":        a.IsCash,
 	}
 	metadata := audit.Diff(oldFields, newFields,
-		[]string{"code", "name", "account_type", "normal_balance", "description", "is_active"})
+		[]string{"code", "name", "account_type", "normal_balance", "description", "is_active", "is_cash"})
 	if metadata != nil {
 		audit.Log(r.Context(), h.DB, audit.Event{
 			Action:      "account.update",
@@ -244,6 +249,7 @@ func (h *Handler) DeleteAccount(w http.ResponseWriter, r *http.Request) {
 				"name":           account.Name,
 				"account_type":   account.AccountType,
 				"normal_balance": account.NormalBalance,
+				"is_cash":        account.IsCash,
 			},
 		},
 	})
@@ -271,6 +277,9 @@ func validateAccount(a *model.Account) map[string]string {
 	}
 	if a.NormalBalance == "" {
 		errors["normal_balance"] = "Normal balance is required"
+	}
+	if err := model.ValidateCashAccount(a); err != nil {
+		errors["is_cash"] = err.Error()
 	}
 	return errors
 }

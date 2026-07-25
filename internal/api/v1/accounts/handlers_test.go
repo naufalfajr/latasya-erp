@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -270,6 +271,43 @@ func TestCreateAccount(t *testing.T) {
 			t.Error("expected is_active=true by default")
 		}
 	})
+
+	t.Run("cash classification is returned and validated", func(t *testing.T) {
+		body := map[string]any{
+			"code": "9-CASH-API", "name": "API Cash", "account_type": "asset",
+			"normal_balance": "debit", "is_cash": true,
+		}
+		resp := doRequest(t, ts, http.MethodPost, "/api/v1/accounts", token, body)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusCreated {
+			t.Fatalf("expected 201, got %d", resp.StatusCode)
+		}
+		var envelope struct {
+			Data model.Account `json:"data"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&envelope); err != nil {
+			t.Fatal(err)
+		}
+		if !envelope.Data.IsCash {
+			t.Fatal("expected is_cash=true in response")
+		}
+		var metadata string
+		if err := db.QueryRow(`SELECT metadata FROM audit_log WHERE action = 'account.create' AND target_id = ? ORDER BY id DESC LIMIT 1`, envelope.Data.ID).Scan(&metadata); err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(metadata, "is_cash") {
+			t.Fatalf("audit metadata should include is_cash: %s", metadata)
+		}
+
+		body["code"] = "9-BAD-CASH"
+		body["account_type"] = "liability"
+		body["normal_balance"] = "credit"
+		resp = doRequest(t, ts, http.MethodPost, "/api/v1/accounts", token, body)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusUnprocessableEntity {
+			t.Fatalf("expected 422 for invalid cash account, got %d", resp.StatusCode)
+		}
+	})
 }
 
 func TestUpdateAccount(t *testing.T) {
@@ -319,6 +357,45 @@ func TestUpdateAccount(t *testing.T) {
 		}
 		if envelope.Data.Description != "updated description" {
 			t.Errorf("expected description 'updated description', got %q", envelope.Data.Description)
+		}
+	})
+
+	t.Run("omitted is_cash preserves classification", func(t *testing.T) {
+		if _, err := db.Exec(`UPDATE accounts SET is_cash = 1 WHERE id = ?`, testID); err != nil {
+			t.Fatal(err)
+		}
+		body := map[string]any{
+			"code": "UPD-1", "name": "Still Cash", "account_type": "asset", "normal_balance": "debit",
+		}
+		resp := doRequest(t, ts, http.MethodPut, fmt.Sprintf("/api/v1/accounts/%d", testID), token, body)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("expected 200, got %d", resp.StatusCode)
+		}
+		var isCash bool
+		if err := db.QueryRow(`SELECT is_cash FROM accounts WHERE id = ?`, testID).Scan(&isCash); err != nil {
+			t.Fatal(err)
+		}
+		if !isCash {
+			t.Fatal("omitting is_cash must not erase existing classification")
+		}
+	})
+
+	t.Run("omitted is_cash still rejects conflicting type changes", func(t *testing.T) {
+		body := map[string]any{
+			"code": "UPD-1", "name": "Invalid Cash", "account_type": "liability", "normal_balance": "credit",
+		}
+		resp := doRequest(t, ts, http.MethodPut, fmt.Sprintf("/api/v1/accounts/%d", testID), token, body)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusUnprocessableEntity {
+			t.Fatalf("expected 422, got %d", resp.StatusCode)
+		}
+		var errEnv v1.ErrorEnvelope
+		if err := json.NewDecoder(resp.Body).Decode(&errEnv); err != nil {
+			t.Fatal(err)
+		}
+		if errEnv.Fields["is_cash"] == "" {
+			t.Fatal("expected clear is_cash validation error")
 		}
 	})
 

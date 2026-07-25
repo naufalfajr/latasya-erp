@@ -42,8 +42,12 @@ func anyAuthToken(t *testing.T, db *sql.DB) string {
 }
 
 func doReq(t *testing.T, ts *httptest.Server, bearer string) *http.Response {
+	return doReqPath(t, ts, bearer, "/api/v1/dashboard")
+}
+
+func doReqPath(t *testing.T, ts *httptest.Server, bearer, path string) *http.Response {
 	t.Helper()
-	req, err := http.NewRequest(http.MethodGet, ts.URL+"/api/v1/dashboard", bytes.NewReader(nil))
+	req, err := http.NewRequest(http.MethodGet, ts.URL+path, bytes.NewReader(nil))
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
@@ -110,6 +114,49 @@ func TestGetDashboard(t *testing.T) {
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
 			t.Errorf("expected 200 for any authenticated user, got %d", resp.StatusCode)
+		}
+	})
+
+	t.Run("granularity defaults to monthly and accepts supported values", func(t *testing.T) {
+		for _, granularity := range []string{"", "monthly", "quarterly"} {
+			path := "/api/v1/dashboard"
+			if granularity != "" {
+				path += "?granularity=" + granularity
+			}
+			resp := doReqPath(t, ts, tok, path)
+			var env struct {
+				Data struct {
+					Granularity string `json:"granularity"`
+					Trends      []struct {
+						Revenue string `json:"revenue"`
+					} `json:"trends"`
+				} `json:"data"`
+			}
+			if err := json.NewDecoder(resp.Body).Decode(&env); err != nil {
+				resp.Body.Close()
+				t.Fatal(err)
+			}
+			resp.Body.Close()
+			want := "monthly"
+			if granularity != "" {
+				want = granularity
+			}
+			if resp.StatusCode != http.StatusOK || env.Data.Granularity != want || len(env.Data.Trends) != 6 {
+				t.Errorf("granularity=%q: status=%d data=%+v", granularity, resp.StatusCode, env.Data)
+			}
+			if len(env.Data.Trends) > 0 && env.Data.Trends[0].Revenue == "" {
+				t.Errorf("granularity=%q: trend currency fields must be strings", granularity)
+			}
+		}
+	})
+
+	t.Run("unsupported granularity returns 400", func(t *testing.T) {
+		for _, query := range []string{"?granularity=weekly", "?granularity="} {
+			resp := doReqPath(t, ts, tok, "/api/v1/dashboard"+query)
+			resp.Body.Close()
+			if resp.StatusCode != http.StatusBadRequest {
+				t.Errorf("%s: expected 400, got %d", query, resp.StatusCode)
+			}
 		}
 	})
 }

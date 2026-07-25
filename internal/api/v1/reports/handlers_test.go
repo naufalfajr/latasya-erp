@@ -176,6 +176,29 @@ func TestCashFlow(t *testing.T) {
 	}
 }
 
+func TestCashFlowWithoutConfigurationReturnsUnavailableFigures(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	if _, err := db.Exec(`UPDATE accounts SET is_cash = 0`); err != nil {
+		t.Fatal(err)
+	}
+	ts := newTestServer(t, db)
+	resp := doReq(t, ts, http.MethodGet, "/api/v1/reports/cash-flow", adminToken(t, db))
+	defer resp.Body.Close()
+	var env struct {
+		Data struct {
+			CashConfigured bool    `json:"cash_configured"`
+			ClosingCash    *string `json:"closing_cash"`
+			TotalMovement  *string `json:"total_movement"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&env); err != nil {
+		t.Fatal(err)
+	}
+	if env.Data.CashConfigured || env.Data.ClosingCash != nil || env.Data.TotalMovement != nil {
+		t.Fatalf("unconfigured cash figures must be unavailable: %+v", env.Data)
+	}
+}
+
 func TestGeneralLedger(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	ts := newTestServer(t, db)

@@ -441,3 +441,594 @@ func TestDeleteBill_NonDraft(t *testing.T) {
 		t.Fatalf("status: got %d, want 409", resp.StatusCode)
 	}
 }
+
+func TestListBills_Filters(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+
+	id, _, _ := createBillFixture(t, ts, db, token)
+	rec := doRequest(t, ts, http.MethodPost, fmt.Sprintf("/api/v1/bills/%d/receive", id), token, nil, nil)
+	rec.Body.Close()
+	createBillFixture(t, ts, db, token) // stays draft
+
+	t.Run("status_filter", func(t *testing.T) {
+		resp := doRequest(t, ts, http.MethodGet, "/api/v1/bills?status=received", token, nil, nil)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("status: got %d, want 200", resp.StatusCode)
+		}
+		var env struct {
+			Data []model.Bill `json:"data"`
+			Meta v1.Meta      `json:"meta"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&env); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		for _, b := range env.Data {
+			if b.Status != "received" {
+				t.Errorf("status filter leaked non-received bill: %s", b.Status)
+			}
+		}
+		if env.Meta.Total < 1 {
+			t.Errorf("total: got %d, want >= 1", env.Meta.Total)
+		}
+	})
+
+	t.Run("search_filter", func(t *testing.T) {
+		resp := doRequest(t, ts, http.MethodGet, "/api/v1/bills?search=nonexistent-xyz", token, nil, nil)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("status: got %d, want 200", resp.StatusCode)
+		}
+		var env struct {
+			Data []model.Bill `json:"data"`
+			Meta v1.Meta      `json:"meta"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&env); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if env.Meta.Total != 0 {
+			t.Errorf("total: got %d, want 0", env.Meta.Total)
+		}
+	})
+}
+
+func TestGetBill_InvalidID(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+
+	resp := doRequest(t, ts, http.MethodGet, "/api/v1/bills/not-a-number", token, nil, nil)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("status: got %d, want 404", resp.StatusCode)
+	}
+}
+
+func TestCreateBill_Auth(t *testing.T) {
+	ts, db := setupServer(t)
+	supplierID := seedSupplier(t, db)
+	expenseAcct := accountID(t, db, "5-1001")
+	body, err := json.Marshal(sampleBillBody(supplierID, expenseAcct))
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	testutil.APIMatrix(t, ts, db, http.MethodPost, "/api/v1/bills", string(body), testutil.AuthMatrix{
+		Anon:               http.StatusUnauthorized,
+		ValidBearer:        http.StatusCreated,
+		ExpiredBearer:      http.StatusUnauthorized,
+		RevokedBearer:      http.StatusUnauthorized,
+		ScopeMissingBearer: http.StatusForbidden,
+	})
+}
+
+func TestCreateBill_InvalidBody(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+
+	req, err := http.NewRequest(http.MethodPost, ts.URL+"/api/v1/bills",
+		bytes.NewBufferString(`{"contact_id": 1, "unexpected_field": true}`))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := ts.Client().Do(req)
+	if err != nil {
+		t.Fatalf("do request: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status: got %d, want 400", resp.StatusCode)
+	}
+}
+
+func TestCreateBill_ValidationErrors(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+	supplierID := seedSupplier(t, db)
+	expenseAcct := accountID(t, db, "5-1001")
+
+	cases := map[string]func(map[string]any){
+		"missing_contact_id":  func(b map[string]any) { b["contact_id"] = 0 },
+		"missing_bill_date":   func(b map[string]any) { b["bill_date"] = "" },
+		"missing_due_date":    func(b map[string]any) { b["due_date"] = "" },
+		"invalid_tax_amount":  func(b map[string]any) { b["tax_amount"] = "not-a-number" },
+		"negative_tax_amount": func(b map[string]any) { b["tax_amount"] = "-100" },
+		"no_lines":            func(b map[string]any) { b["lines"] = []map[string]any{} },
+		"invalid_quantity": func(b map[string]any) {
+			b["lines"].([]map[string]any)[0]["quantity"] = "abc"
+		},
+		"invalid_unit_price": func(b map[string]any) {
+			b["lines"].([]map[string]any)[0]["unit_price"] = "abc"
+		},
+		"missing_description": func(b map[string]any) {
+			b["lines"].([]map[string]any)[0]["description"] = ""
+		},
+		"zero_unit_price": func(b map[string]any) {
+			b["lines"].([]map[string]any)[0]["unit_price"] = "0"
+		},
+		"missing_account_id": func(b map[string]any) {
+			b["lines"].([]map[string]any)[0]["account_id"] = 0
+		},
+	}
+
+	for name, mutate := range cases {
+		t.Run(name, func(t *testing.T) {
+			body := sampleBillBody(supplierID, expenseAcct)
+			mutate(body)
+			resp := doRequest(t, ts, http.MethodPost, "/api/v1/bills", token, body, nil)
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusUnprocessableEntity {
+				raw, _ := io.ReadAll(resp.Body)
+				t.Fatalf("status: got %d (%s), want 422", resp.StatusCode, string(raw))
+			}
+		})
+	}
+}
+
+func TestCreateBill_DBConstraintError(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+	supplierID := seedSupplier(t, db)
+
+	body := sampleBillBody(supplierID, 999999) // account_id doesn't exist
+	resp := doRequest(t, ts, http.MethodPost, "/api/v1/bills", token, body, nil)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusUnprocessableEntity {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status: got %d (%s), want 422", resp.StatusCode, string(raw))
+	}
+}
+
+func TestUpdateBill_Auth(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+	id, supplierID, expenseAcct := createBillFixture(t, ts, db, token)
+	body, err := json.Marshal(sampleBillBody(supplierID, expenseAcct))
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	testutil.APIMatrix(t, ts, db, http.MethodPut, fmt.Sprintf("/api/v1/bills/%d", id), string(body), testutil.AuthMatrix{
+		Anon:               http.StatusUnauthorized,
+		ScopeMissingBearer: http.StatusForbidden,
+	})
+}
+
+func TestUpdateBill_NotFound(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+	supplierID := seedSupplier(t, db)
+	expenseAcct := accountID(t, db, "5-1001")
+	body := sampleBillBody(supplierID, expenseAcct)
+
+	resp := doRequest(t, ts, http.MethodPut, "/api/v1/bills/999999", token, body, nil)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("status: got %d, want 404", resp.StatusCode)
+	}
+}
+
+func TestUpdateBill_InvalidBody(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+	id, _, _ := createBillFixture(t, ts, db, token)
+
+	req, err := http.NewRequest(http.MethodPut, ts.URL+fmt.Sprintf("/api/v1/bills/%d", id),
+		bytes.NewBufferString(`{"unexpected_field": true}`))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := ts.Client().Do(req)
+	if err != nil {
+		t.Fatalf("do request: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status: got %d, want 400", resp.StatusCode)
+	}
+}
+
+func TestUpdateBill_ValidationFailed(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+	id, supplierID, expenseAcct := createBillFixture(t, ts, db, token)
+
+	body := sampleBillBody(supplierID, expenseAcct)
+	body["due_date"] = ""
+	resp := doRequest(t, ts, http.MethodPut, fmt.Sprintf("/api/v1/bills/%d", id), token, body, nil)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("status: got %d, want 422", resp.StatusCode)
+	}
+}
+
+func TestUpdateBill_DBConstraintError(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+	id, supplierID, _ := createBillFixture(t, ts, db, token)
+
+	body := sampleBillBody(supplierID, 999999) // account_id doesn't exist
+	resp := doRequest(t, ts, http.MethodPut, fmt.Sprintf("/api/v1/bills/%d", id), token, body, nil)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusUnprocessableEntity {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status: got %d (%s), want 422", resp.StatusCode, string(raw))
+	}
+}
+
+func TestUpdateBill_Success(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+	id, supplierID, expenseAcct := createBillFixture(t, ts, db, token)
+
+	body := sampleBillBody(supplierID, expenseAcct)
+	body["notes"] = "updated bill notes"
+	body["due_date"] = "2026-07-01"
+	body["lines"].([]map[string]any)[0]["unit_price"] = "750000"
+
+	resp := doRequest(t, ts, http.MethodPut, fmt.Sprintf("/api/v1/bills/%d", id), token, body, nil)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status: got %d (%s), want 200", resp.StatusCode, string(raw))
+	}
+	var b model.Bill
+	if err := json.NewDecoder(resp.Body).Decode(&b); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if b.Notes != "updated bill notes" {
+		t.Errorf("notes: got %q, want %q", b.Notes, "updated bill notes")
+	}
+	if b.DueDate != "2026-07-01" {
+		t.Errorf("due_date: got %q, want %q", b.DueDate, "2026-07-01")
+	}
+	if b.Total != 750000 {
+		t.Errorf("total: got %d, want 750000", b.Total)
+	}
+}
+
+func TestDeleteBill(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+
+	t.Run("auth", func(t *testing.T) {
+		id, _, _ := createBillFixture(t, ts, db, token)
+		testutil.APIMatrix(t, ts, db, http.MethodDelete, fmt.Sprintf("/api/v1/bills/%d", id), "", testutil.AuthMatrix{
+			Anon:               http.StatusUnauthorized,
+			ScopeMissingBearer: http.StatusForbidden,
+		})
+	})
+
+	t.Run("not_found_bad_id", func(t *testing.T) {
+		resp := doRequest(t, ts, http.MethodDelete, "/api/v1/bills/not-a-number", token, nil, nil)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusNotFound {
+			t.Fatalf("status: got %d, want 404", resp.StatusCode)
+		}
+	})
+
+	t.Run("not_found_missing", func(t *testing.T) {
+		resp := doRequest(t, ts, http.MethodDelete, "/api/v1/bills/999999", token, nil, nil)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusNotFound {
+			t.Fatalf("status: got %d, want 404", resp.StatusCode)
+		}
+	})
+
+	t.Run("success", func(t *testing.T) {
+		id, _, _ := createBillFixture(t, ts, db, token)
+		resp := doRequest(t, ts, http.MethodDelete, fmt.Sprintf("/api/v1/bills/%d", id), token, nil, nil)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusNoContent {
+			t.Fatalf("status: got %d, want 204", resp.StatusCode)
+		}
+
+		get := doRequest(t, ts, http.MethodGet, fmt.Sprintf("/api/v1/bills/%d", id), token, nil, nil)
+		defer get.Body.Close()
+		if get.StatusCode != http.StatusNotFound {
+			t.Errorf("post-delete get: got %d, want 404", get.StatusCode)
+		}
+	})
+}
+
+func TestReceiveBill_Auth(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+	id, _, _ := createBillFixture(t, ts, db, token)
+
+	testutil.APIMatrix(t, ts, db, http.MethodPost, fmt.Sprintf("/api/v1/bills/%d/receive", id), "", testutil.AuthMatrix{
+		Anon:               http.StatusUnauthorized,
+		ScopeMissingBearer: http.StatusForbidden,
+	})
+}
+
+func TestReceiveBill_NotFound(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+
+	t.Run("bad_id", func(t *testing.T) {
+		resp := doRequest(t, ts, http.MethodPost, "/api/v1/bills/not-a-number/receive", token, nil, nil)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusNotFound {
+			t.Fatalf("status: got %d, want 404", resp.StatusCode)
+		}
+	})
+
+	t.Run("missing", func(t *testing.T) {
+		resp := doRequest(t, ts, http.MethodPost, "/api/v1/bills/999999/receive", token, nil, nil)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusNotFound {
+			t.Fatalf("status: got %d, want 404", resp.StatusCode)
+		}
+	})
+}
+
+func TestReceiveBill_AlreadyReceived(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+	id, _, _ := createBillFixture(t, ts, db, token)
+
+	first := doRequest(t, ts, http.MethodPost, fmt.Sprintf("/api/v1/bills/%d/receive", id), token, nil, nil)
+	first.Body.Close()
+
+	resp := doRequest(t, ts, http.MethodPost, fmt.Sprintf("/api/v1/bills/%d/receive", id), token, nil, nil)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusConflict {
+		t.Fatalf("status: got %d, want 409", resp.StatusCode)
+	}
+}
+
+func TestBillPayment_Auth(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+	id, _, _ := createBillFixture(t, ts, db, token)
+	rec := doRequest(t, ts, http.MethodPost, fmt.Sprintf("/api/v1/bills/%d/receive", id), token, nil, nil)
+	rec.Body.Close()
+
+	cashAcct := accountID(t, db, "1-1001")
+	body, err := json.Marshal(map[string]any{
+		"amount":          "100000",
+		"payment_date":    "2026-05-20",
+		"payment_account": cashAcct,
+	})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	testutil.APIMatrix(t, ts, db, http.MethodPost, fmt.Sprintf("/api/v1/bills/%d/payment", id), string(body), testutil.AuthMatrix{
+		Anon:               http.StatusUnauthorized,
+		ValidBearer:        http.StatusOK,
+		ExpiredBearer:      http.StatusUnauthorized,
+		RevokedBearer:      http.StatusUnauthorized,
+		ScopeMissingBearer: http.StatusForbidden,
+	})
+}
+
+func TestBillPayment_NotFound(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+
+	t.Run("bad_id", func(t *testing.T) {
+		resp := doRequest(t, ts, http.MethodPost, "/api/v1/bills/not-a-number/payment", token, nil, nil)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusNotFound {
+			t.Fatalf("status: got %d, want 404", resp.StatusCode)
+		}
+	})
+
+	t.Run("missing", func(t *testing.T) {
+		resp := doRequest(t, ts, http.MethodPost, "/api/v1/bills/999999/payment", token, nil, nil)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusNotFound {
+			t.Fatalf("status: got %d, want 404", resp.StatusCode)
+		}
+	})
+}
+
+func TestBillPayment_InvalidBody(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+	id, _, _ := createBillFixture(t, ts, db, token)
+
+	req, err := http.NewRequest(http.MethodPost, ts.URL+fmt.Sprintf("/api/v1/bills/%d/payment", id),
+		bytes.NewBufferString(`{"unexpected_field": true}`))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := ts.Client().Do(req)
+	if err != nil {
+		t.Fatalf("do request: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status: got %d, want 400", resp.StatusCode)
+	}
+}
+
+func TestBillPayment_ValidationErrors(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+	id, _, _ := createBillFixture(t, ts, db, token)
+	rec := doRequest(t, ts, http.MethodPost, fmt.Sprintf("/api/v1/bills/%d/receive", id), token, nil, nil)
+	rec.Body.Close()
+
+	cashAcct := accountID(t, db, "1-1001")
+	path := fmt.Sprintf("/api/v1/bills/%d/payment", id)
+
+	cases := map[string]map[string]any{
+		"missing_amount": {
+			"amount": "", "payment_date": "2026-05-15", "payment_account": cashAcct,
+		},
+		"non_numeric_amount": {
+			"amount": "abc", "payment_date": "2026-05-15", "payment_account": cashAcct,
+		},
+		"negative_amount": {
+			"amount": "-100", "payment_date": "2026-05-15", "payment_account": cashAcct,
+		},
+		"zero_amount": {
+			"amount": "0", "payment_date": "2026-05-15", "payment_account": cashAcct,
+		},
+		"missing_payment_date": {
+			"amount": "100000", "payment_date": "", "payment_account": cashAcct,
+		},
+		"missing_payment_account": {
+			"amount": "100000", "payment_date": "2026-05-15", "payment_account": 0,
+		},
+	}
+
+	for name, body := range cases {
+		t.Run(name, func(t *testing.T) {
+			resp := doRequest(t, ts, http.MethodPost, path, token, body, nil)
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusUnprocessableEntity {
+				raw, _ := io.ReadAll(resp.Body)
+				t.Fatalf("status: got %d (%s), want 422", resp.StatusCode, string(raw))
+			}
+		})
+	}
+}
+
+func TestBillPayment_NotReceived(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+	id, _, _ := createBillFixture(t, ts, db, token) // still draft
+
+	cashAcct := accountID(t, db, "1-1001")
+	resp := doRequest(t, ts, http.MethodPost, fmt.Sprintf("/api/v1/bills/%d/payment", id), token, map[string]any{
+		"amount":          "100000",
+		"payment_date":    "2026-05-15",
+		"payment_account": cashAcct,
+	}, nil)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusConflict {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status: got %d (%s), want 409", resp.StatusCode, string(raw))
+	}
+}
+
+func TestBillPayment_Overpayment(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+	id, _, _ := createBillFixture(t, ts, db, token) // total 500000
+	rec := doRequest(t, ts, http.MethodPost, fmt.Sprintf("/api/v1/bills/%d/receive", id), token, nil, nil)
+	rec.Body.Close()
+
+	cashAcct := accountID(t, db, "1-1001")
+	resp := doRequest(t, ts, http.MethodPost, fmt.Sprintf("/api/v1/bills/%d/payment", id), token, map[string]any{
+		"amount":          "600000",
+		"payment_date":    "2026-05-15",
+		"payment_account": cashAcct,
+	}, nil)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusConflict {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status: got %d (%s), want 409", resp.StatusCode, string(raw))
+	}
+}
+
+func TestBillPayment_PartialThenFull(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+	id, _, _ := createBillFixture(t, ts, db, token) // total 500000
+	rec := doRequest(t, ts, http.MethodPost, fmt.Sprintf("/api/v1/bills/%d/receive", id), token, nil, nil)
+	rec.Body.Close()
+
+	cashAcct := accountID(t, db, "1-1001")
+	path := fmt.Sprintf("/api/v1/bills/%d/payment", id)
+
+	partial := doRequest(t, ts, http.MethodPost, path, token, map[string]any{
+		"amount":          "200000",
+		"payment_date":    "2026-05-15",
+		"payment_account": cashAcct,
+	}, nil)
+	defer partial.Body.Close()
+	if partial.StatusCode != http.StatusOK {
+		raw, _ := io.ReadAll(partial.Body)
+		t.Fatalf("partial: got %d (%s), want 200", partial.StatusCode, string(raw))
+	}
+	var afterPartial model.Bill
+	if err := json.NewDecoder(partial.Body).Decode(&afterPartial); err != nil {
+		t.Fatalf("decode partial: %v", err)
+	}
+	if afterPartial.Status != "partial" {
+		t.Errorf("status after partial: got %q, want partial", afterPartial.Status)
+	}
+	if afterPartial.AmountPaid != 200000 {
+		t.Errorf("amount_paid after partial: got %d, want 200000", afterPartial.AmountPaid)
+	}
+
+	final := doRequest(t, ts, http.MethodPost, path, token, map[string]any{
+		"amount":          "300000",
+		"payment_date":    "2026-05-16",
+		"payment_account": cashAcct,
+	}, nil)
+	defer final.Body.Close()
+	if final.StatusCode != http.StatusOK {
+		raw, _ := io.ReadAll(final.Body)
+		t.Fatalf("final: got %d (%s), want 200", final.StatusCode, string(raw))
+	}
+	var afterFinal model.Bill
+	if err := json.NewDecoder(final.Body).Decode(&afterFinal); err != nil {
+		t.Fatalf("decode final: %v", err)
+	}
+	if afterFinal.Status != "paid" {
+		t.Errorf("status after final: got %q, want paid", afterFinal.Status)
+	}
+	if afterFinal.AmountPaid != 500000 {
+		t.Errorf("amount_paid after final: got %d, want 500000", afterFinal.AmountPaid)
+	}
+}
+
+func TestBillPayment_AlreadyPaid(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+	id, _, _ := createBillFixture(t, ts, db, token)
+	rec := doRequest(t, ts, http.MethodPost, fmt.Sprintf("/api/v1/bills/%d/receive", id), token, nil, nil)
+	rec.Body.Close()
+
+	cashAcct := accountID(t, db, "1-1001")
+	path := fmt.Sprintf("/api/v1/bills/%d/payment", id)
+	full := doRequest(t, ts, http.MethodPost, path, token, map[string]any{
+		"amount":          "500000",
+		"payment_date":    "2026-05-15",
+		"payment_account": cashAcct,
+	}, nil)
+	full.Body.Close()
+
+	resp := doRequest(t, ts, http.MethodPost, path, token, map[string]any{
+		"amount":          "1",
+		"payment_date":    "2026-05-16",
+		"payment_account": cashAcct,
+	}, nil)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusConflict {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status: got %d (%s), want 409", resp.StatusCode, string(raw))
+	}
+}

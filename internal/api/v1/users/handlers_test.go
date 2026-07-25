@@ -146,6 +146,27 @@ func TestGetUser(t *testing.T) {
 			t.Errorf("expected 404, got %d", resp.StatusCode)
 		}
 	})
+
+	t.Run("invalid id returns 400", func(t *testing.T) {
+		resp := doReq(t, ts, http.MethodGet, "/api/v1/users/notanumber", tok, nil)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Errorf("expected 400, got %d", resp.StatusCode)
+		}
+	})
+
+	t.Run("forbidden returns 403", func(t *testing.T) {
+		viewerID := testutil.CreateTestUser(t, db, "viewer-get-user", "pw", "viewer")
+		_, noCapTok, err := model.CreateAPIToken(db, viewerID, "no-cap-get-user", []string{}, nil)
+		if err != nil {
+			t.Fatalf("create token: %v", err)
+		}
+		resp := doReq(t, ts, http.MethodGet, fmt.Sprintf("/api/v1/users/%d", adminID), noCapTok, nil)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusForbidden {
+			t.Errorf("expected 403, got %d", resp.StatusCode)
+		}
+	})
 }
 
 func TestCreateUser(t *testing.T) {
@@ -208,6 +229,289 @@ func TestCreateUser(t *testing.T) {
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusConflict {
 			t.Errorf("expected 409, got %d", resp.StatusCode)
+		}
+	})
+
+	t.Run("forbidden returns 403", func(t *testing.T) {
+		viewerID := testutil.CreateTestUser(t, db, "viewer-create-user", "pw", "viewer")
+		_, noCapTok, err := model.CreateAPIToken(db, viewerID, "no-cap-create-user", []string{}, nil)
+		if err != nil {
+			t.Fatalf("create token: %v", err)
+		}
+		body := map[string]any{
+			"username":  "shouldnotcreate",
+			"full_name": "Nope",
+			"role":      "viewer",
+			"password":  "pass1234",
+		}
+		resp := doReq(t, ts, http.MethodPost, "/api/v1/users", noCapTok, body)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusForbidden {
+			t.Errorf("expected 403, got %d", resp.StatusCode)
+		}
+	})
+
+	t.Run("invalid JSON body returns 400", func(t *testing.T) {
+		body := map[string]any{
+			"username":         "badbody",
+			"full_name":        "Bad Body",
+			"role":             "viewer",
+			"password":         "pass1234",
+			"unexpected_field": "boom",
+		}
+		resp := doReq(t, ts, http.MethodPost, "/api/v1/users", tok, body)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Errorf("expected 400, got %d", resp.StatusCode)
+		}
+	})
+
+	t.Run("missing username returns 422", func(t *testing.T) {
+		body := map[string]any{
+			"full_name": "No Username",
+			"role":      "viewer",
+			"password":  "pass1234",
+		}
+		resp := doReq(t, ts, http.MethodPost, "/api/v1/users", tok, body)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusUnprocessableEntity {
+			t.Errorf("expected 422, got %d", resp.StatusCode)
+		}
+	})
+
+	t.Run("missing full_name returns 422", func(t *testing.T) {
+		body := map[string]any{
+			"username": "nofullname",
+			"role":     "viewer",
+			"password": "pass1234",
+		}
+		resp := doReq(t, ts, http.MethodPost, "/api/v1/users", tok, body)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusUnprocessableEntity {
+			t.Errorf("expected 422, got %d", resp.StatusCode)
+		}
+	})
+
+	t.Run("invalid role returns 422", func(t *testing.T) {
+		body := map[string]any{
+			"username":  "badrole",
+			"full_name": "Bad Role",
+			"role":      "not-a-real-role",
+			"password":  "pass1234",
+		}
+		resp := doReq(t, ts, http.MethodPost, "/api/v1/users", tok, body)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusUnprocessableEntity {
+			t.Errorf("expected 422, got %d", resp.StatusCode)
+		}
+	})
+
+	t.Run("short password returns 422", func(t *testing.T) {
+		body := map[string]any{
+			"username":  "shortpwd",
+			"full_name": "Short Password",
+			"role":      "viewer",
+			"password":  "short",
+		}
+		resp := doReq(t, ts, http.MethodPost, "/api/v1/users", tok, body)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusUnprocessableEntity {
+			t.Errorf("expected 422, got %d", resp.StatusCode)
+		}
+	})
+}
+
+func TestUpdateUser(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	ts := newTestServer(t, db)
+	tok := adminToken(t, db)
+
+	t.Run("forbidden returns 403", func(t *testing.T) {
+		targetID := testutil.CreateTestUser(t, db, "update-target-forbidden", "pw", "viewer")
+		viewerID := testutil.CreateTestUser(t, db, "viewer-update-user", "pw", "viewer")
+		_, noCapTok, err := model.CreateAPIToken(db, viewerID, "no-cap-update-user", []string{}, nil)
+		if err != nil {
+			t.Fatalf("create token: %v", err)
+		}
+		body := map[string]any{"full_name": "Nope", "role": "viewer"}
+		resp := doReq(t, ts, http.MethodPut, fmt.Sprintf("/api/v1/users/%d", targetID), noCapTok, body)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusForbidden {
+			t.Errorf("expected 403, got %d", resp.StatusCode)
+		}
+	})
+
+	t.Run("invalid id returns 400", func(t *testing.T) {
+		body := map[string]any{"full_name": "X", "role": "viewer"}
+		resp := doReq(t, ts, http.MethodPut, "/api/v1/users/notanumber", tok, body)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Errorf("expected 400, got %d", resp.StatusCode)
+		}
+	})
+
+	t.Run("missing user returns 404", func(t *testing.T) {
+		body := map[string]any{"full_name": "X", "role": "viewer"}
+		resp := doReq(t, ts, http.MethodPut, "/api/v1/users/999999", tok, body)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusNotFound {
+			t.Errorf("expected 404, got %d", resp.StatusCode)
+		}
+	})
+
+	t.Run("missing full_name returns 422", func(t *testing.T) {
+		targetID := testutil.CreateTestUser(t, db, "update-target-nofn", "pw", "viewer")
+		body := map[string]any{"role": "viewer"}
+		resp := doReq(t, ts, http.MethodPut, fmt.Sprintf("/api/v1/users/%d", targetID), tok, body)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusUnprocessableEntity {
+			t.Errorf("expected 422, got %d", resp.StatusCode)
+		}
+	})
+
+	t.Run("invalid role returns 422", func(t *testing.T) {
+		targetID := testutil.CreateTestUser(t, db, "update-target-badrole", "pw", "viewer")
+		body := map[string]any{"full_name": "X", "role": "not-a-real-role"}
+		resp := doReq(t, ts, http.MethodPut, fmt.Sprintf("/api/v1/users/%d", targetID), tok, body)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusUnprocessableEntity {
+			t.Errorf("expected 422, got %d", resp.StatusCode)
+		}
+	})
+
+	t.Run("short password returns 422", func(t *testing.T) {
+		targetID := testutil.CreateTestUser(t, db, "update-target-shortpw", "pw", "viewer")
+		body := map[string]any{"full_name": "X", "role": "viewer", "password": "short"}
+		resp := doReq(t, ts, http.MethodPut, fmt.Sprintf("/api/v1/users/%d", targetID), tok, body)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusUnprocessableEntity {
+			t.Errorf("expected 422, got %d", resp.StatusCode)
+		}
+	})
+
+	t.Run("valid update returns 200 and persists changes", func(t *testing.T) {
+		targetID := testutil.CreateTestUser(t, db, "update-target-ok", "pw", "viewer")
+		body := map[string]any{
+			"full_name": "Updated Name",
+			"role":      "bookkeeper",
+			"is_active": false,
+		}
+		resp := doReq(t, ts, http.MethodPut, fmt.Sprintf("/api/v1/users/%d", targetID), tok, body)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			var errBody map[string]any
+			json.NewDecoder(resp.Body).Decode(&errBody) //nolint:errcheck
+			t.Fatalf("expected 200, got %d: %v", resp.StatusCode, errBody)
+		}
+		var env struct {
+			Data model.User `json:"data"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&env); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if env.Data.FullName != "Updated Name" || env.Data.Role != "bookkeeper" || env.Data.IsActive {
+			t.Errorf("unexpected updated user: %+v", env.Data)
+		}
+	})
+
+	t.Run("password change for other user forces must_change_password", func(t *testing.T) {
+		targetID := testutil.CreateTestUser(t, db, "update-target-pwd", "pw", "viewer")
+		body := map[string]any{
+			"full_name": "Pwd Target",
+			"role":      "viewer",
+			"password":  "newpassword123",
+		}
+		resp := doReq(t, ts, http.MethodPut, fmt.Sprintf("/api/v1/users/%d", targetID), tok, body)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("expected 200, got %d", resp.StatusCode)
+		}
+		u, err := model.GetUserByID(db, targetID)
+		if err != nil {
+			t.Fatalf("get user: %v", err)
+		}
+		if !u.MustChangePassword {
+			t.Error("expected must_change_password to be true after admin changes another user's password")
+		}
+	})
+
+	t.Run("self password change does not force must_change_password", func(t *testing.T) {
+		// The self user must hold a role that actually carries users.manage
+		// for the effective-capability intersection to allow the request;
+		// only the admin role bypasses intersection entirely.
+		selfID := testutil.CreateTestUser(t, db, "update-self-pwd", "pw", "admin")
+		_, selfTok, err := model.CreateAPIToken(db, selfID, "self-pwd-tok", []string{model.CapUsersManage}, nil)
+		if err != nil {
+			t.Fatalf("create token: %v", err)
+		}
+		body := map[string]any{
+			"full_name": "Self Pwd",
+			"role":      "admin",
+			"password":  "newpassword123",
+		}
+		resp := doReq(t, ts, http.MethodPut, fmt.Sprintf("/api/v1/users/%d", selfID), selfTok, body)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("expected 200, got %d", resp.StatusCode)
+		}
+		u, err := model.GetUserByID(db, selfID)
+		if err != nil {
+			t.Fatalf("get user: %v", err)
+		}
+		if u.MustChangePassword {
+			t.Error("expected must_change_password to remain false for self password change")
+		}
+	})
+}
+
+func TestDeleteUser(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	ts := newTestServer(t, db)
+	tok := adminToken(t, db)
+
+	t.Run("forbidden returns 403", func(t *testing.T) {
+		targetID := testutil.CreateTestUser(t, db, "delete-target-forbidden", "pw", "viewer")
+		viewerID := testutil.CreateTestUser(t, db, "viewer-delete-user", "pw", "viewer")
+		_, noCapTok, err := model.CreateAPIToken(db, viewerID, "no-cap-delete-user", []string{}, nil)
+		if err != nil {
+			t.Fatalf("create token: %v", err)
+		}
+		resp := doReq(t, ts, http.MethodDelete, fmt.Sprintf("/api/v1/users/%d", targetID), noCapTok, nil)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusForbidden {
+			t.Errorf("expected 403, got %d", resp.StatusCode)
+		}
+	})
+
+	t.Run("invalid id returns 400", func(t *testing.T) {
+		resp := doReq(t, ts, http.MethodDelete, "/api/v1/users/notanumber", tok, nil)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Errorf("expected 400, got %d", resp.StatusCode)
+		}
+	})
+
+	t.Run("missing user returns 404", func(t *testing.T) {
+		resp := doReq(t, ts, http.MethodDelete, "/api/v1/users/999999", tok, nil)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusNotFound {
+			t.Errorf("expected 404, got %d", resp.StatusCode)
+		}
+	})
+
+	t.Run("valid delete deactivates user returns 204", func(t *testing.T) {
+		targetID := testutil.CreateTestUser(t, db, "delete-target-ok", "pw", "viewer")
+		resp := doReq(t, ts, http.MethodDelete, fmt.Sprintf("/api/v1/users/%d", targetID), tok, nil)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusNoContent {
+			t.Errorf("expected 204, got %d", resp.StatusCode)
+		}
+		u, err := model.GetUserByID(db, targetID)
+		if err != nil {
+			t.Fatalf("get user: %v", err)
+		}
+		if u.IsActive {
+			t.Error("expected user to be deactivated")
 		}
 	})
 }

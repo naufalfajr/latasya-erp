@@ -164,6 +164,9 @@ components:
           type: string
         is_active:
           type: boolean
+        is_cash:
+          type: boolean
+          description: True for Cash/Bank accounts. Only debit-normal asset accounts may be classified.
         is_system:
           type: boolean
         parent_id:
@@ -193,6 +196,9 @@ components:
         is_active:
           type: boolean
           default: true
+        is_cash:
+          type: boolean
+          description: Classify as Cash/Bank. Valid only when account_type is asset and normal_balance is debit. Omission defaults to false on create and preserves the current classification on update.
 
     Meta:
       type: object
@@ -960,18 +966,31 @@ components:
     CashFlowReport:
       type: object
       properties:
-        operating:
+        movements:
           type: array
+          description: Debit-minus-credit activity grouped by explicitly classified Cash/Bank account.
           items:
             $ref: '#/components/schemas/CashFlowRow'
-        total_operating:
-          $ref: '#/components/schemas/IDR'
+        total_movement:
+          allOf:
+            - $ref: '#/components/schemas/IDR'
+          description: Net debit-minus-credit movement across all classified Cash/Bank accounts.
+          nullable: true
         net_cash_change:
-          $ref: '#/components/schemas/IDR'
+          allOf:
+            - $ref: '#/components/schemas/IDR'
+          nullable: true
         opening_cash:
-          $ref: '#/components/schemas/IDR'
+          allOf:
+            - $ref: '#/components/schemas/IDR'
+          nullable: true
         closing_cash:
-          $ref: '#/components/schemas/IDR'
+          allOf:
+            - $ref: '#/components/schemas/IDR'
+          nullable: true
+        cash_configured:
+          type: boolean
+          description: False when no accounts are classified as Cash/Bank and cash figures are unavailable.
         from:
           $ref: '#/components/schemas/BusinessDate'
         to:
@@ -1153,7 +1172,12 @@ components:
       type: object
       properties:
         cash_balance:
-          $ref: '#/components/schemas/IDR'
+          allOf:
+            - $ref: '#/components/schemas/IDR'
+          nullable: true
+          description: Null when cash_configured is false.
+        cash_configured:
+          type: boolean
         monthly_revenue:
           $ref: '#/components/schemas/IDR'
         monthly_expenses:
@@ -1166,6 +1190,45 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/RecentTransaction'
+        granularity:
+          type: string
+          enum: [monthly, quarterly]
+        as_of:
+          $ref: '#/components/schemas/BusinessDate'
+        trends:
+          type: array
+          description: Always the most recent 6 periods, including the current in-progress one.
+          items:
+            $ref: '#/components/schemas/FinancialPeriodTrend'
+
+    FinancialPeriodTrend:
+      type: object
+      properties:
+        label:
+          type: string
+          description: Display label, e.g. "Jul 2026" (monthly) or "Q3 2026" (quarterly).
+        start_date:
+          $ref: '#/components/schemas/BusinessDate'
+        end_date:
+          $ref: '#/components/schemas/BusinessDate'
+        is_partial:
+          type: boolean
+        revenue:
+          $ref: '#/components/schemas/IDR'
+        expenses:
+          $ref: '#/components/schemas/IDR'
+        net_income:
+          $ref: '#/components/schemas/IDR'
+        net_cash_movement:
+          allOf:
+            - $ref: '#/components/schemas/IDR'
+          nullable: true
+          description: Null when no accounts are classified as Cash/Bank.
+        closing_cash:
+          allOf:
+            - $ref: '#/components/schemas/IDR'
+          nullable: true
+          description: Cumulative classified cash balance at the period end; null when unconfigured.
 
     APIToken:
       type: object
@@ -3479,6 +3542,14 @@ paths:
     get:
       operationId: getDashboard
       summary: Dashboard summary (any authenticated user)
+      parameters:
+        - name: granularity
+          in: query
+          description: Period size. Always returns the most recent 6 periods, including the current in-progress one.
+          schema:
+            type: string
+            enum: [monthly, quarterly]
+            default: monthly
       responses:
         '200':
           description: Dashboard data with IDR currency strings
@@ -3491,6 +3562,8 @@ paths:
                     $ref: '#/components/schemas/DashboardData'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
 
   /api-tokens:
     get:

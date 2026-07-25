@@ -417,3 +417,421 @@ func TestVoidCreditNote_AlreadyVoided(t *testing.T) {
 		t.Fatalf("status: got %d, want 409", resp.StatusCode)
 	}
 }
+
+func TestListCreditNotes_Filters(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+
+	id, _, _ := createCNFixture(t, ts, db, token)
+	issue := doRequest(t, ts, http.MethodPost, fmt.Sprintf("/api/v1/credit-notes/%d/issue", id), token, nil, nil)
+	issue.Body.Close()
+	createCNFixture(t, ts, db, token) // stays draft
+
+	t.Run("status_filter", func(t *testing.T) {
+		resp := doRequest(t, ts, http.MethodGet, "/api/v1/credit-notes?status=issued", token, nil, nil)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("status: got %d, want 200", resp.StatusCode)
+		}
+		var env struct {
+			Data []model.CreditNote `json:"data"`
+			Meta v1.Meta            `json:"meta"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&env); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		for _, cn := range env.Data {
+			if cn.Status != model.StatusIssued {
+				t.Errorf("status filter leaked non-issued CN: %s", cn.Status)
+			}
+		}
+		if env.Meta.Total < 1 {
+			t.Errorf("total: got %d, want >= 1", env.Meta.Total)
+		}
+	})
+
+	t.Run("search_filter", func(t *testing.T) {
+		resp := doRequest(t, ts, http.MethodGet, "/api/v1/credit-notes?search=nonexistent-xyz", token, nil, nil)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("status: got %d, want 200", resp.StatusCode)
+		}
+		var env struct {
+			Data []model.CreditNote `json:"data"`
+			Meta v1.Meta            `json:"meta"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&env); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if env.Meta.Total != 0 {
+			t.Errorf("total: got %d, want 0", env.Meta.Total)
+		}
+	})
+}
+
+func TestGetCreditNote_InvalidID(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+
+	resp := doRequest(t, ts, http.MethodGet, "/api/v1/credit-notes/not-a-number", token, nil, nil)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("status: got %d, want 404", resp.StatusCode)
+	}
+}
+
+func TestCreateCreditNote_Auth(t *testing.T) {
+	ts, db := setupServer(t)
+	customerID := seedCustomer(t, db)
+	revenueAcct := accountID(t, db, "4-1001")
+	body, err := json.Marshal(sampleCNBody(customerID, revenueAcct))
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	testutil.APIMatrix(t, ts, db, http.MethodPost, "/api/v1/credit-notes", string(body), testutil.AuthMatrix{
+		Anon:               http.StatusUnauthorized,
+		ValidBearer:        http.StatusCreated,
+		ExpiredBearer:      http.StatusUnauthorized,
+		RevokedBearer:      http.StatusUnauthorized,
+		ScopeMissingBearer: http.StatusForbidden,
+	})
+}
+
+func TestCreateCreditNote_InvalidBody(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+
+	req, err := http.NewRequest(http.MethodPost, ts.URL+"/api/v1/credit-notes",
+		bytes.NewBufferString(`{"contact_id": 1, "unexpected_field": true}`))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := ts.Client().Do(req)
+	if err != nil {
+		t.Fatalf("do request: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status: got %d, want 400", resp.StatusCode)
+	}
+}
+
+func TestCreateCreditNote_ValidationErrors(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+	customerID := seedCustomer(t, db)
+	revenueAcct := accountID(t, db, "4-1001")
+
+	cases := map[string]func(map[string]any){
+		"missing_contact_id": func(b map[string]any) { b["contact_id"] = 0 },
+		"missing_cn_date":    func(b map[string]any) { b["cn_date"] = "" },
+		"missing_reason":     func(b map[string]any) { b["reason"] = "" },
+		"invalid_reason":     func(b map[string]any) { b["reason"] = "bogus" },
+		"invalid_tax_amount": func(b map[string]any) { b["tax_amount"] = "not-a-number" },
+		"no_lines":           func(b map[string]any) { b["lines"] = []map[string]any{} },
+		"invalid_quantity": func(b map[string]any) {
+			b["lines"].([]map[string]any)[0]["quantity"] = "abc"
+		},
+		"invalid_unit_price": func(b map[string]any) {
+			b["lines"].([]map[string]any)[0]["unit_price"] = "abc"
+		},
+		"missing_description": func(b map[string]any) {
+			b["lines"].([]map[string]any)[0]["description"] = ""
+		},
+		"zero_unit_price": func(b map[string]any) {
+			b["lines"].([]map[string]any)[0]["unit_price"] = "0"
+		},
+		"missing_account_id": func(b map[string]any) {
+			b["lines"].([]map[string]any)[0]["account_id"] = 0
+		},
+	}
+
+	for name, mutate := range cases {
+		t.Run(name, func(t *testing.T) {
+			body := sampleCNBody(customerID, revenueAcct)
+			mutate(body)
+			resp := doRequest(t, ts, http.MethodPost, "/api/v1/credit-notes", token, body, nil)
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusUnprocessableEntity {
+				raw, _ := io.ReadAll(resp.Body)
+				t.Fatalf("status: got %d (%s), want 422", resp.StatusCode, string(raw))
+			}
+		})
+	}
+}
+
+func TestCreateCreditNote_DBConstraintError(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+	customerID := seedCustomer(t, db)
+
+	body := sampleCNBody(customerID, 999999) // account_id doesn't exist
+	resp := doRequest(t, ts, http.MethodPost, "/api/v1/credit-notes", token, body, nil)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusUnprocessableEntity {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status: got %d (%s), want 422", resp.StatusCode, string(raw))
+	}
+}
+
+func TestUpdateCreditNote_Auth(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+	id, customerID, revenueAcct := createCNFixture(t, ts, db, token)
+	body, err := json.Marshal(sampleCNBody(customerID, revenueAcct))
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	testutil.APIMatrix(t, ts, db, http.MethodPut, fmt.Sprintf("/api/v1/credit-notes/%d", id), string(body), testutil.AuthMatrix{
+		Anon:               http.StatusUnauthorized,
+		ScopeMissingBearer: http.StatusForbidden,
+	})
+}
+
+func TestUpdateCreditNote_NotFound(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+	customerID := seedCustomer(t, db)
+	revenueAcct := accountID(t, db, "4-1001")
+	body := sampleCNBody(customerID, revenueAcct)
+
+	resp := doRequest(t, ts, http.MethodPut, "/api/v1/credit-notes/999999", token, body, nil)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("status: got %d, want 404", resp.StatusCode)
+	}
+}
+
+func TestUpdateCreditNote_InvalidBody(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+	id, _, _ := createCNFixture(t, ts, db, token)
+
+	req, err := http.NewRequest(http.MethodPut, ts.URL+fmt.Sprintf("/api/v1/credit-notes/%d", id),
+		bytes.NewBufferString(`{"unexpected_field": true}`))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := ts.Client().Do(req)
+	if err != nil {
+		t.Fatalf("do request: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status: got %d, want 400", resp.StatusCode)
+	}
+}
+
+func TestUpdateCreditNote_ValidationFailed(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+	id, customerID, revenueAcct := createCNFixture(t, ts, db, token)
+
+	body := sampleCNBody(customerID, revenueAcct)
+	body["reason"] = ""
+	resp := doRequest(t, ts, http.MethodPut, fmt.Sprintf("/api/v1/credit-notes/%d", id), token, body, nil)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("status: got %d, want 422", resp.StatusCode)
+	}
+}
+
+func TestUpdateCreditNote_DBConstraintError(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+	id, customerID, _ := createCNFixture(t, ts, db, token)
+
+	body := sampleCNBody(customerID, 999999) // account_id doesn't exist
+	resp := doRequest(t, ts, http.MethodPut, fmt.Sprintf("/api/v1/credit-notes/%d", id), token, body, nil)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusUnprocessableEntity {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status: got %d (%s), want 422", resp.StatusCode, string(raw))
+	}
+}
+
+func TestUpdateCreditNote_Success(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+	id, customerID, revenueAcct := createCNFixture(t, ts, db, token)
+
+	body := sampleCNBody(customerID, revenueAcct)
+	body["notes"] = "updated notes"
+	body["reason"] = model.CreditNoteReasonReturn
+	body["lines"].([]map[string]any)[0]["unit_price"] = "200000"
+
+	resp := doRequest(t, ts, http.MethodPut, fmt.Sprintf("/api/v1/credit-notes/%d", id), token, body, nil)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status: got %d (%s), want 200", resp.StatusCode, string(raw))
+	}
+	var cn model.CreditNote
+	if err := json.NewDecoder(resp.Body).Decode(&cn); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if cn.Notes != "updated notes" {
+		t.Errorf("notes: got %q, want %q", cn.Notes, "updated notes")
+	}
+	if cn.Reason != model.CreditNoteReasonReturn {
+		t.Errorf("reason: got %q, want %q", cn.Reason, model.CreditNoteReasonReturn)
+	}
+	if cn.Total != 200000 {
+		t.Errorf("total: got %d, want 200000", cn.Total)
+	}
+}
+
+func TestDeleteCreditNote(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+
+	t.Run("auth", func(t *testing.T) {
+		id, _, _ := createCNFixture(t, ts, db, token)
+		testutil.APIMatrix(t, ts, db, http.MethodDelete, fmt.Sprintf("/api/v1/credit-notes/%d", id), "", testutil.AuthMatrix{
+			Anon:               http.StatusUnauthorized,
+			ScopeMissingBearer: http.StatusForbidden,
+		})
+	})
+
+	t.Run("not_found_bad_id", func(t *testing.T) {
+		resp := doRequest(t, ts, http.MethodDelete, "/api/v1/credit-notes/not-a-number", token, nil, nil)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusNotFound {
+			t.Fatalf("status: got %d, want 404", resp.StatusCode)
+		}
+	})
+
+	t.Run("not_found_missing", func(t *testing.T) {
+		resp := doRequest(t, ts, http.MethodDelete, "/api/v1/credit-notes/999999", token, nil, nil)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusNotFound {
+			t.Fatalf("status: got %d, want 404", resp.StatusCode)
+		}
+	})
+
+	t.Run("success", func(t *testing.T) {
+		id, _, _ := createCNFixture(t, ts, db, token)
+		resp := doRequest(t, ts, http.MethodDelete, fmt.Sprintf("/api/v1/credit-notes/%d", id), token, nil, nil)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusNoContent {
+			t.Fatalf("status: got %d, want 204", resp.StatusCode)
+		}
+
+		get := doRequest(t, ts, http.MethodGet, fmt.Sprintf("/api/v1/credit-notes/%d", id), token, nil, nil)
+		defer get.Body.Close()
+		if get.StatusCode != http.StatusNotFound {
+			t.Errorf("post-delete get: got %d, want 404", get.StatusCode)
+		}
+	})
+
+	t.Run("conflict_non_draft", func(t *testing.T) {
+		id, _, _ := createCNFixture(t, ts, db, token)
+		issue := doRequest(t, ts, http.MethodPost, fmt.Sprintf("/api/v1/credit-notes/%d/issue", id), token, nil, nil)
+		issue.Body.Close()
+
+		resp := doRequest(t, ts, http.MethodDelete, fmt.Sprintf("/api/v1/credit-notes/%d", id), token, nil, nil)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusConflict {
+			t.Fatalf("status: got %d, want 409", resp.StatusCode)
+		}
+	})
+}
+
+func TestIssueCreditNote_Auth(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+	id, _, _ := createCNFixture(t, ts, db, token)
+
+	testutil.APIMatrix(t, ts, db, http.MethodPost, fmt.Sprintf("/api/v1/credit-notes/%d/issue", id), "", testutil.AuthMatrix{
+		Anon:               http.StatusUnauthorized,
+		ScopeMissingBearer: http.StatusForbidden,
+	})
+}
+
+func TestIssueCreditNote_NotFound(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+
+	t.Run("bad_id", func(t *testing.T) {
+		resp := doRequest(t, ts, http.MethodPost, "/api/v1/credit-notes/not-a-number/issue", token, nil, nil)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusNotFound {
+			t.Fatalf("status: got %d, want 404", resp.StatusCode)
+		}
+	})
+
+	t.Run("missing", func(t *testing.T) {
+		resp := doRequest(t, ts, http.MethodPost, "/api/v1/credit-notes/999999/issue", token, nil, nil)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusNotFound {
+			t.Fatalf("status: got %d, want 404", resp.StatusCode)
+		}
+	})
+}
+
+func TestIssueCreditNote_AlreadyIssued(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+	id, _, _ := createCNFixture(t, ts, db, token)
+
+	issue1 := doRequest(t, ts, http.MethodPost, fmt.Sprintf("/api/v1/credit-notes/%d/issue", id), token, nil, nil)
+	issue1.Body.Close()
+
+	resp := doRequest(t, ts, http.MethodPost, fmt.Sprintf("/api/v1/credit-notes/%d/issue", id), token, nil, nil)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusConflict {
+		t.Fatalf("status: got %d, want 409", resp.StatusCode)
+	}
+}
+
+func TestVoidCreditNote_Auth(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+	id, _, _ := createCNFixture(t, ts, db, token)
+	issue := doRequest(t, ts, http.MethodPost, fmt.Sprintf("/api/v1/credit-notes/%d/issue", id), token, nil, nil)
+	issue.Body.Close()
+
+	testutil.APIMatrix(t, ts, db, http.MethodPost, fmt.Sprintf("/api/v1/credit-notes/%d/void", id), "", testutil.AuthMatrix{
+		Anon:               http.StatusUnauthorized,
+		ScopeMissingBearer: http.StatusForbidden,
+	})
+}
+
+func TestVoidCreditNote_NotFound(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+
+	t.Run("bad_id", func(t *testing.T) {
+		resp := doRequest(t, ts, http.MethodPost, "/api/v1/credit-notes/not-a-number/void", token, nil, nil)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusNotFound {
+			t.Fatalf("status: got %d, want 404", resp.StatusCode)
+		}
+	})
+
+	t.Run("missing", func(t *testing.T) {
+		resp := doRequest(t, ts, http.MethodPost, "/api/v1/credit-notes/999999/void", token, nil, nil)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusNotFound {
+			t.Fatalf("status: got %d, want 404", resp.StatusCode)
+		}
+	})
+}
+
+func TestVoidCreditNote_NotIssued(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+	id, _, _ := createCNFixture(t, ts, db, token) // still draft
+
+	resp := doRequest(t, ts, http.MethodPost, fmt.Sprintf("/api/v1/credit-notes/%d/void", id), token, nil, nil)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusConflict {
+		t.Fatalf("status: got %d, want 409", resp.StatusCode)
+	}
+}

@@ -2,10 +2,6 @@ package testutil
 
 import (
 	"database/sql"
-	"embed"
-	"html/template"
-	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"github.com/naufal/latasya-erp/internal/auth"
@@ -42,21 +38,6 @@ func SetupTestHandler(t *testing.T, db *sql.DB) *handler.Handler {
 	}
 }
 
-// SetupTestTemplates returns a minimal template set for tests that don't need real HTML.
-func SetupTestTemplates() *template.Template {
-	return template.Must(template.New("").Funcs(tmpl.FuncMap()).Parse(`
-		{{define "base"}}{{block "content" .}}{{end}}{{end}}
-		{{define "nav"}}{{end}}
-		{{define "sidebar"}}{{end}}
-		{{define "flash"}}{{end}}
-	`))
-}
-
-// MustEmbedFS returns the embedded template FS from the root package.
-func MustEmbedFS() embed.FS {
-	return latasyaerp.TemplateFS
-}
-
 // CreateTestUser creates a user in the test database and returns the user ID.
 func CreateTestUser(t *testing.T, db *sql.DB, username, password, role string) int {
 	t.Helper()
@@ -83,46 +64,4 @@ func CreateTestSession(t *testing.T, db *sql.DB, userID int) string {
 		t.Fatalf("create test session: %v", err)
 	}
 	return sessionID
-}
-
-// AuthenticatedRequest creates an HTTP request with a valid session cookie for the admin user.
-// Returns the request and the admin's user ID.
-func AuthenticatedRequest(t *testing.T, db *sql.DB, method, path string, body *http.Request) (*http.Request, int) {
-	t.Helper()
-	// Get admin user ID
-	var userID int
-	err := db.QueryRow("SELECT id FROM users WHERE username = 'admin'").Scan(&userID)
-	if err != nil {
-		t.Fatalf("get admin user: %v", err)
-	}
-	sessionID := CreateTestSession(t, db, userID)
-	req := httptest.NewRequest(method, path, nil)
-	if body != nil {
-		req = httptest.NewRequest(method, path, body.Body)
-		req.Header = body.Header
-	}
-	req.AddCookie(&http.Cookie{Name: "session_id", Value: sessionID})
-	return req, userID
-}
-
-// AdminRequest creates an HTTP request authenticated as the seeded admin user.
-func AdminRequest(t *testing.T, db *sql.DB, method, path string) *http.Request {
-	t.Helper()
-	req, _ := AuthenticatedRequest(t, db, method, path, nil)
-	return req
-}
-
-// ViewerRequest creates an HTTP request authenticated as a viewer user.
-func ViewerRequest(t *testing.T, db *sql.DB, method, path string) *http.Request {
-	t.Helper()
-	// Create viewer if not exists
-	var viewerID int
-	err := db.QueryRow("SELECT id FROM users WHERE username = 'viewer'").Scan(&viewerID)
-	if err != nil {
-		viewerID = CreateTestUser(t, db, "viewer", "viewer", "viewer")
-	}
-	sessionID := CreateTestSession(t, db, viewerID)
-	req := httptest.NewRequest(method, path, nil)
-	req.AddCookie(&http.Cookie{Name: "session_id", Value: sessionID})
-	return req
 }
