@@ -8,6 +8,7 @@ import (
 )
 
 func TestListRouteCapacity(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	routes, err := model.ListRoutes(db)

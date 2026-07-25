@@ -47,6 +47,7 @@ func mustContact(t *testing.T, db *sql.DB, name, phone string) int {
 }
 
 func TestPublicHome_ShowsCompanyProfile(t *testing.T) {
+	t.Parallel()
 	ts, db := publicTestServer(t)
 	db.Exec("UPDATE company_profile SET name='Latasya Transport', phone='081234567890' WHERE id=1")
 
@@ -65,6 +66,7 @@ func TestPublicHome_ShowsCompanyProfile(t *testing.T) {
 }
 
 func TestPublicHome_CompanyProfileLoadError(t *testing.T) {
+	t.Parallel()
 	ts, db := publicTestServer(t)
 	if _, err := db.Exec("DELETE FROM company_profile WHERE id = 1"); err != nil {
 		t.Fatalf("delete company_profile: %v", err)
@@ -81,6 +83,7 @@ func TestPublicHome_CompanyProfileLoadError(t *testing.T) {
 }
 
 func TestPortalIndex_ValidCode_ShowsIssuedInvoiceOnly(t *testing.T) {
+	t.Parallel()
 	ts, db := publicTestServer(t)
 	contactID := mustContact(t, db, "Portal Kid", "081111111111")
 
@@ -115,6 +118,7 @@ func TestPortalIndex_ValidCode_ShowsIssuedInvoiceOnly(t *testing.T) {
 }
 
 func TestPortalIndex_ConfirmPaymentButton_HiddenWithoutCompanyPhone(t *testing.T) {
+	t.Parallel()
 	ts, db := publicTestServer(t)
 	db.Exec("UPDATE company_profile SET phone='' WHERE id=1")
 
@@ -142,6 +146,7 @@ func TestPortalIndex_ConfirmPaymentButton_HiddenWithoutCompanyPhone(t *testing.T
 }
 
 func TestPortalInvoicePDF_WrongFamily_NotFound(t *testing.T) {
+	t.Parallel()
 	ts, db := publicTestServer(t)
 	contactA := mustContact(t, db, "Family A", "081111111111")
 	contactB := mustContact(t, db, "Family B", "082222222222")
@@ -164,6 +169,7 @@ func TestPortalInvoicePDF_WrongFamily_NotFound(t *testing.T) {
 }
 
 func TestPortalInvoicePDF_InvalidID_NotFound(t *testing.T) {
+	t.Parallel()
 	ts, db := publicTestServer(t)
 	contactID := mustContact(t, db, "Bad ID Family", "081111111111")
 	code, _ := model.GetOrCreatePortalCode(db, contactID)
@@ -179,6 +185,7 @@ func TestPortalInvoicePDF_InvalidID_NotFound(t *testing.T) {
 }
 
 func TestPortalInvoicePDF_UnknownCode_NotFound(t *testing.T) {
+	t.Parallel()
 	ts, db := publicTestServer(t)
 	contactID := mustContact(t, db, "Unknown Code Family", "081111111111")
 	invID := mustInvoice(t, db, contactID)
@@ -197,6 +204,7 @@ func TestPortalInvoicePDF_UnknownCode_NotFound(t *testing.T) {
 }
 
 func TestPortalInvoicePDF_OwnInvoice_Succeeds(t *testing.T) {
+	t.Parallel()
 	ts, db := publicTestServer(t)
 	contactID := mustContact(t, db, "Portal PDF", "083333333333")
 	invID := mustInvoice(t, db, contactID)
@@ -223,6 +231,7 @@ func TestPortalInvoicePDF_OwnInvoice_Succeeds(t *testing.T) {
 // durable financial-data URL: both the portal page and its PDF must tell
 // shared caches/proxies not to store the response.
 func TestPortalPages_NoStore(t *testing.T) {
+	t.Parallel()
 	ts, db := publicTestServer(t)
 	contactID := mustContact(t, db, "No Store", "085555555555")
 	invID := mustInvoice(t, db, contactID)
@@ -251,6 +260,7 @@ func TestPortalPages_NoStore(t *testing.T) {
 }
 
 func TestInvoiceWhatsApp_Draft_RedirectsBackWithoutSending(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 	contactID := mustContact(t, db, "WA Draft", "081111111111")
@@ -270,6 +280,7 @@ func TestInvoiceWhatsApp_Draft_RedirectsBackWithoutSending(t *testing.T) {
 }
 
 func TestInvoiceWhatsApp_NoPhone_RedirectsBackWithoutSending(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 	contactID := mustContact(t, db, "WA NoPhone", "")
@@ -292,6 +303,7 @@ func TestInvoiceWhatsApp_NoPhone_RedirectsBackWithoutSending(t *testing.T) {
 }
 
 func TestInvoiceWhatsApp_Sent_RedirectsToWALink(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 	contactID := mustContact(t, db, "WA Sent", "081234567890")
@@ -327,10 +339,10 @@ func TestInvoiceWhatsApp_Sent_RedirectsToWALink(t *testing.T) {
 	if !strings.Contains(decoded, "/p/"+code.String) {
 		t.Errorf("expected the wa.me message to include the short portal link, got %q", decoded)
 	}
-	if !strings.Contains(decoded, "Halo, kami dari Antar Jemput Latasya. Berikut link invoice Ananda WA Sent") {
+	if !strings.Contains(decoded, "Assalamualaikum Wr. Wb., kami dari Antar Jemput Latasya. Berikut link invoice Ananda WA Sent") {
 		t.Errorf("expected selected WhatsApp template, got %q", decoded)
 	}
-	if !strings.Contains(decoded, "Link ini akan terus aktif sesuai masa keikutsertaan antar jemput") {
+	if !strings.Contains(decoded, "Link berisi daftar invoice dan akan terus aktif sesuai masa keikutsertaan antar jemput") {
 		t.Errorf("expected the message to tell the parent the link is permanent, got %q", decoded)
 	}
 }
@@ -340,6 +352,7 @@ func TestInvoiceWhatsApp_Sent_RedirectsToWALink(t *testing.T) {
 // token existed and worked, but no template ever rendered a way to reach
 // it, making the feature invisible in the actual UI.
 func TestContactEditPage_ShowsPortalLinkControl(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 	contactID := mustContact(t, db, "UI Reset", "081111111111")
@@ -379,6 +392,7 @@ func TestContactEditPage_ShowsPortalLinkControl(t *testing.T) {
 }
 
 func TestSaveContactPortalCode_BlankRegeneratesAndRedirects(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 	contactID := mustContact(t, db, "Reset Me", "081111111111")
@@ -416,6 +430,7 @@ func TestSaveContactPortalCode_BlankRegeneratesAndRedirects(t *testing.T) {
 }
 
 func TestPortalIndex_ValidCode_ShowsInvoicesAndPDFLinks(t *testing.T) {
+	t.Parallel()
 	ts, db := publicTestServer(t)
 	contactID := mustContact(t, db, "Short Code Kid", "086666666666")
 	invID := mustInvoice(t, db, contactID)
@@ -451,6 +466,7 @@ func TestPortalIndex_ValidCode_ShowsInvoicesAndPDFLinks(t *testing.T) {
 // Pins the status, not just the body: a friendly 200 would silently disable
 // brute-force protection, since the limiter only counts non-2xx as a guess.
 func TestPortalIndex_UnknownCode_404(t *testing.T) {
+	t.Parallel()
 	ts, _ := publicTestServer(t)
 
 	resp, err := http.Get(ts.URL + "/p/zzzz-000")
@@ -469,6 +485,7 @@ func TestPortalIndex_UnknownCode_404(t *testing.T) {
 
 // A sloppy spelling still gets in, and the banner shows the tidy one.
 func TestPortalIndex_EchoesCanonicalLink(t *testing.T) {
+	t.Parallel()
 	ts, db := publicTestServer(t)
 	contactID := mustContact(t, db, "Learns Short Link", "081212121212")
 	code, _ := model.GetOrCreatePortalCode(db, contactID)
@@ -495,6 +512,7 @@ func TestPortalIndex_EchoesCanonicalLink(t *testing.T) {
 // Locks in the decision to stop shouting "Terlambat" at parents: state the
 // due date and let them draw the conclusion.
 func TestPortalIndex_PastDueInvoice_ShowsDueDateNotOverdueBadge(t *testing.T) {
+	t.Parallel()
 	ts, db := publicTestServer(t)
 	contactID := mustContact(t, db, "Past Due Kid", "081414141414")
 	invID := mustInvoice(t, db, contactID)
@@ -523,6 +541,7 @@ func TestPortalIndex_PastDueInvoice_ShowsDueDateNotOverdueBadge(t *testing.T) {
 }
 
 func TestSaveContactPortalCode_StoresEditedCode(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 	contactID := mustContact(t, db, "Edit Code", "081111111111")
@@ -547,6 +566,7 @@ func TestSaveContactPortalCode_StoresEditedCode(t *testing.T) {
 
 // A taken code must leave the contact's existing link untouched.
 func TestSaveContactPortalCode_TakenCodeLeavesExistingIntact(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 	first := mustContact(t, db, "First Kid", "081111111111")
@@ -573,6 +593,7 @@ func TestSaveContactPortalCode_TakenCodeLeavesExistingIntact(t *testing.T) {
 // Editing the code is admin-only: a weak code weakens an unauthenticated
 // portal, so a non-admin must be refused by the server, not just the UI.
 func TestSaveContactPortalCode_NonAdminForbidden(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsViewer(t, ts, db)
 	contactID := mustContact(t, db, "Guarded Kid", "081111111111")
@@ -597,6 +618,7 @@ func TestSaveContactPortalCode_NonAdminForbidden(t *testing.T) {
 }
 
 func TestContactEditPage_HidesCodeEditorFromNonAdmin(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsViewer(t, ts, db)
 	contactID := mustContact(t, db, "Viewer Sees", "081111111111")

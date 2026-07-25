@@ -6,13 +6,15 @@ import (
 	"log/slog"
 	"sync"
 
-	"golang.org/x/crypto/bcrypt"
+	"github.com/naufal/latasya-erp/internal/auth"
 )
 
 // Production seeds one database per process, so hashing once costs nothing
-// there; tests seed hundreds and this is 83% of their setup time.
-var defaultAdminHash = sync.OnceValues(func() ([]byte, error) {
-	return bcrypt.GenerateFromPassword([]byte("admin"), bcrypt.DefaultCost)
+// there; tests seed hundreds and this is 83% of their setup time. auth's cost
+// drops to bcrypt.MinCost under test, which also makes every admin login in
+// the suite cheap to verify.
+var defaultAdminHash = sync.OnceValues(func() (string, error) {
+	return auth.HashPassword("admin")
 })
 
 func Seed(db *sql.DB) error {
@@ -35,7 +37,7 @@ func Seed(db *sql.DB) error {
 
 	_, err = db.Exec(
 		"INSERT INTO users (username, password, full_name, role, must_change_password) VALUES (?, ?, ?, ?, 1)",
-		"admin", string(hash), "Administrator", "admin",
+		"admin", hash, "Administrator", "admin",
 	)
 	if err != nil {
 		return fmt.Errorf("insert admin user: %w", err)

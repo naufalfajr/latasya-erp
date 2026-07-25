@@ -16,6 +16,7 @@ import (
 var tokenFormatRE = regexp.MustCompile(`^lat_[0-9A-Za-z]{32}$`)
 
 func TestGenerateAPIToken_Format(t *testing.T) {
+	t.Parallel()
 	plaintext, prefix, hash, err := model.GenerateAPIToken()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -39,6 +40,7 @@ func TestGenerateAPIToken_Format(t *testing.T) {
 }
 
 func TestGenerateAPIToken_Uniqueness(t *testing.T) {
+	t.Parallel()
 	const n = 1000
 	seen := make(map[string]struct{}, n)
 	for i := 0; i < n; i++ {
@@ -57,6 +59,7 @@ func TestGenerateAPIToken_Uniqueness(t *testing.T) {
 }
 
 func TestCreateAPIToken(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	userID := testutil.CreateTestUser(t, db, "tokenuser", "pass", "bookkeeper")
 
@@ -92,6 +95,7 @@ func TestCreateAPIToken(t *testing.T) {
 }
 
 func TestGetAPITokenByHash_Valid(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	userID := testutil.CreateTestUser(t, db, "hashuser", "pass", "bookkeeper")
 
@@ -113,6 +117,7 @@ func TestGetAPITokenByHash_Valid(t *testing.T) {
 }
 
 func TestGetAPITokenByHash_Revoked(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	userID := testutil.CreateTestUser(t, db, "revokeduser", "pass", "bookkeeper")
 
@@ -134,6 +139,7 @@ func TestGetAPITokenByHash_Revoked(t *testing.T) {
 }
 
 func TestGetAPITokenByHash_Expired(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	userID := testutil.CreateTestUser(t, db, "expireduser", "pass", "bookkeeper")
 
@@ -152,6 +158,7 @@ func TestGetAPITokenByHash_Expired(t *testing.T) {
 }
 
 func TestGetAPITokenByHash_WrongHash(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	_, err := model.GetAPITokenByHash(db, "0000000000000000000000000000000000000000000000000000000000000000")
@@ -161,6 +168,7 @@ func TestGetAPITokenByHash_WrongHash(t *testing.T) {
 }
 
 func TestListAPITokensByUser(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	userA := testutil.CreateTestUser(t, db, "userA", "pass", "bookkeeper")
 	userB := testutil.CreateTestUser(t, db, "userB", "pass", "bookkeeper")
@@ -190,6 +198,7 @@ func TestListAPITokensByUser(t *testing.T) {
 }
 
 func TestRevokeAPIToken(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	userID := testutil.CreateTestUser(t, db, "revoker", "pass", "bookkeeper")
 	otherID := testutil.CreateTestUser(t, db, "other", "pass", "bookkeeper")
@@ -217,6 +226,7 @@ func TestRevokeAPIToken(t *testing.T) {
 }
 
 func TestScopesRoundTrip(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	userID := testutil.CreateTestUser(t, db, "scopeuser", "pass", "bookkeeper")
 

@@ -10,6 +10,7 @@ import (
 )
 
 func TestContactsByPortalCode_GroupsSiblingsBySharedPhone(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	shared := "083333333333"
 	c1 := &model.Contact{Name: "Sibling One", ContactType: "customer", Phone: shared, IsActive: true}
@@ -39,6 +40,7 @@ func TestContactsByPortalCode_GroupsSiblingsBySharedPhone(t *testing.T) {
 // against comparing phone numbers as raw strings: "081..." and "+62 812-..."
 // are the same number, entered inconsistently, and must still group.
 func TestContactsByPortalCode_GroupsSiblingsByDifferentlyFormattedPhone(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	c1 := &model.Contact{Name: "Format One", ContactType: "customer", Phone: "081234567890", IsActive: true}
 	c2 := &model.Contact{Name: "Format Two", ContactType: "customer", Phone: "+62 812-3456-7890", IsActive: true}
@@ -64,6 +66,7 @@ func TestContactsByPortalCode_GroupsSiblingsByDifferentlyFormattedPhone(t *testi
 }
 
 func TestContactsByPortalCode_BlankPhoneDoesNotGroup(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	c1 := &model.Contact{Name: "No Phone One", ContactType: "customer", Phone: "", IsActive: true}
 	c2 := &model.Contact{Name: "No Phone Two", ContactType: "customer", Phone: "", IsActive: true}
@@ -89,6 +92,7 @@ func TestContactsByPortalCode_BlankPhoneDoesNotGroup(t *testing.T) {
 }
 
 func TestContactsByPortalCode_UnknownCodeReturnsNil(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	fam, err := model.ContactsByPortalCode(db, "does-not-exist")
 	if err != nil {
@@ -100,6 +104,7 @@ func TestContactsByPortalCode_UnknownCodeReturnsNil(t *testing.T) {
 }
 
 func TestListPortalInvoices_ExcludesDrafts(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	c := &model.Contact{Name: "Citra", ContactType: "customer", Phone: "084444444444", IsActive: true}
 	model.CreateContact(db, c)
@@ -140,6 +145,7 @@ func TestListPortalInvoices_ExcludesDrafts(t *testing.T) {
 }
 
 func TestPortalCode_FormatAndPrefix(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	tests := []struct {
@@ -186,6 +192,7 @@ func TestPortalCode_FormatAndPrefix(t *testing.T) {
 }
 
 func TestGetOrCreatePortalCode_StableAcrossCalls(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	c := &model.Contact{Name: "Andi", ContactType: "customer", Phone: "081111111111", IsActive: true}
 	if err := model.CreateContact(db, c); err != nil {
@@ -211,6 +218,7 @@ func TestGetOrCreatePortalCode_StableAcrossCalls(t *testing.T) {
 }
 
 func TestRegeneratePortalCode_InvalidatesOldCode(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	c := &model.Contact{Name: "Budi", ContactType: "customer", Phone: "082222222222", IsActive: true}
 	model.CreateContact(db, c)
@@ -238,6 +246,7 @@ func TestRegeneratePortalCode_InvalidatesOldCode(t *testing.T) {
 // The point of the short code: a parent retypes it from memory, so casing
 // and the dash must not decide whether they get in.
 func TestContactsByPortalCode_ResolvesHandTypedCode(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	shared := "083333333333"
 	model.CreateContact(db, &model.Contact{Name: "Andi", ContactType: "customer", Phone: shared, IsActive: true})
@@ -263,6 +272,7 @@ func TestContactsByPortalCode_ResolvesHandTypedCode(t *testing.T) {
 // Dangerous edge of matching a nullable column: an empty or punctuation-only
 // key must not reach a contact that never got a code.
 func TestContactsByPortalCode_BlankCodeDoesNotMatchAll(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	model.CreateContact(db, &model.Contact{Name: "No Code", ContactType: "customer", Phone: "084444444444", IsActive: true})
 
@@ -278,6 +288,7 @@ func TestContactsByPortalCode_BlankCodeDoesNotMatchAll(t *testing.T) {
 }
 
 func TestNormalizePortalCode(t *testing.T) {
+	t.Parallel()
 	tests := []struct{ in, want string }{
 		{"andi-829", "andi829"},
 		{"ANDI-829", "andi829"},
@@ -294,6 +305,7 @@ func TestNormalizePortalCode(t *testing.T) {
 }
 
 func TestSetPortalCode_StoresAndResolves(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	model.CreateContact(db, &model.Contact{Name: "Andi", ContactType: "customer", Phone: "081111111111", IsActive: true})
 	contacts, _ := model.ListContacts(db, model.ContactFilter{Search: "Andi"})
@@ -316,6 +328,7 @@ func TestSetPortalCode_StoresAndResolves(t *testing.T) {
 // Lookup ignores dashes, so a hand-entered "an-di829" is the same link as an
 // existing "andi-829" even though the raw unique index would allow both.
 func TestSetPortalCode_RejectsDashOnlyDifference(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	model.CreateContact(db, &model.Contact{Name: "One", ContactType: "customer", Phone: "081111111111", IsActive: true})
 	model.CreateContact(db, &model.Contact{Name: "Two", ContactType: "customer", Phone: "082222222222", IsActive: true})
@@ -332,6 +345,7 @@ func TestSetPortalCode_RejectsDashOnlyDifference(t *testing.T) {
 }
 
 func TestSetPortalCode_KeepingOwnCodeIsNotACollision(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	model.CreateContact(db, &model.Contact{Name: "Andi", ContactType: "customer", Phone: "081111111111", IsActive: true})
 	contacts, _ := model.ListContacts(db, model.ContactFilter{Search: "Andi"})
@@ -344,6 +358,7 @@ func TestSetPortalCode_KeepingOwnCodeIsNotACollision(t *testing.T) {
 }
 
 func TestSetPortalCode_Validation(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	model.CreateContact(db, &model.Contact{Name: "Andi", ContactType: "customer", Phone: "081111111111", IsActive: true})
 	contacts, _ := model.ListContacts(db, model.ContactFilter{Search: "Andi"})

@@ -8,6 +8,7 @@ import (
 )
 
 func TestTrialBalance_Balanced(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	var cashID, revenueID, fuelID int
@@ -51,6 +52,7 @@ func TestTrialBalance_Balanced(t *testing.T) {
 }
 
 func TestTrialBalance_Empty(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	rows, err := model.TrialBalance(db, "2026-04-01", "2026-04-30")
@@ -63,6 +65,7 @@ func TestTrialBalance_Empty(t *testing.T) {
 }
 
 func TestProfitLoss(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	var cashID, revenueID, fuelID int
@@ -103,6 +106,7 @@ func TestProfitLoss(t *testing.T) {
 }
 
 func TestBalanceSheet_Equation(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	var cashID, revenueID, fuelID int
@@ -149,6 +153,7 @@ func TestBalanceSheet_Equation(t *testing.T) {
 }
 
 func TestGeneralLedger(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	var cashID, revenueID int
@@ -189,6 +194,7 @@ func TestGeneralLedger(t *testing.T) {
 }
 
 func TestCashFlow(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	var cashID, revenueID, fuelID int
@@ -222,6 +228,7 @@ func TestCashFlow(t *testing.T) {
 }
 
 func TestCashFlow_UsesClassification(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	var cash, bank, ar, revenue int
 	for code, target := range map[string]*int{

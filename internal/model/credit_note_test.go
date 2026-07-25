@@ -9,6 +9,7 @@ import (
 )
 
 func TestCreateCreditNote(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	db.Exec("INSERT INTO contacts (name, contact_type, is_active) VALUES ('Cust', 'customer', 1)")
@@ -54,6 +55,7 @@ func TestCreateCreditNote(t *testing.T) {
 }
 
 func TestIssueCreditNote_FullCancellation(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	db.Exec("INSERT INTO contacts (name, contact_type, is_active) VALUES ('Cust', 'customer', 1)")
@@ -116,6 +118,7 @@ func TestIssueCreditNote_FullCancellation(t *testing.T) {
 }
 
 func TestIssueCreditNote_AfterPartialPayment(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	db.Exec("INSERT INTO contacts (name, contact_type, is_active) VALUES ('Cust', 'customer', 1)")
@@ -157,6 +160,7 @@ func TestIssueCreditNote_AfterPartialPayment(t *testing.T) {
 }
 
 func TestIssueCreditNote_OverCreditRejected(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	db.Exec("INSERT INTO contacts (name, contact_type, is_active) VALUES ('Cust', 'customer', 1)")
@@ -188,6 +192,7 @@ func TestIssueCreditNote_OverCreditRejected(t *testing.T) {
 }
 
 func TestVoidCreditNote(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	db.Exec("INSERT INTO contacts (name, contact_type, is_active) VALUES ('Cust', 'customer', 1)")
@@ -231,6 +236,7 @@ func TestVoidCreditNote(t *testing.T) {
 }
 
 func TestDeleteCreditNote_OnlyDraft(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	db.Exec("INSERT INTO contacts (name, contact_type, is_active) VALUES ('Cust', 'customer', 1)")
@@ -273,6 +279,7 @@ func TestDeleteCreditNote_OnlyDraft(t *testing.T) {
 }
 
 func TestListCreditNotesForInvoice(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	db.Exec("INSERT INTO contacts (name, contact_type, is_active) VALUES ('Cust', 'customer', 1)")
@@ -306,6 +313,7 @@ func TestListCreditNotesForInvoice(t *testing.T) {
 }
 
 func TestUpdateCreditNote(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	db.Exec("INSERT INTO contacts (name, contact_type, is_active) VALUES ('Cust', 'customer', 1)")
@@ -341,6 +349,7 @@ func TestUpdateCreditNote(t *testing.T) {
 }
 
 func TestUpdateCreditNote_RejectsNonDraft(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	db.Exec("INSERT INTO contacts (name, contact_type, is_active) VALUES ('Cust', 'customer', 1)")
@@ -374,6 +383,7 @@ func TestUpdateCreditNote_RejectsNonDraft(t *testing.T) {
 }
 
 func TestIssueCreditNote_RejectsDraftInvoice(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	db.Exec("INSERT INTO contacts (name, contact_type, is_active) VALUES ('Cust', 'customer', 1)")
@@ -403,6 +413,7 @@ func TestIssueCreditNote_RejectsDraftInvoice(t *testing.T) {
 }
 
 func TestIssueCreditNote_RejectsCancelledInvoice(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	db.Exec("INSERT INTO contacts (name, contact_type, is_active) VALUES ('Cust', 'customer', 1)")
@@ -443,6 +454,7 @@ func TestIssueCreditNote_RejectsCancelledInvoice(t *testing.T) {
 }
 
 func TestIssueCreditNote_RejectsPaidInvoice(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	db.Exec("INSERT INTO contacts (name, contact_type, is_active) VALUES ('Cust', 'customer', 1)")
@@ -472,6 +484,7 @@ func TestIssueCreditNote_RejectsPaidInvoice(t *testing.T) {
 }
 
 func TestIssueCreditNote_WithTax(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	db.Exec("INSERT INTO contacts (name, contact_type, is_active) VALUES ('Cust', 'customer', 1)")
@@ -511,6 +524,7 @@ func TestIssueCreditNote_WithTax(t *testing.T) {
 }
 
 func TestIssueCreditNote_TaxExceedsInvoiceTax(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	db.Exec("INSERT INTO contacts (name, contact_type, is_active) VALUES ('Cust', 'customer', 1)")
@@ -542,6 +556,7 @@ func TestIssueCreditNote_TaxExceedsInvoiceTax(t *testing.T) {
 }
 
 func TestIssueCreditNote_MultiplePartialCNs(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	db.Exec("INSERT INTO contacts (name, contact_type, is_active) VALUES ('Cust', 'customer', 1)")
@@ -596,6 +611,7 @@ func TestIssueCreditNote_MultiplePartialCNs(t *testing.T) {
 }
 
 func TestIssueCreditNote_ContactMismatch(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	db.Exec("INSERT INTO contacts (name, contact_type, is_active) VALUES ('Cust A', 'customer', 1)")
@@ -628,6 +644,7 @@ func TestIssueCreditNote_ContactMismatch(t *testing.T) {
 }
 
 func TestListCreditNotes_FilterByStatus(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	db.Exec("INSERT INTO contacts (name, contact_type, is_active) VALUES ('Cust', 'customer', 1)")

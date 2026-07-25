@@ -8,6 +8,7 @@ import (
 )
 
 func TestNewCreditNote_Form(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -25,6 +26,7 @@ func TestNewCreditNote_Form(t *testing.T) {
 }
 
 func TestNewCreditNote_PrefilledFromInvoice(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -68,6 +70,7 @@ func TestNewCreditNote_PrefilledFromInvoice(t *testing.T) {
 }
 
 func TestCreditNoteLinePartial_HTMX(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -86,6 +89,7 @@ func TestCreditNoteLinePartial_HTMX(t *testing.T) {
 }
 
 func TestViewCreditNote_NotFound(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -103,6 +107,7 @@ func TestViewCreditNote_NotFound(t *testing.T) {
 }
 
 func TestEditCreditNote_NotFound(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -120,6 +125,7 @@ func TestEditCreditNote_NotFound(t *testing.T) {
 }
 
 func TestUpdateCreditNote_NotFound(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -139,6 +145,7 @@ func TestUpdateCreditNote_NotFound(t *testing.T) {
 }
 
 func TestDeleteCreditNote_InvalidID(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -158,6 +165,7 @@ func TestDeleteCreditNote_InvalidID(t *testing.T) {
 }
 
 func TestCreateCreditNote_ValidationError_InvalidReason(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -179,6 +187,7 @@ func TestCreateCreditNote_ValidationError_InvalidReason(t *testing.T) {
 }
 
 func TestCreditNoteFullLifecycle(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -337,6 +346,7 @@ func TestCreditNoteFullLifecycle(t *testing.T) {
 }
 
 func TestCreditNotes_ViewerDenied(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsViewer(t, ts, db)
 

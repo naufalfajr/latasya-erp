@@ -50,6 +50,7 @@ func testServerWithCompany(t *testing.T) (*httptest.Server, *sql.DB) {
 }
 
 func TestCompanyProfilePage_AdminRenders(t *testing.T) {
+	t.Parallel()
 	ts, db := testServerWithCompany(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -73,6 +74,7 @@ func TestCompanyProfilePage_AdminRenders(t *testing.T) {
 }
 
 func TestCompanyProfilePage_ViewerForbidden(t *testing.T) {
+	t.Parallel()
 	ts, db := testServerWithCompany(t)
 	cookies := loginAsViewer(t, ts, db)
 
@@ -89,6 +91,7 @@ func TestCompanyProfilePage_ViewerForbidden(t *testing.T) {
 }
 
 func TestCompanyProfilePage_LoadError_StillRenders(t *testing.T) {
+	t.Parallel()
 	ts, db := testServerWithCompany(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -116,6 +119,7 @@ func TestCompanyProfilePage_LoadError_StillRenders(t *testing.T) {
 }
 
 func TestUpdateCompanyProfile_ValidationError_EmptyName(t *testing.T) {
+	t.Parallel()
 	ts, db := testServerWithCompany(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -137,6 +141,7 @@ func TestUpdateCompanyProfile_ValidationError_EmptyName(t *testing.T) {
 }
 
 func TestUpdateCompanyProfile_HTTP(t *testing.T) {
+	t.Parallel()
 	ts, db := testServerWithCompany(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -173,6 +178,7 @@ func TestUpdateCompanyProfile_HTTP(t *testing.T) {
 }
 
 func TestInvoicePDF_HTTP(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 

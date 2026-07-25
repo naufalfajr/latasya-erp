@@ -8,6 +8,7 @@ import (
 )
 
 func TestPasswordChangePage_RendersForm(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -28,6 +29,7 @@ func TestPasswordChangePage_RendersForm(t *testing.T) {
 }
 
 func TestPasswordChange_WrongCurrentPassword(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -53,6 +55,7 @@ func TestPasswordChange_WrongCurrentPassword(t *testing.T) {
 }
 
 func TestPasswordChange_TooShort(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -78,6 +81,7 @@ func TestPasswordChange_TooShort(t *testing.T) {
 }
 
 func TestPasswordChange_ConfirmMismatch(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -103,6 +107,7 @@ func TestPasswordChange_ConfirmMismatch(t *testing.T) {
 }
 
 func TestPasswordChange_SameAsCurrentPassword(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 

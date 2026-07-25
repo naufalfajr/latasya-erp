@@ -8,6 +8,7 @@ import (
 )
 
 func TestNewBill_Form(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -28,6 +29,7 @@ func TestNewBill_Form(t *testing.T) {
 }
 
 func TestBillLinePartial_HTMX(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -46,6 +48,7 @@ func TestBillLinePartial_HTMX(t *testing.T) {
 }
 
 func TestViewBill_NotFound(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -63,6 +66,7 @@ func TestViewBill_NotFound(t *testing.T) {
 }
 
 func TestEditBill_NotFound(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -80,6 +84,7 @@ func TestEditBill_NotFound(t *testing.T) {
 }
 
 func TestUpdateBill_NotFound(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -100,6 +105,7 @@ func TestUpdateBill_NotFound(t *testing.T) {
 }
 
 func TestDeleteBill_InvalidID(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -120,6 +126,7 @@ func TestDeleteBill_InvalidID(t *testing.T) {
 }
 
 func TestCreateBill_ValidationError(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -142,6 +149,7 @@ func TestCreateBill_ValidationError(t *testing.T) {
 }
 
 func TestCreateBill_LineValidationError(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -172,6 +180,7 @@ func TestCreateBill_LineValidationError(t *testing.T) {
 }
 
 func TestBillFullLifecycle(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -346,6 +355,7 @@ func TestBillFullLifecycle(t *testing.T) {
 }
 
 func TestBills_ViewerDenied(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsViewer(t, ts, db)
 

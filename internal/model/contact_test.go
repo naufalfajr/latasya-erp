@@ -8,6 +8,7 @@ import (
 )
 
 func TestCreateContact(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	c := &model.Contact{
@@ -39,6 +40,7 @@ func TestCreateContact(t *testing.T) {
 }
 
 func TestContactPrice(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		distanceKm         float64
 		hasSiblingDiscount bool
@@ -74,6 +76,7 @@ func TestContactPrice(t *testing.T) {
 }
 
 func TestListContacts_FilterByType(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	// Create customer and supplier
@@ -98,6 +101,7 @@ func TestListContacts_FilterByType(t *testing.T) {
 }
 
 func TestListContacts_Search(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	model.CreateContact(db, &model.Contact{Name: "SPBU Pertamina", ContactType: "supplier", Phone: "021555", IsActive: true})
@@ -117,6 +121,7 @@ func TestListContacts_Search(t *testing.T) {
 }
 
 func TestGetContact(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	model.CreateContact(db, &model.Contact{Name: "Test Contact", ContactType: "customer", IsActive: true})
@@ -136,6 +141,7 @@ func TestGetContact(t *testing.T) {
 }
 
 func TestUpdateContact(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	model.CreateContact(db, &model.Contact{Name: "Original", ContactType: "customer", IsActive: true})
@@ -163,6 +169,7 @@ func TestUpdateContact(t *testing.T) {
 }
 
 func TestDeleteContact(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	model.CreateContact(db, &model.Contact{Name: "To Delete", ContactType: "supplier", IsActive: true})
@@ -183,6 +190,7 @@ func TestDeleteContact(t *testing.T) {
 }
 
 func TestListContacts_FilterActive(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	model.CreateContact(db, &model.Contact{Name: "Active", ContactType: "customer", IsActive: true})
@@ -206,6 +214,7 @@ func TestListContacts_FilterActive(t *testing.T) {
 }
 
 func TestListContacts_Sort(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	var eastID, westID int
@@ -248,6 +257,7 @@ func TestListContacts_Sort(t *testing.T) {
 }
 
 func TestContactRoute(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	var routeID int

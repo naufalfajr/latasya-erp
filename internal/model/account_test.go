@@ -8,6 +8,7 @@ import (
 )
 
 func TestListAccounts_All(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	accounts, err := model.ListAccounts(db, model.AccountFilter{})
@@ -24,6 +25,7 @@ func TestListAccounts_All(t *testing.T) {
 }
 
 func TestListAccounts_FilterByType(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	types := []string{"asset", "liability", "equity", "revenue", "expense"}
@@ -44,6 +46,7 @@ func TestListAccounts_FilterByType(t *testing.T) {
 }
 
 func TestListAccounts_FilterByActive(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	active := true
@@ -59,6 +62,7 @@ func TestListAccounts_FilterByActive(t *testing.T) {
 }
 
 func TestListAccounts_Search(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	accounts, err := model.ListAccounts(db, model.AccountFilter{Search: "fuel"})
@@ -71,6 +75,7 @@ func TestListAccounts_Search(t *testing.T) {
 }
 
 func TestCreateAccount(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	a := &model.Account{
@@ -97,6 +102,7 @@ func TestCreateAccount(t *testing.T) {
 }
 
 func TestCashAccountClassificationValidation(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	valid := &model.Account{
@@ -138,6 +144,7 @@ func TestCashAccountClassificationValidation(t *testing.T) {
 }
 
 func TestCreateAccount_DuplicateCode(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	a := &model.Account{
@@ -155,6 +162,7 @@ func TestCreateAccount_DuplicateCode(t *testing.T) {
 }
 
 func TestGetAccount(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	// Get first account
@@ -173,6 +181,7 @@ func TestGetAccount(t *testing.T) {
 }
 
 func TestUpdateAccount(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	// Create a test account
@@ -200,6 +209,7 @@ func TestUpdateAccount(t *testing.T) {
 }
 
 func TestDeleteAccount_NonSystem(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	// Create a non-system account
@@ -226,6 +236,7 @@ func TestDeleteAccount_NonSystem(t *testing.T) {
 }
 
 func TestDeleteAccount_SystemProtected(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	// Find a system account (Cash on Hand)
@@ -245,6 +256,7 @@ func TestDeleteAccount_SystemProtected(t *testing.T) {
 }
 
 func TestListAccounts_OrderedByCode(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	accounts, err := model.ListAccounts(db, model.AccountFilter{})
@@ -260,6 +272,7 @@ func TestListAccounts_OrderedByCode(t *testing.T) {
 }
 
 func TestAccountTypeLabel(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		accountType string
 		want        string

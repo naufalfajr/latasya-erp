@@ -9,6 +9,7 @@ import (
 )
 
 func TestDashboardMonthlyTrends_AccrualAndCashIntegrity(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	accountID := func(code string) int {
 		t.Helper()
@@ -85,6 +86,7 @@ func TestDashboardMonthlyTrends_AccrualAndCashIntegrity(t *testing.T) {
 }
 
 func TestDashboardMonthlyTrends_UsesJakartaMonthBoundary(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	// 18:30 UTC on July 31 is already August 1 in Jakarta.
 	got, err := model.GetDashboardDataAt(db, "monthly", time.Date(2026, time.July, 31, 18, 30, 0, 0, time.UTC))
@@ -97,6 +99,7 @@ func TestDashboardMonthlyTrends_UsesJakartaMonthBoundary(t *testing.T) {
 }
 
 func TestDashboardMonthlyTrends_NoCashClassification(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	if _, err := db.Exec(`UPDATE accounts SET is_cash = 0`); err != nil {
 		t.Fatal(err)
@@ -116,6 +119,7 @@ func TestDashboardMonthlyTrends_NoCashClassification(t *testing.T) {
 }
 
 func TestDashboardQuarterlyTrends_AlignToCalendarQuarters(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	accountID := func(code string) int {
 		t.Helper()
@@ -169,6 +173,7 @@ func TestDashboardQuarterlyTrends_AlignToCalendarQuarters(t *testing.T) {
 // TestGetDashboardDataNow covers the default path the handlers take: monthly
 // granularity at the current business instant.
 func TestGetDashboardDataNow(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	got, err := model.GetDashboardDataAt(db, "monthly", model.BusinessNow())

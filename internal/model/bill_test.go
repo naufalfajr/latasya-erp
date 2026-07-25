@@ -8,6 +8,7 @@ import (
 )
 
 func TestCreateBill(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	db.Exec("INSERT INTO contacts (name, contact_type, is_active) VALUES ('SPBU Pertamina', 'supplier', 1)")
@@ -41,6 +42,7 @@ func TestCreateBill(t *testing.T) {
 }
 
 func TestReceiveBill(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	db.Exec("INSERT INTO contacts (name, contact_type, is_active) VALUES ('Supplier', 'supplier', 1)")
@@ -75,6 +77,7 @@ func TestReceiveBill(t *testing.T) {
 }
 
 func TestBillPaymentLifecycle(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	db.Exec("INSERT INTO contacts (name, contact_type, is_active) VALUES ('Supplier', 'supplier', 1)")
@@ -112,6 +115,7 @@ func TestBillPaymentLifecycle(t *testing.T) {
 }
 
 func TestDeleteBill_OnlyDraft(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	db.Exec("INSERT INTO contacts (name, contact_type, is_active) VALUES ('Supplier', 'supplier', 1)")

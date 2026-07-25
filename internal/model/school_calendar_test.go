@@ -11,6 +11,7 @@ import (
 )
 
 func TestSchoolClosureCRUDAndList(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	closure := &model.SchoolClosure{
@@ -78,6 +79,7 @@ func TestSchoolClosureCRUDAndList(t *testing.T) {
 }
 
 func TestEffectiveSchoolDaysCountsMondaySaturday(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	days, err := model.EffectiveSchoolDays(db, "2026-06")
@@ -90,6 +92,7 @@ func TestEffectiveSchoolDaysCountsMondaySaturday(t *testing.T) {
 }
 
 func TestEffectiveSchoolDaysIgnoresSundayClosures(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	createSchoolClosure(t, db, "Sunday event", "2026-06-07", "2026-06-07")
 
@@ -103,6 +106,7 @@ func TestEffectiveSchoolDaysIgnoresSundayClosures(t *testing.T) {
 }
 
 func TestEffectiveSchoolDaysDedupesOverlapsAndBoundsMonth(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	createSchoolClosure(t, db, "Previous month boundary", "2026-05-30", "2026-06-02")
 	createSchoolClosure(t, db, "Overlap A", "2026-06-01", "2026-06-03")
@@ -119,6 +123,7 @@ func TestEffectiveSchoolDaysDedupesOverlapsAndBoundsMonth(t *testing.T) {
 }
 
 func TestMonthlyPriceMultiplierPercent(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		days int
 		want int
@@ -138,6 +143,7 @@ func TestMonthlyPriceMultiplierPercent(t *testing.T) {
 }
 
 func TestApplyMonthlyPriceMultiplier(t *testing.T) {
+	t.Parallel()
 	if got := model.ApplyMonthlyPriceMultiplier(400000, 85); got != 340000 {
 		t.Fatalf("85 percent multiplier: got %d want 340000", got)
 	}
@@ -147,6 +153,7 @@ func TestApplyMonthlyPriceMultiplier(t *testing.T) {
 }
 
 func TestGoogleOAuthStateConsumeRejectsExpiredMismatchedAndIsSingleUse(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	if err := model.CreateGoogleOAuthState(db, "valid", 1, "verifier", time.Now().UTC().Add(time.Hour).Format(time.RFC3339)); err != nil {
@@ -176,6 +183,7 @@ func TestGoogleOAuthStateConsumeRejectsExpiredMismatchedAndIsSingleUse(t *testin
 }
 
 func TestReplaceGoogleSchoolClosuresDeletesOnlyOverlappingGoogleRows(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	createSchoolClosureWithSource(t, db, model.SchoolClosureSourceManual, "Manual overlap", "2026-06-05", "2026-06-06", "")
 	createSchoolClosureWithSource(t, db, model.SchoolClosureSourceGoogle, "Google overlap", "2026-06-02", "2026-06-03", "g-overlap")
@@ -211,6 +219,7 @@ func TestReplaceGoogleSchoolClosuresDeletesOnlyOverlappingGoogleRows(t *testing.
 }
 
 func TestGoogleCalendarConnectionSaveGetAndDelete(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	conn, err := model.GetGoogleCalendarConnection(db)

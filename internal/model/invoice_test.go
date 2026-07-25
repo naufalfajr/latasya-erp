@@ -9,6 +9,7 @@ import (
 )
 
 func TestCreateInvoice(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	db.Exec("INSERT INTO contacts (name, contact_type, is_active) VALUES ('SD Negeri 1', 'customer', 1)")
@@ -56,6 +57,7 @@ func TestCreateInvoice(t *testing.T) {
 }
 
 func TestSendInvoice(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	db.Exec("INSERT INTO contacts (name, contact_type, is_active) VALUES ('SD Negeri 1', 'customer', 1)")
@@ -97,6 +99,7 @@ func TestSendInvoice(t *testing.T) {
 }
 
 func TestSendInvoice_OnlyDraft(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	db.Exec("INSERT INTO contacts (name, contact_type, is_active) VALUES ('Test', 'customer', 1)")
@@ -122,6 +125,7 @@ func TestSendInvoice_OnlyDraft(t *testing.T) {
 }
 
 func TestRecordInvoicePayment(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	db.Exec("INSERT INTO contacts (name, contact_type, is_active) VALUES ('Test', 'customer', 1)")
@@ -172,6 +176,7 @@ func TestRecordInvoicePayment(t *testing.T) {
 // write time, but staff can backdate payment_date, so the two can legitimately
 // differ. PaidDate must reflect the payment's own date.
 func TestListInvoices_PaidDateReflectsPaymentNotUpdatedAt(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	db.Exec("INSERT INTO contacts (name, contact_type, is_active) VALUES ('Test', 'customer', 1)")
@@ -210,6 +215,7 @@ func TestListInvoices_PaidDateReflectsPaymentNotUpdatedAt(t *testing.T) {
 }
 
 func TestRecordInvoicePayment_ExceedsBalance(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	db.Exec("INSERT INTO contacts (name, contact_type, is_active) VALUES ('Test', 'customer', 1)")
@@ -233,6 +239,7 @@ func TestRecordInvoicePayment_ExceedsBalance(t *testing.T) {
 }
 
 func TestDeleteInvoice_OnlyDraft(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	db.Exec("INSERT INTO contacts (name, contact_type, is_active) VALUES ('Test', 'customer', 1)")
@@ -269,6 +276,7 @@ func TestDeleteInvoice_OnlyDraft(t *testing.T) {
 }
 
 func TestListInvoices(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	db.Exec("INSERT INTO contacts (name, contact_type, is_active) VALUES ('Test', 'customer', 1)")
@@ -301,6 +309,7 @@ func TestListInvoices(t *testing.T) {
 }
 
 func TestGenerateRecurringInvoices(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	seedManualSchoolClosure(t, db, "Sunday only", "2026-06-07", "2026-06-07")
 
@@ -362,6 +371,7 @@ func TestGenerateRecurringInvoices(t *testing.T) {
 }
 
 func TestGenerateRecurringInvoicesAllowsPreviousMonthAndSkipsCurrentMonth(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	contactID := seedRecurringCustomer(t, db, "Monthly Customer", 5)
 
@@ -406,6 +416,7 @@ func TestGenerateRecurringInvoicesAllowsPreviousMonthAndSkipsCurrentMonth(t *tes
 }
 
 func TestGenerateRecurringInvoicesApplies85PercentMultiplier(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	seedManualSchoolClosure(t, db, "June break", "2026-06-01", "2026-06-08")
 	contactID := seedRecurringCustomer(t, db, "Medium Closure Customer", 5)
@@ -424,6 +435,7 @@ func TestGenerateRecurringInvoicesApplies85PercentMultiplier(t *testing.T) {
 }
 
 func TestGenerateRecurringInvoicesApplies75PercentMultiplier(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	seedManualSchoolClosure(t, db, "Long June break", "2026-06-01", "2026-06-15")
 	contactID := seedRecurringCustomer(t, db, "Low Closure Customer", 5)
@@ -487,6 +499,7 @@ func assertGeneratedRecurringPrice(t *testing.T, db *sql.DB, contactID int, mont
 }
 
 func TestBulkDeleteDraftInvoices(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	db.Exec("INSERT INTO contacts (name, contact_type, is_active) VALUES ('Bulk Co', 'customer', 1)")
@@ -524,6 +537,7 @@ func TestBulkDeleteDraftInvoices(t *testing.T) {
 }
 
 func TestInvoiceNumberNoCollisionAfterDelete(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	db.Exec("INSERT INTO contacts (name, contact_type, is_active) VALUES ('Seq Co', 'customer', 1)")
@@ -561,6 +575,7 @@ func TestInvoiceNumberNoCollisionAfterDelete(t *testing.T) {
 }
 
 func TestBulkSendInvoices(t *testing.T) {
+	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
 	db.Exec("INSERT INTO contacts (name, contact_type, is_active) VALUES ('Send Co', 'customer', 1)")

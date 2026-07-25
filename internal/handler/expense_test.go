@@ -8,6 +8,7 @@ import (
 )
 
 func TestNewExpense_Form(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -25,6 +26,7 @@ func TestNewExpense_Form(t *testing.T) {
 }
 
 func TestEditExpense_NotFound(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -46,6 +48,7 @@ func TestEditExpense_NotFound(t *testing.T) {
 // SourceType == expense, so this guards the "wrong source type" branch
 // distinct from "no such id".
 func TestEditExpense_WrongSourceType(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -85,6 +88,7 @@ func TestEditExpense_WrongSourceType(t *testing.T) {
 }
 
 func TestUpdateExpense_NotFound(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -104,6 +108,7 @@ func TestUpdateExpense_NotFound(t *testing.T) {
 }
 
 func TestUpdateExpense_ValidationError(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -143,6 +148,7 @@ func TestUpdateExpense_ValidationError(t *testing.T) {
 }
 
 func TestUpdateExpense_SuccessWithEditForm(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -204,6 +210,7 @@ func TestUpdateExpense_SuccessWithEditForm(t *testing.T) {
 }
 
 func TestDeleteExpense_NotFound(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -225,6 +232,7 @@ func TestDeleteExpense_NotFound(t *testing.T) {
 }
 
 func TestDeleteExpense_WrongSourceType(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -264,6 +272,7 @@ func TestDeleteExpense_WrongSourceType(t *testing.T) {
 }
 
 func TestDeleteExpense_Success_HTMX(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -305,6 +314,7 @@ func TestDeleteExpense_Success_HTMX(t *testing.T) {
 }
 
 func TestExpenses_ViewerDenied(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsViewer(t, ts, db)
 

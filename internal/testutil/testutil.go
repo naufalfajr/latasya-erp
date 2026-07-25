@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"database/sql"
+	"sync"
 	"testing"
 
 	"github.com/naufal/latasya-erp/internal/auth"
@@ -12,10 +13,16 @@ import (
 	latasyaerp "github.com/naufal/latasya-erp"
 )
 
+// Parallel tests all register the same FS; once is enough and keeps the
+// global write out of the race detector's way.
+var setMigrations = sync.OnceFunc(func() {
+	database.SetMigrations(latasyaerp.MigrationFS)
+})
+
 // SetupTestDB creates an in-memory SQLite database with migrations and seed data applied.
 func SetupTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	database.SetMigrations(latasyaerp.MigrationFS)
+	setMigrations()
 	db, err := database.Open(":memory:")
 	if err != nil {
 		t.Fatalf("setup test db: %v", err)

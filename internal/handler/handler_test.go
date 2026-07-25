@@ -263,6 +263,7 @@ func requestWithCookies(db *sql.DB, method, url string, cookies []*http.Cookie, 
 // --- Auth Handler Tests ---
 
 func TestLoginPage(t *testing.T) {
+	t.Parallel()
 	ts, _ := testServer(t)
 	resp, err := http.Get(ts.URL + "/login")
 	if err != nil {
@@ -275,6 +276,7 @@ func TestLoginPage(t *testing.T) {
 }
 
 func TestLogin_Success(t *testing.T) {
+	t.Parallel()
 	ts, _ := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -290,6 +292,7 @@ func TestLogin_Success(t *testing.T) {
 }
 
 func TestLogin_WrongPassword(t *testing.T) {
+	t.Parallel()
 	ts, _ := testServer(t)
 	client := &http.Client{CheckRedirect: func(r *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
@@ -309,6 +312,7 @@ func TestLogin_WrongPassword(t *testing.T) {
 }
 
 func TestLogin_EmptyFields(t *testing.T) {
+	t.Parallel()
 	ts, _ := testServer(t)
 	client := &http.Client{CheckRedirect: func(r *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
@@ -327,6 +331,7 @@ func TestLogin_EmptyFields(t *testing.T) {
 }
 
 func TestDashboard_RequiresAuth(t *testing.T) {
+	t.Parallel()
 	ts, _ := testServer(t)
 	client := &http.Client{CheckRedirect: func(r *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
@@ -344,6 +349,7 @@ func TestDashboard_RequiresAuth(t *testing.T) {
 }
 
 func TestDashboard_Authenticated(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -361,6 +367,7 @@ func TestDashboard_Authenticated(t *testing.T) {
 }
 
 func TestLogout(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -395,6 +402,7 @@ func TestLogout(t *testing.T) {
 // --- Account Handler Tests ---
 
 func TestListAccounts_Authenticated(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -412,6 +420,7 @@ func TestListAccounts_Authenticated(t *testing.T) {
 }
 
 func TestCreateAccount_Admin(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -433,6 +442,7 @@ func TestCreateAccount_Admin(t *testing.T) {
 }
 
 func TestCreateAccount_ValidationError(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -456,6 +466,7 @@ func TestCreateAccount_ValidationError(t *testing.T) {
 }
 
 func TestDeleteAccount_HTMX(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -491,6 +502,7 @@ func TestDeleteAccount_HTMX(t *testing.T) {
 // --- Contact Handler Tests ---
 
 func TestListContacts_Authenticated(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -508,6 +520,7 @@ func TestListContacts_Authenticated(t *testing.T) {
 }
 
 func TestListContacts_TableColumnsAndRouteSort(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -554,6 +567,7 @@ func TestListContacts_TableColumnsAndRouteSort(t *testing.T) {
 }
 
 func TestCreateContact_Admin(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -575,6 +589,7 @@ func TestCreateContact_Admin(t *testing.T) {
 }
 
 func TestCreateContact_ValidationError(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -598,6 +613,7 @@ func TestCreateContact_ValidationError(t *testing.T) {
 // --- Authorization Tests ---
 
 func TestAccounts_ViewerCanView(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsViewer(t, ts, db)
 
@@ -615,6 +631,7 @@ func TestAccounts_ViewerCanView(t *testing.T) {
 }
 
 func TestContacts_ViewerCanView(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsViewer(t, ts, db)
 
@@ -634,6 +651,7 @@ func TestContacts_ViewerCanView(t *testing.T) {
 // --- Journal Handler Tests ---
 
 func TestListJournals_Authenticated(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -651,6 +669,7 @@ func TestListJournals_Authenticated(t *testing.T) {
 }
 
 func TestNewJournal_Form(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -668,6 +687,7 @@ func TestNewJournal_Form(t *testing.T) {
 }
 
 func TestCreateJournal_Success(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -703,6 +723,7 @@ func TestCreateJournal_Success(t *testing.T) {
 }
 
 func TestCreateJournal_ValidationError_MissingDate(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -731,6 +752,7 @@ func TestCreateJournal_ValidationError_MissingDate(t *testing.T) {
 }
 
 func TestCreateJournal_ValidationError_Unbalanced(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -759,6 +781,7 @@ func TestCreateJournal_ValidationError_Unbalanced(t *testing.T) {
 }
 
 func TestViewJournal(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -793,6 +816,7 @@ func TestViewJournal(t *testing.T) {
 }
 
 func TestJournalLinePartial_HTMX(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -813,6 +837,7 @@ func TestJournalLinePartial_HTMX(t *testing.T) {
 // --- Income Handler Tests ---
 
 func TestListIncome(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -845,6 +870,7 @@ func TestListIncome(t *testing.T) {
 }
 
 func TestCreateIncome_Success(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -893,6 +919,7 @@ func TestCreateIncome_Success(t *testing.T) {
 }
 
 func TestCreateIncome_ValidationError(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -916,6 +943,7 @@ func TestCreateIncome_ValidationError(t *testing.T) {
 // --- Expense Handler Tests ---
 
 func TestListExpenses(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -948,6 +976,7 @@ func TestListExpenses(t *testing.T) {
 }
 
 func TestCreateExpense_Success(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -996,6 +1025,7 @@ func TestCreateExpense_Success(t *testing.T) {
 }
 
 func TestCreateExpense_ValidationError(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -1019,6 +1049,7 @@ func TestCreateExpense_ValidationError(t *testing.T) {
 // --- Invoice Handler Tests ---
 
 func TestListInvoices_Handler(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -1036,6 +1067,7 @@ func TestListInvoices_Handler(t *testing.T) {
 }
 
 func TestInvoiceLifecycle_Handler(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -1100,6 +1132,7 @@ func TestInvoiceLifecycle_Handler(t *testing.T) {
 // --- Bill Handler Tests ---
 
 func TestListBills_Handler(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -1117,6 +1150,7 @@ func TestListBills_Handler(t *testing.T) {
 }
 
 func TestBillLifecycle_Handler(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -1169,6 +1203,7 @@ func TestBillLifecycle_Handler(t *testing.T) {
 // --- Report Handler Tests ---
 
 func TestReportPages_Authenticated(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 	client := &http.Client{}
@@ -1195,6 +1230,7 @@ func TestReportPages_Authenticated(t *testing.T) {
 }
 
 func TestReportPages_ViewerCanAccess(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsViewer(t, ts, db)
 	client := &http.Client{}
@@ -1221,6 +1257,7 @@ func TestReportPages_ViewerCanAccess(t *testing.T) {
 // --- User Management Tests ---
 
 func TestListUsers_AdminOnly(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -1238,6 +1275,7 @@ func TestListUsers_AdminOnly(t *testing.T) {
 }
 
 func TestListUsers_ViewerDenied(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsViewer(t, ts, db)
 
@@ -1255,6 +1293,7 @@ func TestListUsers_ViewerDenied(t *testing.T) {
 }
 
 func TestCreateUser_Admin(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -1276,6 +1315,7 @@ func TestCreateUser_Admin(t *testing.T) {
 }
 
 func TestCreateUser_ValidationError(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -1299,6 +1339,7 @@ func TestCreateUser_ValidationError(t *testing.T) {
 // --- Dashboard Tests ---
 
 func TestDashboard_WithData(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -1351,6 +1392,7 @@ func TestDashboard_WithData(t *testing.T) {
 }
 
 func TestDashboard_InvalidGranularity(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 	for _, query := range []string{"?granularity=weekly", "?granularity="} {
@@ -1367,6 +1409,7 @@ func TestDashboard_InvalidGranularity(t *testing.T) {
 }
 
 func TestDashboard_NoCashConfigurationWarning(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 	if _, err := db.Exec(`UPDATE accounts SET is_cash = 0`); err != nil {

@@ -26,6 +26,7 @@ func noRedirectClient() *http.Client {
 // --- Invoice ----------------------------------------------------------------
 
 func TestUpdateInvoice_Success(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -78,6 +79,7 @@ func TestUpdateInvoice_Success(t *testing.T) {
 }
 
 func TestDeleteInvoice_Success(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -121,6 +123,7 @@ func TestDeleteInvoice_Success(t *testing.T) {
 // --- Bill -------------------------------------------------------------------
 
 func TestUpdateBill_Success(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -163,6 +166,7 @@ func TestUpdateBill_Success(t *testing.T) {
 }
 
 func TestDeleteBill_Success(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -199,6 +203,7 @@ func TestDeleteBill_Success(t *testing.T) {
 // --- Income -----------------------------------------------------------------
 
 func TestUpdateIncome_Success(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -245,6 +250,7 @@ func TestUpdateIncome_Success(t *testing.T) {
 }
 
 func TestDeleteIncome_Success(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -280,6 +286,7 @@ func TestDeleteIncome_Success(t *testing.T) {
 // --- Expense ----------------------------------------------------------------
 
 func TestUpdateExpense_Success(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -326,6 +333,7 @@ func TestUpdateExpense_Success(t *testing.T) {
 }
 
 func TestDeleteExpense_Success(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -361,6 +369,7 @@ func TestDeleteExpense_Success(t *testing.T) {
 // --- Account ----------------------------------------------------------------
 
 func TestUpdateAccount_Success(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -410,6 +419,7 @@ func TestUpdateAccount_Success(t *testing.T) {
 }
 
 func TestUpdateAccount_ValidationError(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -437,6 +447,7 @@ func TestUpdateAccount_ValidationError(t *testing.T) {
 // --- Contact ----------------------------------------------------------------
 
 func TestUpdateContact_Success(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -479,6 +490,7 @@ func TestUpdateContact_Success(t *testing.T) {
 }
 
 func TestDeleteContact_Success(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -511,6 +523,7 @@ func TestDeleteContact_Success(t *testing.T) {
 // --- Credit Note ------------------------------------------------------------
 
 func TestCreateCreditNote_Success(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -542,6 +555,7 @@ func TestCreateCreditNote_Success(t *testing.T) {
 }
 
 func TestCreateCreditNote_ValidationError(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -565,6 +579,7 @@ func TestCreateCreditNote_ValidationError(t *testing.T) {
 }
 
 func TestUpdateCreditNote_Success(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -606,6 +621,7 @@ func TestUpdateCreditNote_Success(t *testing.T) {
 }
 
 func TestDeleteCreditNote_Success(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -636,6 +652,7 @@ func TestDeleteCreditNote_Success(t *testing.T) {
 }
 
 func TestIssueCreditNote_HTTP(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -677,6 +694,7 @@ func TestIssueCreditNote_HTTP(t *testing.T) {
 }
 
 func TestVoidCreditNote_HTTP(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -725,6 +743,7 @@ func TestVoidCreditNote_HTTP(t *testing.T) {
 }
 
 func TestCreditNote_ViewerCannotCreate(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsViewer(t, ts, db)
 

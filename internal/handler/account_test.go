@@ -10,6 +10,7 @@ import (
 )
 
 func TestNewAccount_RendersForm(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -33,6 +34,7 @@ func TestNewAccount_RendersForm(t *testing.T) {
 }
 
 func TestEditAccount_RendersForm(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -61,6 +63,7 @@ func TestEditAccount_RendersForm(t *testing.T) {
 }
 
 func TestEditAccount_InvalidID_NotFound(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -77,6 +80,7 @@ func TestEditAccount_InvalidID_NotFound(t *testing.T) {
 }
 
 func TestEditAccount_UnknownID_NotFound(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -93,6 +97,7 @@ func TestEditAccount_UnknownID_NotFound(t *testing.T) {
 }
 
 func TestUpdateAccount_InvalidID_NotFound(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -110,6 +115,7 @@ func TestUpdateAccount_InvalidID_NotFound(t *testing.T) {
 }
 
 func TestUpdateAccount_UnknownID_NotFound(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -127,6 +133,7 @@ func TestUpdateAccount_UnknownID_NotFound(t *testing.T) {
 }
 
 func TestUpdateAccount_DuplicateCode(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -154,6 +161,7 @@ func TestUpdateAccount_DuplicateCode(t *testing.T) {
 }
 
 func TestCreateAccount_DuplicateCode(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -177,6 +185,7 @@ func TestCreateAccount_DuplicateCode(t *testing.T) {
 }
 
 func TestDeleteAccount_InvalidID_NotFound(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -193,6 +202,7 @@ func TestDeleteAccount_InvalidID_NotFound(t *testing.T) {
 }
 
 func TestDeleteAccount_SystemAccount_Forbidden(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
@@ -221,6 +231,7 @@ func TestDeleteAccount_SystemAccount_Forbidden(t *testing.T) {
 }
 
 func TestDeleteAccount_HTMX_RemovesRow(t *testing.T) {
+	t.Parallel()
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
