@@ -23,8 +23,10 @@ func publicTestServer(t *testing.T) (*httptest.Server, *sql.DB) {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", h.PublicHome)
-	mux.HandleFunc("GET /i/{token}", h.PortalIndex)
-	mux.HandleFunc("GET /i/{token}/invoice/{id}/pdf", h.PortalInvoicePDF)
+	// No PortalCodeLimiter here: it is exercised in internal/api/v1, and
+	// omitting it keeps miss-looping tests from throttling themselves.
+	mux.HandleFunc("GET /p/{code}", h.PortalIndex)
+	mux.HandleFunc("GET /p/{code}/invoice/{id}/pdf", h.PortalInvoicePDF)
 
 	ts := httptest.NewServer(mux)
 	t.Cleanup(ts.Close)
@@ -78,21 +80,7 @@ func TestPublicHome_CompanyProfileLoadError(t *testing.T) {
 	}
 }
 
-func TestPortalIndex_UnknownToken_ShowsInvalid(t *testing.T) {
-	ts, _ := publicTestServer(t)
-
-	resp, err := http.Get(ts.URL + "/i/does-not-exist")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
-	if !strings.Contains(string(body), "Link Tidak Valid") {
-		t.Error("expected invalid-link message for an unknown token")
-	}
-}
-
-func TestPortalIndex_ValidToken_ShowsIssuedInvoiceOnly(t *testing.T) {
+func TestPortalIndex_ValidCode_ShowsIssuedInvoiceOnly(t *testing.T) {
 	ts, db := publicTestServer(t)
 	contactID := mustContact(t, db, "Portal Kid", "081111111111")
 
@@ -102,12 +90,12 @@ func TestPortalIndex_ValidToken_ShowsIssuedInvoiceOnly(t *testing.T) {
 		t.Fatalf("send invoice: %v", err)
 	}
 
-	token, err := model.GetOrCreatePortalToken(db, contactID)
+	code, err := model.GetOrCreatePortalCode(db, contactID)
 	if err != nil {
-		t.Fatalf("get token: %v", err)
+		t.Fatalf("get code: %v", err)
 	}
 
-	resp, err := http.Get(ts.URL + "/i/" + token)
+	resp, err := http.Get(ts.URL + "/p/" + code)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,8 +124,8 @@ func TestPortalIndex_ConfirmPaymentButton_HiddenWithoutCompanyPhone(t *testing.T
 		t.Fatalf("send invoice: %v", err)
 	}
 
-	token, _ := model.GetOrCreatePortalToken(db, contactID)
-	resp, err := http.Get(ts.URL + "/i/" + token)
+	code, _ := model.GetOrCreatePortalCode(db, contactID)
+	resp, err := http.Get(ts.URL + "/p/" + code)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -163,9 +151,9 @@ func TestPortalInvoicePDF_WrongFamily_NotFound(t *testing.T) {
 		t.Fatalf("send invoice: %v", err)
 	}
 
-	tokenA, _ := model.GetOrCreatePortalToken(db, contactA)
+	codeA, _ := model.GetOrCreatePortalCode(db, contactA)
 
-	resp, err := http.Get(ts.URL + "/i/" + tokenA + "/invoice/" + strconv.Itoa(invB) + "/pdf")
+	resp, err := http.Get(ts.URL + "/p/" + codeA + "/invoice/" + strconv.Itoa(invB) + "/pdf")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,9 +166,9 @@ func TestPortalInvoicePDF_WrongFamily_NotFound(t *testing.T) {
 func TestPortalInvoicePDF_InvalidID_NotFound(t *testing.T) {
 	ts, db := publicTestServer(t)
 	contactID := mustContact(t, db, "Bad ID Family", "081111111111")
-	token, _ := model.GetOrCreatePortalToken(db, contactID)
+	code, _ := model.GetOrCreatePortalCode(db, contactID)
 
-	resp, err := http.Get(ts.URL + "/i/" + token + "/invoice/not-a-number/pdf")
+	resp, err := http.Get(ts.URL + "/p/" + code + "/invoice/not-a-number/pdf")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -190,21 +178,21 @@ func TestPortalInvoicePDF_InvalidID_NotFound(t *testing.T) {
 	}
 }
 
-func TestPortalInvoicePDF_UnknownToken_NotFound(t *testing.T) {
+func TestPortalInvoicePDF_UnknownCode_NotFound(t *testing.T) {
 	ts, db := publicTestServer(t)
-	contactID := mustContact(t, db, "Unknown Token Family", "081111111111")
+	contactID := mustContact(t, db, "Unknown Code Family", "081111111111")
 	invID := mustInvoice(t, db, contactID)
 	if err := model.SendInvoice(db, invID, 1); err != nil {
 		t.Fatalf("send invoice: %v", err)
 	}
 
-	resp, err := http.Get(ts.URL + "/i/does-not-exist/invoice/" + strconv.Itoa(invID) + "/pdf")
+	resp, err := http.Get(ts.URL + "/p/zzzz-000/invoice/" + strconv.Itoa(invID) + "/pdf")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusNotFound {
-		t.Errorf("expected 404 for an unknown portal token, got %d", resp.StatusCode)
+		t.Errorf("expected 404 for an unknown portal code, got %d", resp.StatusCode)
 	}
 }
 
@@ -216,9 +204,9 @@ func TestPortalInvoicePDF_OwnInvoice_Succeeds(t *testing.T) {
 		t.Fatalf("send invoice: %v", err)
 	}
 
-	token, _ := model.GetOrCreatePortalToken(db, contactID)
+	code, _ := model.GetOrCreatePortalCode(db, contactID)
 
-	resp, err := http.Get(ts.URL + "/i/" + token + "/invoice/" + strconv.Itoa(invID) + "/pdf")
+	resp, err := http.Get(ts.URL + "/p/" + code + "/invoice/" + strconv.Itoa(invID) + "/pdf")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -241,9 +229,9 @@ func TestPortalPages_NoStore(t *testing.T) {
 	if err := model.SendInvoice(db, invID, 1); err != nil {
 		t.Fatalf("send invoice: %v", err)
 	}
-	token, _ := model.GetOrCreatePortalToken(db, contactID)
+	code, _ := model.GetOrCreatePortalCode(db, contactID)
 
-	indexResp, err := http.Get(ts.URL + "/i/" + token)
+	indexResp, err := http.Get(ts.URL + "/p/" + code)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -252,7 +240,7 @@ func TestPortalPages_NoStore(t *testing.T) {
 		t.Errorf("portal index: expected Cache-Control %q, got %q", "private, no-store", cc)
 	}
 
-	pdfResp, err := http.Get(ts.URL + "/i/" + token + "/invoice/" + strconv.Itoa(invID) + "/pdf")
+	pdfResp, err := http.Get(ts.URL + "/p/" + code + "/invoice/" + strconv.Itoa(invID) + "/pdf")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -327,20 +315,23 @@ func TestInvoiceWhatsApp_Sent_RedirectsToWALink(t *testing.T) {
 		t.Errorf("expected wa.me redirect for normalized phone, got %q", loc)
 	}
 
-	var token sql.NullString
-	db.QueryRow("SELECT portal_token FROM contacts WHERE id = ?", contactID).Scan(&token)
-	if !token.Valid || token.String == "" {
-		t.Error("expected a portal token to be created for the contact")
-	}
-	if !strings.Contains(loc, token.String) {
-		t.Error("expected the wa.me message to include the contact's portal link")
+	var code sql.NullString
+	db.QueryRow("SELECT portal_code FROM contacts WHERE id = ?", contactID).Scan(&code)
+	if !code.Valid || code.String == "" {
+		t.Error("expected a portal code to be created for the contact")
 	}
 	decoded, err := url.QueryUnescape(loc)
 	if err != nil {
 		t.Fatalf("decode WhatsApp redirect: %v", err)
 	}
-	if !strings.Contains(decoded, "Halo, kami dari Antar Jemput Latasya. Berikut link invoice layanan antar jemput Ananda WA Sent") {
+	if !strings.Contains(decoded, "/p/"+code.String) {
+		t.Errorf("expected the wa.me message to include the short portal link, got %q", decoded)
+	}
+	if !strings.Contains(decoded, "Halo, kami dari Antar Jemput Latasya. Berikut link invoice Ananda WA Sent") {
 		t.Errorf("expected selected WhatsApp template, got %q", decoded)
+	}
+	if !strings.Contains(decoded, "Link ini akan terus aktif sesuai masa keikutsertaan antar jemput") {
+		t.Errorf("expected the message to tell the parent the link is permanent, got %q", decoded)
 	}
 }
 
@@ -362,11 +353,11 @@ func TestContactEditPage_ShowsPortalLinkControl(t *testing.T) {
 	body, _ := io.ReadAll(resp.Body)
 	text := string(body)
 
-	if !strings.Contains(text, "Buat Link Portal") {
-		t.Error("expected a create-portal-link control before any token exists")
+	if !strings.Contains(text, "Simpan Link Baru") {
+		t.Error("expected the save-link control before any code exists")
 	}
 
-	token, _ := model.GetOrCreatePortalToken(db, contactID)
+	code, _ := model.GetOrCreatePortalCode(db, contactID)
 	req2, _ := requestWithCookies(db, "GET", ts.URL+"/contacts/"+strconv.Itoa(contactID)+"/edit", cookies, "")
 	resp2, err := noRedirectClient().Do(req2)
 	if err != nil {
@@ -376,22 +367,25 @@ func TestContactEditPage_ShowsPortalLinkControl(t *testing.T) {
 	body2, _ := io.ReadAll(resp2.Body)
 	text2 := string(body2)
 
-	if !strings.Contains(text2, "Reset Link") {
-		t.Error("expected a reset-link control once a token exists")
+	if !strings.Contains(text2, `name="portal_code"`) {
+		t.Error("expected an editable portal-code field")
 	}
-	if !strings.Contains(text2, "/i/"+token) {
-		t.Error("expected the current portal link to be displayed")
+	if !strings.Contains(text2, `value="`+code+`"`) {
+		t.Error("expected the field prefilled with the current code")
+	}
+	if !strings.Contains(text2, "/p/"+code) {
+		t.Error("expected the current short portal link to be displayed")
 	}
 }
 
-func TestResetContactPortalToken_RegeneratesAndRedirects(t *testing.T) {
+func TestSaveContactPortalCode_BlankRegeneratesAndRedirects(t *testing.T) {
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 	contactID := mustContact(t, db, "Reset Me", "081111111111")
 
-	oldToken, _ := model.GetOrCreatePortalToken(db, contactID)
+	oldCode, _ := model.GetOrCreatePortalCode(db, contactID)
 
-	req, _ := requestWithCookies(db, "POST", ts.URL+"/contacts/"+strconv.Itoa(contactID)+"/reset-token", cookies, "")
+	req, _ := requestWithCookies(db, "POST", ts.URL+"/contacts/"+strconv.Itoa(contactID)+"/portal-code", cookies, "")
 	resp, err := noRedirectClient().Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -406,17 +400,221 @@ func TestResetContactPortalToken_RegeneratesAndRedirects(t *testing.T) {
 		t.Errorf("expected redirect to %q, got %q", wantLoc, loc)
 	}
 
-	var newToken string
-	db.QueryRow("SELECT portal_token FROM contacts WHERE id = ?", contactID).Scan(&newToken)
-	if newToken == oldToken {
-		t.Error("expected a new token after reset")
+	var newCode string
+	db.QueryRow("SELECT portal_code FROM contacts WHERE id = ?", contactID).Scan(&newCode)
+	if newCode == oldCode {
+		t.Error("expected a new code after reset")
 	}
 
-	fam, err := model.ContactsByPortalToken(db, oldToken)
+	fam, err := model.ContactsByPortalCode(db, oldCode)
 	if err != nil {
-		t.Fatalf("lookup old token: %v", err)
+		t.Fatalf("lookup old code: %v", err)
 	}
 	if fam != nil {
-		t.Error("old token should no longer resolve")
+		t.Error("old short code should no longer resolve")
+	}
+}
+
+func TestPortalIndex_ValidCode_ShowsInvoicesAndPDFLinks(t *testing.T) {
+	ts, db := publicTestServer(t)
+	contactID := mustContact(t, db, "Short Code Kid", "086666666666")
+	invID := mustInvoice(t, db, contactID)
+	if err := model.SendInvoice(db, invID, 1); err != nil {
+		t.Fatalf("send invoice: %v", err)
+	}
+
+	code, err := model.GetOrCreatePortalCode(db, contactID)
+	if err != nil {
+		t.Fatalf("get code: %v", err)
+	}
+
+	resp, err := http.Get(ts.URL + "/p/" + code)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	text := string(body)
+
+	inv, _ := model.GetInvoice(db, invID)
+	if !strings.Contains(text, inv.InvoiceNumber) {
+		t.Error("expected the invoice number on the portal page")
+	}
+	if !strings.Contains(text, "/p/"+code+"/invoice/") {
+		t.Error("expected PDF links under the same /p/ code the parent arrived with")
+	}
+}
+
+// Pins the status, not just the body: a friendly 200 would silently disable
+// brute-force protection, since the limiter only counts non-2xx as a guess.
+func TestPortalIndex_UnknownCode_404(t *testing.T) {
+	ts, _ := publicTestServer(t)
+
+	resp, err := http.Get(ts.URL + "/p/zzzz-000")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("expected 404 for an unknown short code, got %d", resp.StatusCode)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(body), "Link Tidak Valid") {
+		t.Error("expected the friendly invalid-link page body alongside the 404")
+	}
+}
+
+// A sloppy spelling still gets in, and the banner shows the tidy one.
+func TestPortalIndex_EchoesCanonicalLink(t *testing.T) {
+	ts, db := publicTestServer(t)
+	contactID := mustContact(t, db, "Learns Short Link", "081212121212")
+	code, _ := model.GetOrCreatePortalCode(db, contactID)
+
+	resp, err := http.Get(ts.URL + "/p/" + strings.ToUpper(strings.ReplaceAll(code, "-", "")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	text := string(body)
+
+	if !strings.Contains(text, "Simpan link ini") {
+		t.Error("expected the save-this-link banner")
+	}
+	if !strings.Contains(text, "/p/"+code) {
+		t.Errorf("expected the banner to show the canonical %q spelling, not what was typed", code)
+	}
+	if strings.Contains(text, "/p/"+strings.ToUpper(strings.ReplaceAll(code, "-", ""))) {
+		t.Error("no link on the page should echo the sloppy spelling the parent typed")
+	}
+}
+
+// Locks in the decision to stop shouting "Terlambat" at parents: state the
+// due date and let them draw the conclusion.
+func TestPortalIndex_PastDueInvoice_ShowsDueDateNotOverdueBadge(t *testing.T) {
+	ts, db := publicTestServer(t)
+	contactID := mustContact(t, db, "Past Due Kid", "081414141414")
+	invID := mustInvoice(t, db, contactID)
+	if err := model.SendInvoice(db, invID, 1); err != nil {
+		t.Fatalf("send invoice: %v", err)
+	}
+	if _, err := db.Exec("UPDATE invoices SET due_date = '2020-01-15' WHERE id = ?", invID); err != nil {
+		t.Fatalf("backdate due date: %v", err)
+	}
+
+	code, _ := model.GetOrCreatePortalCode(db, contactID)
+	resp, err := http.Get(ts.URL + "/p/" + code)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	text := string(body)
+
+	if strings.Contains(text, "Terlambat") {
+		t.Error("the overdue badge should no longer be shown to parents")
+	}
+	if !strings.Contains(text, "Jatuh tempo") {
+		t.Error("expected the due date to be shown on an unpaid invoice")
+	}
+}
+
+func TestSaveContactPortalCode_StoresEditedCode(t *testing.T) {
+	ts, db := testServer(t)
+	cookies := loginAsAdmin(t, ts)
+	contactID := mustContact(t, db, "Edit Code", "081111111111")
+
+	req, _ := requestWithCookies(db, "POST", ts.URL+"/contacts/"+strconv.Itoa(contactID)+"/portal-code",
+		cookies, "portal_code=budi-kelas2b")
+	resp, err := noRedirectClient().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", resp.StatusCode)
+	}
+
+	var got string
+	db.QueryRow("SELECT portal_code FROM contacts WHERE id = ?", contactID).Scan(&got)
+	if got != "budi-kelas2b" {
+		t.Errorf("portal_code = %q, want the edited value", got)
+	}
+}
+
+// A taken code must leave the contact's existing link untouched.
+func TestSaveContactPortalCode_TakenCodeLeavesExistingIntact(t *testing.T) {
+	ts, db := testServer(t)
+	cookies := loginAsAdmin(t, ts)
+	first := mustContact(t, db, "First Kid", "081111111111")
+	second := mustContact(t, db, "Second Kid", "082222222222")
+
+	model.SetPortalCode(db, first, "shared-777")
+	original, _ := model.GetOrCreatePortalCode(db, second)
+
+	req, _ := requestWithCookies(db, "POST", ts.URL+"/contacts/"+strconv.Itoa(second)+"/portal-code",
+		cookies, "portal_code=shared777")
+	resp, err := noRedirectClient().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	var got string
+	db.QueryRow("SELECT portal_code FROM contacts WHERE id = ?", second).Scan(&got)
+	if got != original {
+		t.Errorf("a rejected edit must not change the code: got %q, want %q", got, original)
+	}
+}
+
+// Editing the code is admin-only: a weak code weakens an unauthenticated
+// portal, so a non-admin must be refused by the server, not just the UI.
+func TestSaveContactPortalCode_NonAdminForbidden(t *testing.T) {
+	ts, db := testServer(t)
+	cookies := loginAsViewer(t, ts, db)
+	contactID := mustContact(t, db, "Guarded Kid", "081111111111")
+	original, _ := model.GetOrCreatePortalCode(db, contactID)
+
+	req, _ := requestWithCookies(db, "POST", ts.URL+"/contacts/"+strconv.Itoa(contactID)+"/portal-code",
+		cookies, "portal_code=easy-guess")
+	resp, err := noRedirectClient().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusForbidden {
+		t.Errorf("expected 403 for a non-admin, got %d", resp.StatusCode)
+	}
+	var got string
+	db.QueryRow("SELECT portal_code FROM contacts WHERE id = ?", contactID).Scan(&got)
+	if got != original {
+		t.Errorf("non-admin changed the code: got %q, want %q", got, original)
+	}
+}
+
+func TestContactEditPage_HidesCodeEditorFromNonAdmin(t *testing.T) {
+	ts, db := testServer(t)
+	cookies := loginAsViewer(t, ts, db)
+	contactID := mustContact(t, db, "Viewer Sees", "081111111111")
+	model.GetOrCreatePortalCode(db, contactID)
+
+	req, _ := requestWithCookies(db, "GET", ts.URL+"/contacts/"+strconv.Itoa(contactID)+"/edit", cookies, "")
+	resp, err := noRedirectClient().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	text := string(body)
+
+	if strings.Contains(text, "Simpan Link Baru") || strings.Contains(text, `name="portal_code"`) {
+		t.Error("non-admin should not see the portal-code editor")
+	}
+	if !strings.Contains(text, "/p/") {
+		t.Error("non-admin should still see the read-only portal link")
 	}
 }

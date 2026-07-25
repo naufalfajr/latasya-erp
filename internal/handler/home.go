@@ -14,7 +14,7 @@ type homeData struct {
 
 // PublicHome is the bare-domain landing page: a read-only company profile
 // for anyone who lands there without an invoice link, plus a discreet path
-// to staff login. Parents reach their bill via their own /i/{token} link,
+// to staff login. Parents reach their invoices via their own /p/{code} link,
 // never through this page.
 func (h *Handler) PublicHome(w http.ResponseWriter, r *http.Request) {
 	company, err := model.GetCompanyProfile(h.DB)

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -154,8 +155,8 @@ func (h *Handler) EditContact(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var portalURL string
-	if contact.PortalToken != "" {
-		portalURL = h.publicOrigin(r) + "/i/" + contact.PortalToken
+	if contact.PortalCode != "" {
+		portalURL = h.publicOrigin(r) + "/p/" + contact.PortalCode
 	}
 
 	h.render(w, r, "templates/contacts/form.html", "Edit Contact", contactFormData{
@@ -258,10 +259,9 @@ func (h *Handler) UpdateContact(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, h.BasePath+"/contacts", http.StatusSeeOther)
 }
 
-// ResetContactPortalToken issues the contact a fresh parent-portal link,
-// invalidating whatever link (if any) was issued before it — for a
-// suspected leak, or simply to generate the first one.
-func (h *Handler) ResetContactPortalToken(w http.ResponseWriter, r *http.Request) {
+// SaveContactPortalCode stores a staff-edited portal code, or generates one
+// when the field is left blank. Either way the previous link stops working.
+func (h *Handler) SaveContactPortalCode(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		http.NotFound(w, r)
@@ -274,16 +274,22 @@ func (h *Handler) ResetContactPortalToken(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if _, err := model.RegeneratePortalToken(h.DB, id); err != nil {
+	code, err := model.SetPortalCode(h.DB, id, r.FormValue("portal_code"))
+	switch {
+	case errors.Is(err, model.ErrPortalCodeTaken):
+		h.setFlash(w, "Link itu sudah dipakai kontak lain. Coba yang lain.")
+	case err != nil:
 		h.setFlash(w, "Error: "+err.Error())
-	} else {
+	default:
 		audit.Log(r.Context(), h.DB, audit.Event{
+			// Name predates codes; kept so old audit rows stay queryable.
 			Action:      "contact.portal_token_reset",
 			TargetType:  "contact",
 			TargetID:    int64(id),
 			TargetLabel: contact.Name,
+			Metadata:    map[string]any{"before": contact.PortalCode, "after": code},
 		})
-		h.setFlash(w, "Link portal baru berhasil dibuat")
+		h.setFlash(w, "Link portal berhasil disimpan: "+code)
 	}
 	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/contacts/%d/edit", id), http.StatusSeeOther)
 }
