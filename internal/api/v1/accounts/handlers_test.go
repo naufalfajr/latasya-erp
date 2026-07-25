@@ -381,6 +381,24 @@ func TestUpdateAccount(t *testing.T) {
 		}
 	})
 
+	t.Run("omitted is_cash still rejects conflicting type changes", func(t *testing.T) {
+		body := map[string]any{
+			"code": "UPD-1", "name": "Invalid Cash", "account_type": "liability", "normal_balance": "credit",
+		}
+		resp := doRequest(t, ts, http.MethodPut, fmt.Sprintf("/api/v1/accounts/%d", testID), token, body)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusUnprocessableEntity {
+			t.Fatalf("expected 422, got %d", resp.StatusCode)
+		}
+		var errEnv v1.ErrorEnvelope
+		if err := json.NewDecoder(resp.Body).Decode(&errEnv); err != nil {
+			t.Fatal(err)
+		}
+		if errEnv.Fields["is_cash"] == "" {
+			t.Fatal("expected clear is_cash validation error")
+		}
+	})
+
 	t.Run("missing account returns 404", func(t *testing.T) {
 		body := map[string]any{
 			"code":           "X",

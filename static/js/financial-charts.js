@@ -97,10 +97,16 @@
             tooltip: `<strong>${row.month}${row.is_partial ? " MTD" : ""}</strong><br>Revenue: ${money.format(row.revenue)}<br>Expenses: ${money.format(row.expenses)}<br>Net income: ${money.format(row.net_income)}`
         }));
         plot(el, 320, rows, [rows.map(r => r.revenue), rows.map(r => r.expenses), rows.map(r => r.net_income)], (svg, p) => {
+            const defs = svgNode("defs");
+            const pattern = svgNode("pattern", {id: "expense-hatch", width: 8, height: 8, patternUnits: "userSpaceOnUse"});
+            pattern.appendChild(svgNode("rect", {width: 8, height: 8, fill: colors.expense}));
+            pattern.appendChild(svgNode("path", {d: "M-2,2 L2,-2 M0,8 L8,0 M6,10 L10,6", stroke: "#ffffff", "stroke-width": 2}));
+            defs.appendChild(pattern);
+            svg.appendChild(defs);
             const step = p.innerW / rows.length;
             const barW = Math.max(3, Math.min(18, step * 0.28));
             rows.forEach((row, i) => {
-                [[row.revenue, -barW, colors.revenue], [row.expenses, 0, colors.expense]].forEach(([value, offset, fill]) => {
+                [[row.revenue, -barW, colors.revenue], [row.expenses, 0, "url(#expense-hatch)"]].forEach(([value, offset, fill]) => {
                     svg.appendChild(svgNode("rect", {x: p.x(i) + offset, y: Math.min(p.y(value), p.zero), width: barW, height: Math.max(1, Math.abs(p.y(value) - p.zero)), fill}));
                 });
             });
@@ -108,7 +114,7 @@
             svg.appendChild(svgNode("polyline", {points, fill: "none", stroke: colors.line, "stroke-width": 3}));
             rows.forEach((row, i) => svg.appendChild(svgNode("circle", {cx: p.x(i), cy: p.y(row.net_income), r: 4, fill: colors.line})));
         }, row => reportURL(basePath, "profit-loss", row), "Profit & Loss report");
-        el.prepend(legend("Revenue: solid bars · Expenses: solid bars · Net income: line with circle points"));
+        el.prepend(legend("Revenue: solid bars · Expenses: diagonally striped bars · Net income: line with circle points"));
     }
 
     function cashPosition(el, trends, basePath) {

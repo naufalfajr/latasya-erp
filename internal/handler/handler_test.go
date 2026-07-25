@@ -1346,14 +1346,16 @@ func TestDashboard_WithData(t *testing.T) {
 func TestDashboard_InvalidMonthRange(t *testing.T) {
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
-	req, _ := requestWithCookies(db, "GET", ts.URL+"/?months=18", cookies, "")
-	resp, err := (&http.Client{}).Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", resp.StatusCode)
+	for _, query := range []string{"?months=18", "?months="} {
+		req, _ := requestWithCookies(db, "GET", ts.URL+"/"+query, cookies, "")
+		resp, err := (&http.Client{}).Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Errorf("%s: expected 400, got %d", query, resp.StatusCode)
+		}
 	}
 }
 

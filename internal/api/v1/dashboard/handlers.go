@@ -52,7 +52,8 @@ type monthlyTrendResp struct {
 }
 
 func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
-	months, err := model.ParseDashboardMonths(r.URL.Query().Get("months"))
+	query := r.URL.Query()
+	months, err := model.ParseDashboardMonths(query.Get("months"), query.Has("months"))
 	if err != nil {
 		v1.WriteError(w, r, http.StatusBadRequest, v1.CodeInvalidRequest, err.Error(), map[string]string{
 			"months": "must be one of: 6, 12, 24",

@@ -198,8 +198,7 @@ components:
           default: true
         is_cash:
           type: boolean
-          default: false
-          description: Classify as Cash/Bank. Valid only when account_type is asset and normal_balance is debit.
+          description: Classify as Cash/Bank. Valid only when account_type is asset and normal_balance is debit. Omission defaults to false on create and preserves the current classification on update.
 
     Meta:
       type: object

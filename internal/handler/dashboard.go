@@ -20,7 +20,8 @@ type dashboardPageData struct {
 }
 
 func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
-	months, err := model.ParseDashboardMonths(r.URL.Query().Get("months"))
+	query := r.URL.Query()
+	months, err := model.ParseDashboardMonths(query.Get("months"), query.Has("months"))
 	if err != nil {
 		http.Error(w, "Invalid months parameter: use 6, 12, or 24", http.StatusBadRequest)
 		return

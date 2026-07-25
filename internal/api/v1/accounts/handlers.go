@@ -251,6 +251,12 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		IsSystem:      existing.IsSystem,
 		ParentID:      existing.ParentID,
 	}
+	if err := model.ValidateCashAccount(a); err != nil {
+		v1.WriteError(w, r, http.StatusUnprocessableEntity, v1.CodeValidationFailed, "validation failed", map[string]string{
+			"is_cash": err.Error(),
+		})
+		return
+	}
 
 	if err := model.UpdateAccount(h.DB, a); err != nil {
 		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to update account", nil)

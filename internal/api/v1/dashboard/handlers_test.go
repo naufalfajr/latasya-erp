@@ -151,10 +151,12 @@ func TestGetDashboard(t *testing.T) {
 	})
 
 	t.Run("unsupported range returns 400", func(t *testing.T) {
-		resp := doReqPath(t, ts, tok, "/api/v1/dashboard?months=18")
-		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusBadRequest {
-			t.Fatalf("expected 400, got %d", resp.StatusCode)
+		for _, query := range []string{"?months=18", "?months="} {
+			resp := doReqPath(t, ts, tok, "/api/v1/dashboard"+query)
+			resp.Body.Close()
+			if resp.StatusCode != http.StatusBadRequest {
+				t.Errorf("%s: expected 400, got %d", query, resp.StatusCode)
+			}
 		}
 	})
 }

@@ -49,8 +49,8 @@ func BusinessNow() time.Time {
 	return time.Now().In(jakartaLocation)
 }
 
-func ParseDashboardMonths(raw string) (int, error) {
-	if raw == "" {
+func ParseDashboardMonths(raw string, present bool) (int, error) {
+	if !present {
 		return 12, nil
 	}
 	months, err := strconv.Atoi(raw)
