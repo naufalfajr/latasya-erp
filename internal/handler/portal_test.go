@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
 	"strings"
 	"testing"
@@ -284,6 +285,13 @@ func TestInvoiceWhatsApp_Sent_RedirectsToWALink(t *testing.T) {
 	}
 	if !strings.Contains(loc, token.String) {
 		t.Error("expected the wa.me message to include the contact's portal link")
+	}
+	decoded, err := url.QueryUnescape(loc)
+	if err != nil {
+		t.Fatalf("decode WhatsApp redirect: %v", err)
+	}
+	if !strings.Contains(decoded, "Halo, kami dari Antar Jemput Latasya. Berikut link invoice layanan antar jemput Ananda WA Sent") {
+		t.Errorf("expected selected WhatsApp template, got %q", decoded)
 	}
 }
 

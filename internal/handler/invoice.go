@@ -443,7 +443,7 @@ func (h *Handler) InvoiceWhatsApp(w http.ResponseWriter, r *http.Request) {
 	}
 
 	portalURL := h.publicOrigin(r) + "/i/" + token
-	message := fmt.Sprintf("Halo %s, berikut link tagihan Antar Jemput (%s): %s", contact.Name, inv.InvoiceNumber, portalURL)
+	message := fmt.Sprintf("Halo, kami dari Antar Jemput Latasya. Berikut link invoice layanan antar jemput Ananda %s (%s): %s", contact.Name, inv.InvoiceNumber, portalURL)
 	http.Redirect(w, r, buildWALink(contact.Phone, message), http.StatusFound)
 }
 
