@@ -445,8 +445,8 @@ func (h *Handler) InvoiceWhatsApp(w http.ResponseWriter, r *http.Request) {
 	portalURL := h.publicOrigin(r) + "/p/" + code
 	message := fmt.Sprintf(
 		"Halo, kami dari Antar Jemput Latasya. Berikut link invoice Ananda %s (%s):\n%s\n\n"+
-			"Link ini akan terus aktif sesuai masa keikutsertaan antar jemput, "+
-			"link berisi invoice terbaru. Terima kasih",
+			"Link berisi daftar invoice dan akan terus aktif sesuai masa keikutsertaan antar jemput, "+
+			"Terima kasih",
 		contact.Name, inv.InvoiceNumber, portalURL)
 	http.Redirect(w, r, buildWALink(contact.Phone, message), http.StatusFound)
 }
