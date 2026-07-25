@@ -34,13 +34,13 @@ type dashboardResp struct {
 	OutstandingInvoices string                  `json:"outstanding_invoices"`
 	OutstandingBills    string                  `json:"outstanding_bills"`
 	RecentTransactions  []recentTransactionResp `json:"recent_transactions"`
-	Months              int                     `json:"months"`
+	Granularity         string                  `json:"granularity"`
 	AsOf                string                  `json:"as_of"`
-	MonthlyTrends       []monthlyTrendResp      `json:"monthly_trends"`
+	Trends              []periodTrendResp       `json:"trends"`
 }
 
-type monthlyTrendResp struct {
-	Month           string  `json:"month"`
+type periodTrendResp struct {
+	Label           string  `json:"label"`
 	StartDate       string  `json:"start_date"`
 	EndDate         string  `json:"end_date"`
 	IsPartial       bool    `json:"is_partial"`
@@ -53,14 +53,14 @@ type monthlyTrendResp struct {
 
 func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
-	months, err := model.ParseDashboardMonths(query.Get("months"), query.Has("months"))
+	granularity, err := model.ParseDashboardGranularity(query.Get("granularity"), query.Has("granularity"))
 	if err != nil {
 		v1.WriteError(w, r, http.StatusBadRequest, v1.CodeInvalidRequest, err.Error(), map[string]string{
-			"months": "must be one of: 6, 12, 24",
+			"granularity": "must be one of: monthly, quarterly",
 		})
 		return
 	}
-	data, err := model.GetDashboardDataAt(h.DB, months, model.BusinessNow())
+	data, err := model.GetDashboardDataAt(h.DB, granularity, model.BusinessNow())
 	if err != nil {
 		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to get dashboard data", nil)
 		return
@@ -74,9 +74,9 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		OutstandingInvoices: idr(data.OutstandingInvoices),
 		OutstandingBills:    idr(data.OutstandingBills),
 		RecentTransactions:  make([]recentTransactionResp, 0, len(data.RecentTransactions)),
-		Months:              data.Months,
+		Granularity:         data.Granularity,
 		AsOf:                data.AsOf,
-		MonthlyTrends:       make([]monthlyTrendResp, 0, len(data.MonthlyTrends)),
+		Trends:              make([]periodTrendResp, 0, len(data.Trends)),
 	}
 	for _, t := range data.RecentTransactions {
 		resp.RecentTransactions = append(resp.RecentTransactions, recentTransactionResp{
@@ -88,9 +88,9 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 			SourceType:  t.SourceType,
 		})
 	}
-	for _, trend := range data.MonthlyTrends {
-		resp.MonthlyTrends = append(resp.MonthlyTrends, monthlyTrendResp{
-			Month: trend.Month, StartDate: trend.StartDate, EndDate: trend.EndDate,
+	for _, trend := range data.Trends {
+		resp.Trends = append(resp.Trends, periodTrendResp{
+			Label: trend.Label, StartDate: trend.StartDate, EndDate: trend.EndDate,
 			IsPartial: trend.IsPartial, Revenue: idr(trend.Revenue),
 			Expenses: idr(trend.Expenses), NetIncome: idr(trend.NetIncome),
 			NetCashMovement: idrPtr(trend.NetCashMovement), ClosingCash: idrPtr(trend.ClosingCash),

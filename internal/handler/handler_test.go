@@ -1333,20 +1333,27 @@ func TestDashboard_WithData(t *testing.T) {
 	}
 	body := readBody(t, resp)
 	for _, want := range []string{
-		"Monthly Profitability", "Cash Position", "financial-charts.js",
-		"View exact monthly values", "/reports/profit-loss?from=", "/reports/cash-flow?from=",
-		"MTD through", "?months=6", "?months=12", "?months=24",
+		"Profitability Trend", "Cash Position", "financial-charts.js",
+		"View exact values", "/reports/profit-loss?from=", "/reports/cash-flow?from=",
+		"?granularity=monthly", "?granularity=quarterly",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("dashboard should contain %q", want)
 		}
 	}
+	for _, unwanted := range []string{
+		"MTD through", "Latest completed-month net income", "Latest completed-month closing cash",
+	} {
+		if strings.Contains(body, unwanted) {
+			t.Errorf("dashboard should no longer contain %q", unwanted)
+		}
+	}
 }
 
-func TestDashboard_InvalidMonthRange(t *testing.T) {
+func TestDashboard_InvalidGranularity(t *testing.T) {
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
-	for _, query := range []string{"?months=18", "?months="} {
+	for _, query := range []string{"?granularity=weekly", "?granularity="} {
 		req, _ := requestWithCookies(db, "GET", ts.URL+"/"+query, cookies, "")
 		resp, err := (&http.Client{}).Do(req)
 		if err != nil {
@@ -1374,8 +1381,5 @@ func TestDashboard_NoCashConfigurationWarning(t *testing.T) {
 	body := readBody(t, resp)
 	if !strings.Contains(body, "Cash figures are unavailable") || !strings.Contains(body, "Configure accounts") {
 		t.Fatal("expected administrator cash configuration warning and link")
-	}
-	if got := strings.Count(body, "Not enough history"); got != 2 {
-		t.Fatalf("brand-new ledger should show two insufficient-history signals, got %d", got)
 	}
 }

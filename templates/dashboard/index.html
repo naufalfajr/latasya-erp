@@ -46,14 +46,10 @@
 
 <section class="mb-6" aria-labelledby="financial-history-heading">
     <div class="flex flex-wrap items-end justify-between gap-4 mb-4">
-        <div>
-            <h2 id="financial-history-heading" class="text-xl font-bold">Financial history</h2>
-            <p class="text-sm opacity-70">Current month is MTD through {{formatDate $d.AsOf}} (Asia/Jakarta).</p>
-        </div>
-        <nav class="join" aria-label="Financial history range">
-            <a class="btn btn-sm join-item {{if eq $d.Months 6}}btn-primary{{end}}" href="?months=6">6 months</a>
-            <a class="btn btn-sm join-item {{if eq $d.Months 12}}btn-primary{{end}}" href="?months=12">12 months</a>
-            <a class="btn btn-sm join-item {{if eq $d.Months 24}}btn-primary{{end}}" href="?months=24">24 months</a>
+        <h2 id="financial-history-heading" class="text-xl font-bold">Financial history</h2>
+        <nav class="join" aria-label="Financial history granularity">
+            <a class="btn btn-sm join-item {{if eq $d.Granularity "monthly"}}btn-primary{{end}}" href="?granularity=monthly">Monthly</a>
+            <a class="btn btn-sm join-item {{if eq $d.Granularity "quarterly"}}btn-primary{{end}}" href="?granularity=quarterly">Quarterly</a>
         </nav>
     </div>
 
@@ -63,40 +59,23 @@
         {{if $.User.IsAdmin}}<a class="btn btn-sm" href="{{$.BasePath}}/accounts">Configure accounts</a>{{end}}
     </div>
     {{end}}
-
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div class="stat bg-base-100 rounded-box shadow p-4">
-            <div class="stat-title">Latest completed-month net income</div>
-            {{if $d.NetIncomeSignal.Available}}
-            <div class="stat-value text-lg font-mono {{if $d.NetIncomeSignal.Negative}}text-error{{else}}text-success{{end}}">{{formatIDR $d.NetIncomeSignal.Current}}</div>
-            <div class="stat-desc">Change from preceding month: {{formatIDR $d.NetIncomeSignal.Difference}}</div>
-            {{else}}<div class="stat-desc">Not enough history</div>{{end}}
-        </div>
-        <div class="stat bg-base-100 rounded-box shadow p-4">
-            <div class="stat-title">Latest completed-month closing cash</div>
-            {{if $d.CashSignal.Available}}
-            <div class="stat-value text-lg font-mono {{if $d.CashSignal.Negative}}text-error{{end}}">{{formatIDR $d.CashSignal.Current}}</div>
-            <div class="stat-desc">Change from preceding month: {{formatIDR $d.CashSignal.Difference}}</div>
-            {{else}}<div class="stat-desc">Not enough history</div>{{end}}
-        </div>
-    </div>
 </section>
 
 <section class="card bg-base-100 shadow mb-6" aria-labelledby="profitability-heading">
     <div class="card-body">
         <div>
-            <h2 id="profitability-heading" class="card-title">Monthly Profitability</h2>
-            <p class="text-sm opacity-70">Accrual revenue, expenses, and net income on one IDR scale.</p>
+            <h2 id="profitability-heading" class="card-title">Profitability Trend</h2>
+            <p class="text-sm opacity-70">Accrual revenue, expenses, and net income for the last 6 {{if eq $d.Granularity "quarterly"}}quarters{{else}}months{{end}}, on one IDR scale.</p>
         </div>
-        <div id="profitability-chart" class="w-full min-h-72" role="group" aria-label="Interactive monthly revenue and expense bars with net income line"></div>
+        <div id="profitability-chart" class="w-full min-h-80" role="group" aria-label="Interactive revenue and expense bars with a net income line, one bar group per period"></div>
         <details>
-            <summary class="cursor-pointer font-medium">View exact monthly values</summary>
+            <summary class="cursor-pointer font-medium">View exact values</summary>
             <div class="overflow-x-auto mt-3">
                 <table class="table table-sm">
-                    <thead><tr><th>Month</th><th class="text-right">Revenue</th><th class="text-right">Expenses</th><th class="text-right">Net income</th></tr></thead>
-                    <tbody>{{range $d.MonthlyTrends}}
+                    <thead><tr><th>Period</th><th class="text-right">Revenue</th><th class="text-right">Expenses</th><th class="text-right">Net income</th></tr></thead>
+                    <tbody>{{range $d.Trends}}
                         <tr>
-                            <td><a class="link" href="{{$.BasePath}}/reports/profit-loss?from={{.StartDate}}&to={{.EndDate}}">{{.Month}}{{if .IsPartial}} MTD{{end}}</a></td>
+                            <td><a class="link" href="{{$.BasePath}}/reports/profit-loss?from={{.StartDate}}&to={{.EndDate}}">{{.Label}}{{if .IsPartial}} (in progress){{end}}</a></td>
                             <td class="text-right font-mono">{{formatIDR .Revenue}}</td>
                             <td class="text-right font-mono">{{formatIDR .Expenses}}</td>
                             <td class="text-right font-mono {{if lt .NetIncome 0}}text-error{{end}}">{{formatIDR .NetIncome}}</td>
@@ -112,19 +91,19 @@
     <div class="card-body">
         <div>
             <h2 id="cash-position-heading" class="card-title">Cash Position</h2>
-            <p class="text-sm opacity-70">Closing cash and net movement use synchronized month labels and separate scales.</p>
+            <p class="text-sm opacity-70">Closing cash and net movement for the last 6 {{if eq $d.Granularity "quarterly"}}quarters{{else}}months{{end}}, on synchronized period labels.</p>
         </div>
         {{if $d.CashConfigured}}
-        <div id="cash-chart" class="w-full min-h-96" role="group" aria-label="Interactive closing cash line above monthly net cash movement bars"></div>
+        <div id="cash-chart" class="w-full min-h-96" role="group" aria-label="Interactive closing cash line above net cash movement bars, one bar per period"></div>
         {{end}}
         <details>
-            <summary class="cursor-pointer font-medium">View exact monthly values</summary>
+            <summary class="cursor-pointer font-medium">View exact values</summary>
             <div class="overflow-x-auto mt-3">
                 <table class="table table-sm">
-                    <thead><tr><th>Month</th><th class="text-right">Closing cash</th><th class="text-right">Net cash movement</th></tr></thead>
-                    <tbody>{{range $d.MonthlyTrends}}
+                    <thead><tr><th>Period</th><th class="text-right">Closing cash</th><th class="text-right">Net cash movement</th></tr></thead>
+                    <tbody>{{range $d.Trends}}
                         <tr>
-                            <td><a class="link" href="{{$.BasePath}}/reports/cash-flow?from={{.StartDate}}&to={{.EndDate}}">{{.Month}}{{if .IsPartial}} MTD{{end}}</a></td>
+                            <td><a class="link" href="{{$.BasePath}}/reports/cash-flow?from={{.StartDate}}&to={{.EndDate}}">{{.Label}}{{if .IsPartial}} (in progress){{end}}</a></td>
                             {{if $d.CashConfigured}}
                             <td class="text-right font-mono {{if isNegative .ClosingCash}}text-error{{end}}">{{formatIDR .ClosingCash}}</td>
                             <td class="text-right font-mono">{{formatIDR .NetCashMovement}}</td>
@@ -165,13 +144,23 @@
     </div>
 </div>
 
-<script src="/static/js/financial-charts.js"></script>
 <script>
 (() => {
-    const trends = {{toJSON $d.MonthlyTrends}};
+    const trends = {{toJSON $d.Trends}};
     const basePath = {{toJSON $.BasePath}};
-    FinancialCharts.profitability(document.getElementById("profitability-chart"), trends, basePath);
-    {{if $d.CashConfigured}}FinancialCharts.cashPosition(document.getElementById("cash-chart"), trends, basePath);{{end}}
+
+    function initCharts() {
+        const profitEl = document.getElementById("profitability-chart");
+        if (!profitEl) return;
+        FinancialCharts.profitability(profitEl, trends, basePath);
+        {{if $d.CashConfigured}}FinancialCharts.cashPosition(document.getElementById("cash-chart"), trends, basePath);{{end}}
+    }
+
+    // The sidebar nav is hx-boost'd (swaps document.body innerHTML), which
+    // does not fire DOMContentLoaded on the way back to this page — hook
+    // htmx's own lifecycle event too, same pattern as invoices/index.html.
+    document.addEventListener("DOMContentLoaded", initCharts);
+    document.addEventListener("htmx:load", initCharts);
 })();
 </script>
 {{end}}

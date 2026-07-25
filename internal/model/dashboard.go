@@ -3,11 +3,12 @@ package model
 import (
 	"database/sql"
 	"fmt"
-	"strconv"
 	"time"
 )
 
 var jakartaLocation = time.FixedZone("Asia/Jakarta", 7*60*60)
+
+const dashboardPeriods = 6
 
 type DashboardData struct {
 	CashBalance         *int                `json:"cash_balance"`
@@ -17,15 +18,15 @@ type DashboardData struct {
 	OutstandingInvoices int                 `json:"outstanding_invoices"`
 	OutstandingBills    int                 `json:"outstanding_bills"`
 	RecentTransactions  []RecentTransaction `json:"recent_transactions"`
-	Months              int                 `json:"months"`
+	Granularity         string              `json:"granularity"`
 	AsOf                string              `json:"as_of"`
-	MonthlyTrends       []MonthlyTrend      `json:"monthly_trends"`
-	ProfitHistoryStart  string              `json:"-"`
-	CashHistoryStart    string              `json:"-"`
+	Trends              []PeriodTrend       `json:"trends"`
 }
 
-type MonthlyTrend struct {
-	Month           string `json:"month"`
+// PeriodTrend summarizes one monthly or quarterly period. The final entry can
+// be an in-progress (partial) period.
+type PeriodTrend struct {
+	Label           string `json:"label"`
 	StartDate       string `json:"start_date"`
 	EndDate         string `json:"end_date"`
 	IsPartial       bool   `json:"is_partial"`
@@ -34,6 +35,21 @@ type MonthlyTrend struct {
 	NetIncome       int    `json:"net_income"`
 	NetCashMovement *int   `json:"net_cash_movement"`
 	ClosingCash     *int   `json:"closing_cash"`
+}
+
+// monthTrend is the raw calendar-month building block that PeriodTrend rows
+// are aggregated from (one-to-one for monthly granularity, three-to-one for
+// quarterly).
+type monthTrend struct {
+	Month           string
+	StartDate       string
+	EndDate         string
+	IsPartial       bool
+	Revenue         int
+	Expenses        int
+	NetIncome       int
+	NetCashMovement *int
+	ClosingCash     *int
 }
 
 type RecentTransaction struct {
@@ -49,69 +65,58 @@ func BusinessNow() time.Time {
 	return time.Now().In(jakartaLocation)
 }
 
-func ParseDashboardMonths(raw string, present bool) (int, error) {
+// ParseDashboardGranularity validates the dashboard's period-size query
+// parameter, defaulting to "monthly" when absent.
+func ParseDashboardGranularity(raw string, present bool) (string, error) {
 	if !present {
-		return 12, nil
+		return "monthly", nil
 	}
-	months, err := strconv.Atoi(raw)
-	if err != nil || (months != 6 && months != 12 && months != 24) {
-		return 0, fmt.Errorf("unsupported dashboard range")
+	if raw != "monthly" && raw != "quarterly" {
+		return "", fmt.Errorf("unsupported dashboard granularity")
 	}
-	return months, nil
+	return raw, nil
 }
 
 func GetDashboardData(db *sql.DB) (*DashboardData, error) {
-	return GetDashboardDataAt(db, 12, BusinessNow())
+	return GetDashboardDataAt(db, "monthly", BusinessNow())
 }
 
 // GetDashboardDataAt returns dashboard values through the supplied instant,
-// interpreted in the Asia/Jakarta business timezone.
-func GetDashboardDataAt(db *sql.DB, months int, at time.Time) (*DashboardData, error) {
-	if months < 1 {
-		return nil, fmt.Errorf("months must be positive")
+// interpreted in the Asia/Jakarta business timezone. It always returns the
+// most recent dashboardPeriods periods (monthly or quarterly), including the
+// current in-progress period.
+func GetDashboardDataAt(db *sql.DB, granularity string, at time.Time) (*DashboardData, error) {
+	bucketSize := 1
+	if granularity == "quarterly" {
+		bucketSize = 3
 	}
 	asOf := at.In(jakartaLocation)
 	asOfDate := asOf.Format("2006-01-02")
-	currentStart := time.Date(asOf.Year(), asOf.Month(), 1, 0, 0, 0, 0, jakartaLocation)
-	rangeStart := currentStart.AddDate(0, -(months - 1), 0)
+	currentMonthStart := time.Date(asOf.Year(), asOf.Month(), 1, 0, 0, 0, 0, jakartaLocation)
+	// The current (possibly in-progress) bucket may only have its first few
+	// calendar months elapsed so far; count those, then add whole buckets for
+	// the rest, so rangeStart always lands on a bucket boundary (a calendar
+	// quarter start, for quarterly) instead of a trailing N-month window.
+	monthsElapsed := (int(asOf.Month())-1)%bucketSize + 1
+	monthsNeeded := (dashboardPeriods-1)*bucketSize + monthsElapsed
+	rangeStart := currentMonthStart.AddDate(0, -(monthsNeeded - 1), 0)
 
 	d := &DashboardData{
-		Months: months,
-		AsOf:   asOfDate,
+		Granularity: granularity,
+		AsOf:        asOfDate,
 	}
-	trends, cashConfigured, err := monthlyFinancialTrends(db, rangeStart, asOf, months)
+	months, cashConfigured, err := monthlyFinancialTrends(db, rangeStart, asOf, monthsNeeded)
 	if err != nil {
 		return nil, err
 	}
-	d.MonthlyTrends = trends
+	d.Trends = groupIntoPeriods(months, bucketSize, cashConfigured)
 	d.CashConfigured = cashConfigured
 	if cashConfigured {
-		d.CashBalance = trends[len(trends)-1].ClosingCash
+		d.CashBalance = d.Trends[len(d.Trends)-1].ClosingCash
 	}
-	current := trends[len(trends)-1]
+	current := d.Trends[len(d.Trends)-1]
 	d.MonthlyRevenue = current.Revenue
 	d.MonthlyExpenses = current.Expenses
-	if err := db.QueryRow(`
-		SELECT COALESCE(MIN(je.entry_date), '')
-		FROM journal_entries je
-		JOIN journal_lines jl ON jl.entry_id = je.id
-		JOIN accounts a ON a.id = jl.account_id
-		WHERE je.is_posted = 1 AND je.entry_date <= ?
-			AND a.account_type IN ('revenue', 'expense')
-	`, asOfDate).Scan(&d.ProfitHistoryStart); err != nil {
-		return nil, fmt.Errorf("profitability history: %w", err)
-	}
-	if cashConfigured {
-		if err := db.QueryRow(`
-			SELECT COALESCE(MIN(je.entry_date), '')
-			FROM journal_entries je
-			JOIN journal_lines jl ON jl.entry_id = je.id
-			JOIN accounts a ON a.id = jl.account_id AND a.is_cash = 1
-			WHERE je.is_posted = 1 AND je.entry_date <= ?
-		`, asOfDate).Scan(&d.CashHistoryStart); err != nil {
-			return nil, fmt.Errorf("cash history: %w", err)
-		}
-	}
 
 	if err := db.QueryRow(`
 		SELECT COALESCE(SUM(total - amount_paid), 0)
@@ -153,10 +158,60 @@ func GetDashboardDataAt(db *sql.DB, months int, at time.Time) (*DashboardData, e
 	return d, nil
 }
 
-func monthlyFinancialTrends(db *sql.DB, rangeStart, asOf time.Time, months int) ([]MonthlyTrend, bool, error) {
+// groupIntoPeriods aggregates consecutive calendar months into bucketSize-wide
+// periods (1 = monthly, 3 = quarterly). The final bucket may hold fewer than
+// bucketSize months when the current quarter has just started.
+func groupIntoPeriods(months []monthTrend, bucketSize int, cashConfigured bool) []PeriodTrend {
+	periods := make([]PeriodTrend, 0, dashboardPeriods)
+	i := 0
+	for len(periods) < dashboardPeriods-1 {
+		periods = append(periods, aggregateBucket(months[i:i+bucketSize], bucketSize, cashConfigured))
+		i += bucketSize
+	}
+	periods = append(periods, aggregateBucket(months[i:], bucketSize, cashConfigured))
+	return periods
+}
+
+func aggregateBucket(bucket []monthTrend, bucketSize int, cashConfigured bool) PeriodTrend {
+	last := bucket[len(bucket)-1]
+	trend := PeriodTrend{
+		Label:     periodLabel(bucket, bucketSize),
+		StartDate: bucket[0].StartDate,
+		EndDate:   last.EndDate,
+		IsPartial: last.IsPartial,
+	}
+	for _, m := range bucket {
+		trend.Revenue += m.Revenue
+		trend.Expenses += m.Expenses
+		trend.NetIncome += m.NetIncome
+	}
+	if cashConfigured {
+		movement := 0
+		for _, m := range bucket {
+			movement += *m.NetCashMovement
+		}
+		trend.NetCashMovement = intPtr(movement)
+		trend.ClosingCash = intPtr(*last.ClosingCash)
+	}
+	return trend
+}
+
+func periodLabel(bucket []monthTrend, bucketSize int) string {
+	start, err := time.Parse("2006-01-02", bucket[0].StartDate)
+	if err != nil {
+		return bucket[0].Month
+	}
+	if bucketSize == 1 {
+		return start.Format("Jan 2006")
+	}
+	quarter := (int(start.Month())-1)/3 + 1
+	return fmt.Sprintf("Q%d %d", quarter, start.Year())
+}
+
+func monthlyFinancialTrends(db *sql.DB, rangeStart, asOf time.Time, months int) ([]monthTrend, bool, error) {
 	startDate := rangeStart.Format("2006-01-02")
 	asOfDate := asOf.Format("2006-01-02")
-	trends := make([]MonthlyTrend, months)
+	trends := make([]monthTrend, months)
 	monthIndex := make(map[string]int, months)
 	for i := range months {
 		start := rangeStart.AddDate(0, i, 0)
@@ -167,7 +222,7 @@ func monthlyFinancialTrends(db *sql.DB, rangeStart, asOf time.Time, months int) 
 			end = asOf
 		}
 		key := start.Format("2006-01")
-		trends[i] = MonthlyTrend{
+		trends[i] = monthTrend{
 			Month: key, StartDate: start.Format("2006-01-02"),
 			EndDate: end.Format("2006-01-02"), IsPartial: partial,
 		}

@@ -117,19 +117,19 @@ func TestGetDashboard(t *testing.T) {
 		}
 	})
 
-	t.Run("range defaults to 12 and accepts supported values", func(t *testing.T) {
-		for _, months := range []string{"", "6", "12", "24"} {
+	t.Run("granularity defaults to monthly and accepts supported values", func(t *testing.T) {
+		for _, granularity := range []string{"", "monthly", "quarterly"} {
 			path := "/api/v1/dashboard"
-			if months != "" {
-				path += "?months=" + months
+			if granularity != "" {
+				path += "?granularity=" + granularity
 			}
 			resp := doReqPath(t, ts, tok, path)
 			var env struct {
 				Data struct {
-					Months        int `json:"months"`
-					MonthlyTrends []struct {
+					Granularity string `json:"granularity"`
+					Trends      []struct {
 						Revenue string `json:"revenue"`
-					} `json:"monthly_trends"`
+					} `json:"trends"`
 				} `json:"data"`
 			}
 			if err := json.NewDecoder(resp.Body).Decode(&env); err != nil {
@@ -137,21 +137,21 @@ func TestGetDashboard(t *testing.T) {
 				t.Fatal(err)
 			}
 			resp.Body.Close()
-			want := 12
-			if months != "" {
-				fmt.Sscan(months, &want)
+			want := "monthly"
+			if granularity != "" {
+				want = granularity
 			}
-			if resp.StatusCode != http.StatusOK || env.Data.Months != want || len(env.Data.MonthlyTrends) != want {
-				t.Errorf("months=%q: status=%d data=%+v", months, resp.StatusCode, env.Data)
+			if resp.StatusCode != http.StatusOK || env.Data.Granularity != want || len(env.Data.Trends) != 6 {
+				t.Errorf("granularity=%q: status=%d data=%+v", granularity, resp.StatusCode, env.Data)
 			}
-			if len(env.Data.MonthlyTrends) > 0 && env.Data.MonthlyTrends[0].Revenue == "" {
-				t.Errorf("months=%q: trend currency fields must be strings", months)
+			if len(env.Data.Trends) > 0 && env.Data.Trends[0].Revenue == "" {
+				t.Errorf("granularity=%q: trend currency fields must be strings", granularity)
 			}
 		}
 	})
 
-	t.Run("unsupported range returns 400", func(t *testing.T) {
-		for _, query := range []string{"?months=18", "?months="} {
+	t.Run("unsupported granularity returns 400", func(t *testing.T) {
+		for _, query := range []string{"?granularity=weekly", "?granularity="} {
 			resp := doReqPath(t, ts, tok, "/api/v1/dashboard"+query)
 			resp.Body.Close()
 			if resp.StatusCode != http.StatusBadRequest {
