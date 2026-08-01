@@ -25,7 +25,7 @@ describe("migrateDatabase", () => {
     const databasePath = temporaryDatabasePath()
     const summary = await Effect.runPromise(migrateDatabase(databasePath))
 
-    expect(summary).toEqual({ applied: 22, total: 22 })
+    expect(summary).toEqual({ applied: 23, total: 23 })
 
     using database = new Database(databasePath)
     const filenames = database.query<
@@ -33,15 +33,30 @@ describe("migrateDatabase", () => {
       []
     >("SELECT filename FROM schema_migrations ORDER BY filename").all()
 
-    expect(filenames).toHaveLength(22)
+    expect(filenames).toHaveLength(23)
     expect(filenames[0]?.filename).toBe("001_initial_schema.sql")
-    expect(filenames.at(-1)?.filename).toBe("022_add_south_route.sql")
+    expect(filenames.at(-1)?.filename).toBe("023_route_capacities.sql")
 
     const routes = database.query<
       { readonly name: string },
       []
     >("SELECT name FROM routes ORDER BY name").all()
     expect(routes.map(({ name }) => name)).toContain("South")
+
+    const vehicles = database.query<
+      { readonly capacity: number; readonly code: string },
+      []
+    >(`
+      SELECT code, capacity
+      FROM vehicles
+      WHERE code IN ('LA001', 'LA002', 'LA003')
+      ORDER BY code
+    `).all()
+    expect(vehicles).toEqual([
+      { code: "LA001", capacity: 13 },
+      { code: "LA002", capacity: 13 },
+      { code: "LA003", capacity: 13 }
+    ])
   })
 
   test("is idempotent for an already migrated database", async () => {
@@ -50,7 +65,7 @@ describe("migrateDatabase", () => {
     await Effect.runPromise(migrateDatabase(databasePath))
     const second = await Effect.runPromise(migrateDatabase(databasePath))
 
-    expect(second).toEqual({ applied: 0, total: 22 })
+    expect(second).toEqual({ applied: 0, total: 23 })
   })
 
   test("creates the final schema expected by the current application", async () => {

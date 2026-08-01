@@ -14,13 +14,13 @@ of parity.
 
 ## Authoritative baseline
 
-The baseline is the current `main` worktree at `f44f58a`.
+The baseline is the current `main` worktree at `7c07103`.
 
 - All Go packages pass their tests.
 - The suite contains 740 named tests across 74 test files.
 - HTTP routes are registered in `cmd/server/main.go`.
 - The JSON contract is defined by `api/openapi.yaml` and its contract tests.
-- Persistence is defined by 22 migrations in `migrations/`.
+- Persistence is defined by 23 migrations in `migrations/`.
 - `MIGRATION_NOTES.md` defines the HTML/API separation, authentication,
   idempotency, pagination, and wire-format invariants.
 - Templates and static assets are embedded into the deployed Go binary.

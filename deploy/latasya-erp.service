@@ -35,8 +35,8 @@ RestrictAddressFamilies=AF_INET AF_INET6
 CapabilityBoundingSet=
 AmbientCapabilities=
 SystemCallArchitectures=native
-SystemCallFilter=@system-service
-SystemCallFilter=~@privileged @resources
+SystemCallFilter=@system-service sched_setscheduler
+SystemCallFilter=~@privileged
 UMask=0077
 ReadWritePaths=/var/lib/latasya
 

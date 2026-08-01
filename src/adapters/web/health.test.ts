@@ -46,7 +46,7 @@ describe("GET /healthz", () => {
       "text/plain; charset=utf-8"
     )
     expect(await response.text()).toBe(
-      "ok version=test-sha migrations=22\n"
+      "ok version=test-sha migrations=23\n"
     )
   })
 

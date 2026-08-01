@@ -74,7 +74,7 @@ describe("server-rendered contacts", () => {
     expect(list.status).toBe(200)
     expect(listBody).toContain("West route")
     expect(listBody).toContain("LA001")
-    expect(listBody).toContain("0 / 14")
+    expect(listBody).toContain("0 / 13")
     expect(listBody).toContain("sort=route")
 
     const invalid = await postForm(

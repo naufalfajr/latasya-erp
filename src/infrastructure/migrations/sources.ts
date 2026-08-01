@@ -20,6 +20,7 @@ import migration019 from "../../../migrations/019_portal_token.sql" with { type:
 import migration020 from "../../../migrations/020_cash_accounts.sql" with { type: "text" }
 import migration021 from "../../../migrations/021_portal_code.sql" with { type: "text" }
 import migration022 from "../../../migrations/022_add_south_route.sql" with { type: "text" }
+import migration023 from "../../../migrations/023_route_capacities.sql" with { type: "text" }
 
 export interface MigrationSource {
   readonly filename: string
@@ -48,5 +49,6 @@ export const migrationSources: ReadonlyArray<MigrationSource> = [
   { filename: "019_portal_token.sql", sql: migration019 },
   { filename: "020_cash_accounts.sql", sql: migration020 },
   { filename: "021_portal_code.sql", sql: migration021 },
-  { filename: "022_add_south_route.sql", sql: migration022 }
+  { filename: "022_add_south_route.sql", sql: migration022 },
+  { filename: "023_route_capacities.sql", sql: migration023 }
 ]
