@@ -225,7 +225,7 @@ jobs:
           sudo cp "$BASE_DB" "$BUN_DB"
           sudo cp "$BASE_DB" "$GO_DB"
           sudo chown latasya:latasya "$BUN_DB" "$GO_DB"
-          ls -lh "$BASE_DB" "$BUN_DB" "$GO_DB"
+          sudo ls -lh "$BASE_DB" "$BUN_DB" "$GO_DB"
 
           run_runtime bun /usr/local/bin/latasya-erp "$BUN_DB" "$BUN_UNIT" 18086
           run_runtime go /usr/local/bin/latasya-erp.rollback "$GO_DB" "$GO_UNIT" 18087
