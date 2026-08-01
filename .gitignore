@@ -1,5 +1,9 @@
 # Binary
 latasya-erp
+dist/
+
+# Bun
+node_modules/
 
 # Database
 *.db
@@ -33,4 +37,3 @@ AGENTS.md
 CLAUDE.md
 .claude/
 docs/
-

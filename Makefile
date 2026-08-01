@@ -1,4 +1,4 @@
-.PHONY: dev run build build-linux css css-watch clean test
+.PHONY: dev run build build-linux css css-watch clean test test-reference
 
 # Tailwind standalone CLI
 TAILWIND := ./bin/tailwindcss
@@ -35,28 +35,33 @@ css-watch: $(TAILWIND) $(DAISYUI) $(DAISYUI_THEME)
 
 # Run in development mode
 run:
-	DEV_MODE=true go run ./cmd/server
+	DEV_MODE=true bun run src/main.ts
 
 # Build identity, surfaced at /healthz. CI overrides with the commit SHA;
 # local builds stay "dev".
 VERSION ?= dev
-LDFLAGS := -X main.version=$(VERSION)
 
 # Build production binary (host OS/arch)
 build: css
-	CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o latasya-erp ./cmd/server
+	VERSION=$(VERSION) bun run build:bun
+	cp dist/latasya-erp latasya-erp
 
-# Cross-compile for the Linux VPS (amd64 by default; override with GOARCH=arm64)
-GOARCH ?= amd64
+# Build the standalone Linux executable used by the amd64 VPS.
 build-linux: css
-	GOOS=linux GOARCH=$(GOARCH) CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o latasya-erp ./cmd/server
+	VERSION=$(VERSION) bun run build:bun:linux
+	cp dist/latasya-erp latasya-erp
 
 # Run tests
 test:
+	bun run check:bun
+
+# Keep the Go implementation green as the rollback reference through cutover.
+test-reference:
 	go test ./... -v
 
 # Clean build artifacts
 clean:
 	rm -f latasya-erp
+	rm -rf dist/
 	rm -f static/css/app.css
 	rm -rf bin/

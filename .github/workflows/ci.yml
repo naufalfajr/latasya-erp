@@ -16,41 +16,32 @@ permissions:
   contents: read
 
 jobs:
-  lint:
+  bun-check:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v7
+      - uses: oven-sh/setup-bun@v2
         with:
-          go-version: stable
-          cache: true
+          bun-version: 1.3.12
 
-      - name: Verify gofmt
-        run: |
-          unformatted=$(gofmt -l .)
-          if [ -n "$unformatted" ]; then
-            echo "FAIL: these files are not gofmt-formatted:"
-            echo "$unformatted"
-            echo "      → run 'gofmt -w .' and commit"
-            exit 1
-          fi
-          echo "ok: all files gofmt-clean"
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
 
-      - name: go vet
-        run: go vet ./...
+      - name: Typecheck
+        run: bun run typecheck
 
-      - name: staticcheck
-        run: go run honnef.co/go/tools/cmd/staticcheck@v0.7.0 ./...
+      - name: Test
+        run: bun test
 
-      - name: Build
-        run: go build ./...
+      - name: Build standalone Linux executable
+        run: VERSION="${GITHUB_SHA}" bun run build:bun:linux
 
-      - name: govulncheck
-        run: go run golang.org/x/vuln/cmd/govulncheck@v1.3.0 ./...
+      - name: Smoke standalone executable
+        run: scripts/smoke-standalone.sh dist/latasya-erp "${GITHUB_SHA}"
 
-  test:
+  go-reference:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -61,5 +52,13 @@ jobs:
           go-version: stable
           cache: true
 
-      - name: Test (race detector)
+      - name: Verify reference formatting
+        run: |
+          unformatted=$(gofmt -l .)
+          test -z "$unformatted" || {
+            echo "$unformatted"
+            exit 1
+          }
+
+      - name: Test rollback reference (race detector)
         run: go test -race -timeout=10m ./...

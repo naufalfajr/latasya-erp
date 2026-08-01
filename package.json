@@ -1,0 +1,28 @@
+{
+  "name": "latasya-erp",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.3.12",
+  "engines": {
+    "bun": "1.3.12"
+  },
+  "scripts": {
+    "dev:bun": "bun --watch src/main.ts",
+    "typecheck": "tsc --noEmit",
+    "test:bun": "bun test",
+    "check:bun": "bun run typecheck && bun test",
+    "build:bun": "bun run scripts/build.ts",
+    "build:bun:linux": "bun run scripts/build.ts --linux"
+  },
+  "dependencies": {
+    "@effect/platform": "0.97.0",
+    "@effect/platform-bun": "0.91.0",
+    "@effect/sql": "0.52.0",
+    "@effect/sql-sqlite-bun": "0.53.0",
+    "effect": "3.22.0"
+  },
+  "devDependencies": {
+    "@types/bun": "1.3.14",
+    "typescript": "7.0.2"
+  }
+}

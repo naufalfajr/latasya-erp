@@ -2,7 +2,7 @@
 
 Simple bookkeeping web app for a transport business (school bus & travel) in Indonesia.
 
-Built with Go stdlib, HTMX, Tailwind CSS + DaisyUI, and SQLite. Deploys as a single static binary behind Cloudflare Tunnel.
+Built with Bun, Effect, HTMX, Tailwind CSS + DaisyUI, and SQLite. Deploys as a standalone executable behind Cloudflare Tunnel.
 
 ## Features
 
@@ -13,7 +13,7 @@ Built with Go stdlib, HTMX, Tailwind CSS + DaisyUI, and SQLite. Deploys as a sin
 - **Chart of Accounts** — 45 predefined accounts for Indonesian transport business (fuel, tolls, KIR, PKB/STNK, THR, etc.)
 - **Contacts** — manage customers and suppliers
 - **Financial Reports** — Trial Balance, Profit & Loss, Balance Sheet, Cash Flow, General Ledger
-- **User Management** — capability-based roles (admin, bookkeeper, viewer) with a `/roles` page to manage custom roles
+- **User Management** — capability-based roles (admin, bookkeeper, viewer) with a `/dashboard/roles` page to manage custom roles
 - **Dashboard** — cash balance, monthly revenue/expenses, outstanding invoices/bills
 - **Responsive** — works on desktop and mobile (DaisyUI drawer layout)
 - **HTMX** — SPA-like navigation with `hx-boost`, inline delete, live search, dynamic form rows
@@ -22,17 +22,18 @@ Built with Go stdlib, HTMX, Tailwind CSS + DaisyUI, and SQLite. Deploys as a sin
 
 | Layer | Choice |
 |-------|--------|
-| Backend | Go stdlib (`net/http`, `html/template`) |
+| Backend | Bun 1.3.12 + Effect 3 |
 | Frontend | HTMX + Tailwind CSS + DaisyUI (CDN) |
-| Database | SQLite via `modernc.org/sqlite` (pure Go, no CGO) |
+| Database | SQLite via Bun and `@effect/sql` |
 | Auth | Session-based (bcrypt + HttpOnly cookie) |
 | Deploy | systemd + Cloudflare Tunnel |
 
-No Node.js, no npm, no JS framework. Single binary with embedded templates and static files.
+Dependencies are pinned in `bun.lock`. The production build is a standalone
+Bun executable with the templates, static files, and migrations embedded.
 
 ## API
 
-Latasya ERP exposes a JSON API at `/api/v1/*` alongside the HTML UI. Bots, scripts, MCP servers, and Telegram integrations authenticate via scoped Bearer tokens managed at `/settings/api-tokens`.
+Latasya ERP exposes a JSON API at `/api/v1/*` alongside the HTML UI. Bots, scripts, MCP servers, and Telegram integrations authenticate via scoped Bearer tokens managed at `/dashboard/settings/api-tokens`.
 
 ### Quick Start
 
@@ -83,7 +84,7 @@ curl -s -X DELETE \
 | Method | Use Case | How |
 |--------|----------|-----|
 | Session cookie | Browser / SPA | Login via `/api/v1/auth/login`, cookie set automatically |
-| Bearer token | Bots, MCP, Telegram, scripts | Create at `/settings/api-tokens`, use `Authorization: Bearer lat_...` |
+| Bearer token | Bots, MCP, Telegram, scripts | Create at `/dashboard/settings/api-tokens`, use `Authorization: Bearer lat_...` |
 
 Bearer tokens are scoped (subset of your capabilities) and revocable. They skip CSRF validation.
 
@@ -118,7 +119,7 @@ See `MIGRATION_NOTES.md` for the full migration strategy and sunset criteria.
 
 ### Prerequisites
 
-- Go 1.22+ (uses stdlib routing patterns)
+- Bun 1.3.12
 - [Tailwind CSS standalone CLI](https://tailwindcss.com/blog/standalone-cli) (auto-downloaded by `make`)
 
 ### Run locally
@@ -156,7 +157,7 @@ Put deployment-only environment variables in `/etc/latasya/latasya-erp.env`. The
 ```env
 GOOGLE_CLIENT_ID=your-google-oauth-client-id
 GOOGLE_CLIENT_SECRET=your-google-oauth-client-secret
-GOOGLE_REDIRECT_URL=https://latasya.naufalf.net/integrations/google-calendar/callback
+GOOGLE_REDIRECT_URL=https://latasya.naufalf.net/dashboard/integrations/google-calendar/callback
 ```
 
 Install the systemd unit:
@@ -195,21 +196,23 @@ The tunnel is outbound-only — you can keep ports 80/443/8080 closed on the VPS
 
 ```
 latasya-erp/
-├── cmd/server/main.go           # Entry point, routes, graceful shutdown
-├── internal/
-│   ├── auth/                    # Login, sessions, middleware (RequireAuth, AdminOnly)
-│   ├── database/                # SQLite setup, migration runner, seed
-│   ├── handler/                 # HTTP handlers (one file per feature)
-│   ├── model/                   # Data structs + DB queries (no ORM)
-│   ├── testutil/                # Test helpers (in-memory DB, auth)
-│   └── tmpl/                    # Template functions (formatIDR, formatDate, dict)
+├── src/
+│   ├── main.ts                  # Entry point and startup
+│   ├── app/                     # Configuration, layers, and server lifecycle
+│   ├── domain/                  # Effect services and business rules
+│   ├── adapters/                # SQLite and HTTP adapters
+│   └── infrastructure/          # Migrations and bootstrap
 ├── migrations/                  # SQL migrations (embedded, auto-applied)
 ├── templates/                   # HTML templates (embedded)
 ├── static/                      # CSS, JS (embedded)
-├── embed.go                     # Go embed directives
+├── scripts/build.ts             # Standalone executable build
 ├── deploy/                      # systemd unit + cloudflared config example
-└── Makefile
+├── package.json
+└── bun.lock
 ```
+
+The Go implementation remains in `cmd/` and `internal/` as a tested rollback
+reference until production cutover is confirmed.
 
 ## Accounting Model
 
@@ -248,11 +251,12 @@ Predefined for an Indonesian transport business:
 
 ### Key Patterns
 
-- **Template rendering**: `handler.render(w, r, "templates/foo/bar.html", "Title", data, ...extraTemplates)` loads base + partials + page. Cached in production, re-parsed every request when `DEV_MODE=true`. Each page is parsed separately to avoid `{{define "content"}}` collisions.
-- **Authorization**: Write endpoints are wrapped with `auth.CapabilityOnly(model.CapXxxManage, handler)` — the capability-to-role mapping lives in the `roles` table and is editable via `/roles`. Admin implicitly holds every capability.
-- **Journal entries are the core**: Income, expenses, invoices, and bills all create journal entries. No separate transaction tables — reports read from `journal_entries` and `journal_lines`.
-- **SQLite single connection**: `SetMaxOpenConns(1)` prevents "database is locked". Generate document numbers *before* starting transactions.
-- **Tests**: Each test calls `testutil.SetupTestDB()` for an isolated in-memory DB. `handler_test.go` sets up a full `httptest.Server` with all routes wired, mirroring `cmd/server/main.go`.
+- **Effect services**: domain capabilities are exposed as Effect services; HTTP handlers depend on interfaces rather than opening their own databases.
+- **Template rendering**: the existing Go-style templates are rendered by a compatibility engine, preserving the current HTML and HTMX behavior.
+- **Authorization**: browser and API adapters enforce the capability mapping stored in `roles`; admin implicitly holds every capability.
+- **Journal entries are the core**: income, expenses, invoices, and bills all create balanced journal entries inside SQLite transactions.
+- **SQLite**: migrations, foreign keys, WAL mode, busy timeout, and the existing database schema are preserved in place.
+- **Tests**: Bun tests use a freshly migrated temporary SQLite database and the real Effect runtime layer.
 
 ### Conventions
 
@@ -270,10 +274,10 @@ Environment variables (all optional):
 |----------|---------|-------------|
 | `PORT` | `8080` | Server port |
 | `DB_PATH` | `./latasya.db` | SQLite database file path |
-| `DEV_MODE` | `false` | Re-parse templates on each request |
+| `DEV_MODE` | `false` | Enables development cookie and URL behavior |
 | `GOOGLE_CLIENT_ID` | empty | Google OAuth client ID for private school calendar sync |
 | `GOOGLE_CLIENT_SECRET` | empty | Google OAuth client secret for private school calendar sync |
-| `GOOGLE_REDIRECT_URL` | empty | Google OAuth redirect URL, e.g. `https://latasya.naufalf.net/integrations/google-calendar/callback` |
+| `GOOGLE_REDIRECT_URL` | empty | Google OAuth redirect URL, e.g. `https://latasya.naufalf.net/dashboard/integrations/google-calendar/callback` |
 
 On a VPS, keep secrets and deployment-specific overrides in `/etc/latasya/latasya-erp.env` with mode `600`. The systemd service loads this file if it exists.
 
@@ -282,10 +286,13 @@ On a VPS, keep secrets and deployment-specific overrides in `/etc/latasya/latasy
 ```bash
 make test
 # or
-go test ./... -v
+bun run check:bun
+
+# Optional rollback-reference regression suite
+make test-reference
 ```
 
-101 tests covering:
+The Bun suite covers:
 - Auth flow (login, logout, sessions, middleware, admin/viewer roles)
 - CRUD for all entities (accounts, contacts, journals, income, expenses, invoices, bills, users)
 - Accounting correctness (balanced entries, P&L, balance sheet equation, trial balance)
@@ -298,7 +305,7 @@ All monetary values are stored as integers in IDR (Indonesian Rupiah). IDR has n
 
 ## Security
 
-- Passwords hashed with bcrypt
+- Passwords stored and verified as bcrypt hashes through Bun's password API
 - Session tokens: 32 bytes cryptographically random, HttpOnly + SameSite=Lax + Secure cookies
 - Session fixation prevention (old sessions invalidated on login)
 - Admin-only enforcement on all write endpoints (POST/DELETE)
@@ -306,7 +313,7 @@ All monetary values are stored as integers in IDR (Indonesian Rupiah). IDR has n
 - HTML auto-escaped by `html/template` (no XSS)
 - systemd service runs as non-root `latasya` user with filesystem sandboxing
 - Cloudflare Tunnel: no inbound ports exposed on the VPS
-- HTTP server timeouts (Read: 15s, Write: 30s, Idle: 60s)
+- Graceful signal shutdown and a 60-second idle timeout
 
 ## License
 
