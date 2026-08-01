@@ -15,18 +15,25 @@ func TestListRouteCapacity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list routes: %v", err)
 	}
-	if len(routes) != 2 {
+	if len(routes) != 3 {
 		t.Fatalf("expected seeded routes, got %d", len(routes))
 	}
 
 	var westID int
+	var southSeeded bool
 	for _, r := range routes {
 		if r.Name == "West" {
 			westID = r.ID
 		}
+		if r.Name == "South" {
+			southSeeded = true
+		}
 	}
 	if westID == 0 {
 		t.Fatal("west route not seeded")
+	}
+	if !southSeeded {
+		t.Fatal("south route not seeded")
 	}
 
 	if err := model.CreateContact(db, &model.Contact{Name: "Student", ContactType: "customer", RouteID: westID, IsActive: true}); err != nil {
