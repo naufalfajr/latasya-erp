@@ -64,14 +64,16 @@ jobs:
             latasya-erp deploy/latasya-erp.service \
             "$VPS_USER@$VPS_HOST:/tmp/"
 
-      - name: Install and restart
+      - name: Backup, install and restart
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
         run: |
           ssh -o BatchMode=yes -o ConnectTimeout=15 \
             -i ~/.ssh/deploy_key "$VPS_USER@$VPS_HOST" \
-            'sudo install -m 755 /tmp/latasya-erp /usr/local/bin/latasya-erp &&
+            'sudo systemctl start latasya-backup.service &&
+             sudo install -m 755 /usr/local/bin/latasya-erp /usr/local/bin/latasya-erp.rollback &&
+             sudo install -m 755 /tmp/latasya-erp /usr/local/bin/latasya-erp &&
              sudo install -m 644 /tmp/latasya-erp.service /etc/systemd/system/latasya-erp.service &&
              sudo systemctl daemon-reload &&
              sudo systemctl restart latasya-erp'
