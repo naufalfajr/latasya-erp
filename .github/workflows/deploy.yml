@@ -72,7 +72,9 @@ jobs:
           ssh -o BatchMode=yes -o ConnectTimeout=15 \
             -i ~/.ssh/deploy_key "$VPS_USER@$VPS_HOST" \
             'sudo systemctl start latasya-backup.service &&
-             sudo install -m 755 /usr/local/bin/latasya-erp /usr/local/bin/latasya-erp.rollback &&
+             if [ ! -x /usr/local/bin/latasya-erp.rollback ]; then
+               sudo install -m 755 /usr/local/bin/latasya-erp /usr/local/bin/latasya-erp.rollback;
+             fi &&
              sudo install -m 755 /tmp/latasya-erp /usr/local/bin/latasya-erp &&
              sudo install -m 644 /tmp/latasya-erp.service /etc/systemd/system/latasya-erp.service &&
              sudo systemctl daemon-reload &&
@@ -89,24 +91,29 @@ jobs:
             "EXPECTED_SHA=$EXPECTED_SHA bash -s" <<'EOF'
           set -euo pipefail
 
-          # Wait for systemd to settle after restart.
-          for i in {1..10}; do
-            if systemctl is-active --quiet latasya-erp; then break; fi
+          body=""
+          for i in {1..15}; do
+            if body=$(curl -sSf http://127.0.0.1:8080/healthz); then break; fi
             sleep 1
           done
 
-          # Unit must be running — catches startup panics cleanly before curl.
-          sudo systemctl is-active --quiet latasya-erp
-
-          # Ask the app itself: are you the right build?
-          body=$(curl -sSf http://127.0.0.1:8080/healthz)
-          echo "healthz: $body"
-
-          if ! echo "$body" | grep -q "version=$EXPECTED_SHA"; then
-            echo "FAIL: serving binary does not match $EXPECTED_SHA"
+          if [[ "$body" != *"version=$EXPECTED_SHA"* ]]; then
+            echo "FAIL: Effect build did not become healthy; restoring Go rollback"
             sudo journalctl -u latasya-erp -n 50 --no-pager
+            sudo test -x /usr/local/bin/latasya-erp.rollback
+            sudo install -m 755 /usr/local/bin/latasya-erp.rollback /usr/local/bin/latasya-erp
+            sudo systemctl restart latasya-erp
+
+            rollback_body=""
+            for i in {1..15}; do
+              if rollback_body=$(curl -sSf http://127.0.0.1:8080/healthz); then break; fi
+              sleep 1
+            done
+            test -n "$rollback_body"
+            echo "rollback healthz: $rollback_body"
             exit 1
           fi
 
+          echo "healthz: $body"
           echo "deploy verified: correct build ($EXPECTED_SHA) is live"
           EOF
