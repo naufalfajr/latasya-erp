@@ -44,13 +44,14 @@ func TestListRouteCapacity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list route capacity: %v", err)
 	}
+	byRoute := make(map[string]model.RouteCapacity, len(capacities))
 	for _, c := range capacities {
-		if c.RouteName == "West" {
-			if c.VehicleCode != "LA001" || c.Capacity != 14 || c.Used != 1 {
-				t.Fatalf("unexpected west capacity: %+v", c)
-			}
-			return
-		}
+		byRoute[c.RouteName] = c
 	}
-	t.Fatal("west capacity not found")
+	if got := byRoute["West"]; got.VehicleCode != "LA001" || got.Capacity != 13 || got.Used != 1 {
+		t.Fatalf("unexpected west capacity: %+v", got)
+	}
+	if got := byRoute["South"]; got.VehicleCode != "LA003" || got.Capacity != 13 || got.Used != 0 {
+		t.Fatalf("unexpected south capacity: %+v", got)
+	}
 }
