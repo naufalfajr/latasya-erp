@@ -13,6 +13,7 @@ on:
         options:
           - deploy
           - diagnose
+          - benchmark
 
 concurrency:
   group: deploy-main
@@ -49,8 +50,193 @@ jobs:
           sudo coredumpctl info --since '-30 minutes' --no-pager || true
           EOF
 
+  benchmark:
+    if: inputs.operation == 'benchmark'
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 10
+    steps:
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          echo "${{ secrets.VPS_SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Compare Bun and Go resources
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          BENCHMARK_ID: ${{ github.run_id }}
+        run: |
+          ssh -o BatchMode=yes -o ConnectTimeout=15 \
+            -i ~/.ssh/deploy_key "$VPS_USER@$VPS_HOST" \
+            "BENCHMARK_ID=$BENCHMARK_ID bash -s" <<'EOF'
+          set -euo pipefail
+
+          REQUESTS=250
+          CONCURRENCY=8
+          BASE_DB="/var/lib/latasya/benchmark-${BENCHMARK_ID}-base.db"
+          BUN_DB="/var/lib/latasya/benchmark-${BENCHMARK_ID}-bun.db"
+          GO_DB="/var/lib/latasya/benchmark-${BENCHMARK_ID}-go.db"
+          BUN_UNIT="latasya-benchmark-bun-${BENCHMARK_ID}"
+          GO_UNIT="latasya-benchmark-go-${BENCHMARK_ID}"
+
+          cleanup() {
+            sudo systemctl stop "${BUN_UNIT}.service" >/dev/null 2>&1 || true
+            sudo systemctl stop "${GO_UNIT}.service" >/dev/null 2>&1 || true
+            sudo systemctl reset-failed "${BUN_UNIT}.service" >/dev/null 2>&1 || true
+            sudo systemctl reset-failed "${GO_UNIT}.service" >/dev/null 2>&1 || true
+            sudo rm -f "$BASE_DB" "$BUN_DB" "$GO_DB" \
+              "${BASE_DB}-wal" "${BASE_DB}-shm" \
+              "${BUN_DB}-wal" "${BUN_DB}-shm" \
+              "${GO_DB}-wal" "${GO_DB}-shm"
+            rm -f "/tmp/latasya-benchmark-${BENCHMARK_ID}-"*.txt
+          }
+          trap cleanup EXIT INT TERM
+
+          host_metrics() {
+            local phase="$1"
+            echo "HOST_METRICS phase=$phase"
+            date --iso-8601=seconds
+            uptime
+            nproc
+            free -b
+            cat /proc/swaps
+            cat /proc/loadavg
+            for pressure in cpu memory io; do
+              if [ -r "/proc/pressure/$pressure" ]; then
+                echo "PRESSURE $pressure"
+                cat "/proc/pressure/$pressure"
+              fi
+            done
+            vmstat 1 3
+          }
+
+          service_metrics() {
+            local label="$1"
+            local unit="$2"
+            local pid
+            pid=$(sudo systemctl show "$unit" -p MainPID --value)
+            echo "SERVICE_METRICS runtime=$label unit=$unit pid=$pid"
+            sudo systemctl show "$unit" \
+              -p ActiveState -p SubState -p NRestarts \
+              -p MemoryCurrent -p MemoryPeak -p MemorySwapCurrent -p MemorySwapPeak \
+              -p CPUUsageNSec -p TasksCurrent
+            sudo awk '/^(VmPeak|VmSize|VmHWM|VmRSS|RssAnon|RssFile|VmSwap|Threads|voluntary_ctxt_switches|nonvoluntary_ctxt_switches):/' "/proc/$pid/status"
+            sudo awk '{print "minflt=" $10, "majflt=" $12, "utime_ticks=" $14, "stime_ticks=" $15}' "/proc/$pid/stat"
+            sudo awk '/^(rchar|wchar|syscr|syscw|read_bytes|write_bytes|cancelled_write_bytes):/' "/proc/$pid/io"
+            echo "open_fds=$(sudo find "/proc/$pid/fd" -mindepth 1 -maxdepth 1 | wc -l)"
+          }
+
+          run_endpoint() {
+            local label="$1"
+            local pid="$2"
+            local port="$3"
+            local endpoint="$4"
+            local slug="$5"
+            local output="/tmp/latasya-benchmark-${BENCHMARK_ID}-${label}-${slug}.txt"
+            local started ended wall_ns
+
+            started=$(date +%s%N)
+            seq 1 "$REQUESTS" | xargs -P "$CONCURRENCY" -I{} \
+              sudo nsenter --target "$pid" --net \
+              curl --silent --show-error --max-time 10 --output /dev/null \
+              --write-out '%{http_code} %{time_total}\n' \
+              "http://127.0.0.1:${port}${endpoint}" > "$output"
+            ended=$(date +%s%N)
+            wall_ns=$((ended - started))
+
+            sort -n -k2 "$output" | awk \
+              -v runtime="$label" -v endpoint="$endpoint" \
+              -v requests="$REQUESTS" -v concurrency="$CONCURRENCY" \
+              -v wall_ns="$wall_ns" '
+              $1 == 200 { ok++; values[ok] = $2 * 1000; sum += $2 * 1000 }
+              $1 != 200 { errors++ }
+              END {
+                if (ok == 0) {
+                  printf "LATENCY runtime=%s endpoint=%s requests=%d concurrency=%d ok=0 errors=%d\n", runtime, endpoint, requests, concurrency, errors
+                  exit 1
+                }
+                p50 = values[int((ok - 1) * 0.50) + 1]
+                p95 = values[int((ok - 1) * 0.95) + 1]
+                p99 = values[int((ok - 1) * 0.99) + 1]
+                wall_s = wall_ns / 1000000000
+                printf "LATENCY runtime=%s endpoint=%s requests=%d concurrency=%d ok=%d errors=%d wall_ms=%.3f rps=%.2f mean_ms=%.3f p50_ms=%.3f p95_ms=%.3f p99_ms=%.3f max_ms=%.3f\n", runtime, endpoint, requests, concurrency, ok, errors, wall_s * 1000, requests / wall_s, sum / ok, p50, p95, p99, values[ok]
+              }'
+          }
+
+          run_runtime() {
+            local label="$1"
+            local binary="$2"
+            local database="$3"
+            local unit="$4"
+            local port="$5"
+            local started ended pid body cpu_before cpu_after
+
+            started=$(date +%s%N)
+            sudo systemd-run --unit="$unit" --collect \
+              --property=User=latasya --property=Group=latasya \
+              --property=WorkingDirectory=/var/lib/latasya \
+              --property=MemoryAccounting=yes --property=CPUAccounting=yes \
+              --property=TasksAccounting=yes --property=PrivateNetwork=yes \
+              --property=NoNewPrivileges=yes \
+              --setenv="PORT=$port" --setenv="DB_PATH=$database" \
+              --setenv=DEV_MODE=false "$binary"
+
+            pid=0
+            for attempt in {1..100}; do
+              pid=$(sudo systemctl show "$unit" -p MainPID --value)
+              if [ "$pid" -gt 0 ]; then
+                body=$(sudo nsenter --target "$pid" --net \
+                  curl --silent --fail "http://127.0.0.1:${port}/healthz" 2>/dev/null || true)
+                if [ -n "$body" ]; then break; fi
+              fi
+              sleep 0.05
+            done
+            test -n "${body:-}"
+            ended=$(date +%s%N)
+            echo "STARTUP runtime=$label milliseconds=$(((ended - started) / 1000000)) health=$body"
+
+            sleep 2
+            service_metrics "$label-idle" "$unit"
+            cpu_before=$(sudo systemctl show "$unit" -p CPUUsageNSec --value)
+            run_endpoint "$label" "$pid" "$port" "/healthz" "health"
+            run_endpoint "$label" "$pid" "$port" "/" "home"
+            run_endpoint "$label" "$pid" "$port" "/dashboard/login" "login"
+            cpu_after=$(sudo systemctl show "$unit" -p CPUUsageNSec --value)
+            echo "CPU_WORKLOAD runtime=$label requests=$((REQUESTS * 3)) delta_ns=$((cpu_after - cpu_before)) ns_per_request=$(((cpu_after - cpu_before) / (REQUESTS * 3)))"
+            service_metrics "$label-loaded" "$unit"
+            sudo systemctl stop "$unit"
+          }
+
+          echo "BENCHMARK_CONFIG requests_per_endpoint=$REQUESTS concurrency=$CONCURRENCY"
+          uname -a
+          lscpu | grep -E 'Model name|CPU\(s\)|Thread|Core|Socket|MHz' || true
+          ls -lh /usr/local/bin/latasya-erp /usr/local/bin/latasya-erp.rollback
+          file /usr/local/bin/latasya-erp /usr/local/bin/latasya-erp.rollback
+          host_metrics before
+          service_metrics production-bun latasya-erp.service
+
+          sudo rm -f "$BASE_DB" "$BUN_DB" "$GO_DB"
+          sudo -u latasya sqlite3 /var/lib/latasya/latasya.db \
+            "VACUUM INTO '$BASE_DB';"
+          sudo cp "$BASE_DB" "$BUN_DB"
+          sudo cp "$BASE_DB" "$GO_DB"
+          sudo chown latasya:latasya "$BUN_DB" "$GO_DB"
+          ls -lh "$BASE_DB" "$BUN_DB" "$GO_DB"
+
+          run_runtime bun /usr/local/bin/latasya-erp "$BUN_DB" "$BUN_UNIT" 18086
+          run_runtime go /usr/local/bin/latasya-erp.rollback "$GO_DB" "$GO_UNIT" 18087
+
+          service_metrics production-bun-after latasya-erp.service
+          host_metrics after
+          echo "BENCHMARK_COMPLETE id=$BENCHMARK_ID"
+          EOF
+
   deploy:
-    if: inputs.operation != 'diagnose'
+    if: github.event_name == 'push' || inputs.operation == 'deploy'
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 10
