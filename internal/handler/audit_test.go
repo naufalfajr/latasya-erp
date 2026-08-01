@@ -139,7 +139,7 @@ func TestAuditList_FilterByDateRange_Included(t *testing.T) {
 
 	audit.Log(context.Background(), db, audit.Event{Action: "dated.event", ActorUsername: "admin"})
 
-	today := time.Now().Format("2006-01-02")
+	today := time.Now().UTC().Format("2006-01-02")
 	client := &http.Client{}
 	req, _ := requestWithCookies(db, "GET", ts.URL+"/audit?from="+today+"&to="+today, cookies, "")
 	resp, err := client.Do(req)
