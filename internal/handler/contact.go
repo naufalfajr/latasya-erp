@@ -32,7 +32,7 @@ func (h *Handler) ListContacts(w http.ResponseWriter, r *http.Request) {
 	}
 	capacity, _ := h.Contacts.ListRouteCapacity(r.Context())
 	data := contactPageData{Contacts: result.Contacts, RouteCapacity: capacity, Filter: f.Type, Search: f.Search, Sort: f.Sort, Order: f.Order, SortURLs: h.contactSortURLs(r, f.Sort, f.Order)}
-	if r.Header.Get("HX-Request") == "true" {
+	if isHTMXTarget(r, "contact-table") {
 		h.renderFragment(w, r, "templates/contacts/index.html", "contact-table", data)
 		return
 	}

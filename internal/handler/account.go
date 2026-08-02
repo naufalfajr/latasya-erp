@@ -30,7 +30,7 @@ func (h *Handler) ListAccounts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data := accountPageData{Accounts: result.Accounts, Filter: r.URL.Query().Get("type"), Search: r.URL.Query().Get("search"), TypeCounts: counts}
-	if r.Header.Get("HX-Request") == "true" {
+	if isHTMXTarget(r, "account-table") {
 		h.renderFragment(w, r, "templates/accounts/index.html", "account-table", data)
 		return
 	}

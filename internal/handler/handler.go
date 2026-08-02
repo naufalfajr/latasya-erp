@@ -153,6 +153,10 @@ func (h *Handler) renderFragment(w http.ResponseWriter, r *http.Request, page, n
 	}
 }
 
+func isHTMXTarget(r *http.Request, id string) bool {
+	return r.Header.Get("HX-Request") == "true" && r.Header.Get("HX-Target") == id
+}
+
 func (h *Handler) setFlash(w http.ResponseWriter, msg string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     "flash",

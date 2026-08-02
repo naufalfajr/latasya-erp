@@ -8,7 +8,9 @@ Full-page responses execute `templates/base.html` with shared navigation, flash,
 
 ## HTMX fragments
 
-Handlers should return the requested fragment directly when `HX-Request` is true. Avoid rendering a complete document only for the browser to discard most of it through `hx-select`.
+Handlers return a fragment only when `HX-Target` matches that fragment's stable
+outer ID. `HX-Request` alone is insufficient because boosted sidebar navigation
+also sets it and requires the complete application shell.
 
 Each fragment must have a stable target ID, document its swap behavior, and remain valid when rendered independently. Mutation fragments must preserve CSRF and authorization behavior.
 # Template contracts

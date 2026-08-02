@@ -41,7 +41,7 @@ func (h *Handler) ListJournals(w http.ResponseWriter, r *http.Request) {
 	}
 	pg := newPagination(page, result.Total)
 	data := journalPageData{Entries: result.Entries, Filter: filter, Pagination: pg}
-	if r.Header.Get("HX-Request") == "true" {
+	if isHTMXTarget(r, "journal-table") {
 		h.renderFragment(w, r, "templates/journals/index.html", "journal-table", data)
 		return
 	}
