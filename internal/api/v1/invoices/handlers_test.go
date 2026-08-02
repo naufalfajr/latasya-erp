@@ -22,7 +22,7 @@ func setupServer(t *testing.T) (*httptest.Server, *sql.DB) {
 	db := testutil.SetupTestDB(t)
 
 	apiMux := http.NewServeMux()
-	h := &v1invoices.Handler{DB: db, Invoices: invoiceModule.New(db)}
+	h := &v1invoices.Handler{Invoices: invoiceModule.New(db)}
 	idem := v1.Idempotency(db)
 	apiMux.HandleFunc("GET /api/v1/invoices", h.List)
 	apiMux.HandleFunc("GET /api/v1/invoices/{id}", h.Get)

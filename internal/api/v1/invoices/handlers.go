@@ -3,7 +3,6 @@
 package invoices
 
 import (
-	"database/sql"
 	"errors"
 	"fmt"
 	"net/http"
@@ -19,7 +18,6 @@ import (
 )
 
 type Handler struct {
-	DB       *sql.DB
 	Invoices *invoiceModule.Module
 }
 

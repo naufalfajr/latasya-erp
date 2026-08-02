@@ -1,6 +1,7 @@
 package model
 
 import (
+	"context"
 	"crypto/rand"
 	"database/sql"
 	"errors"
@@ -35,22 +36,30 @@ func portalCodePrefix(name string) string {
 // GetOrCreatePortalCode returns the contact's short portal code, generating
 // and persisting one on first use.
 func GetOrCreatePortalCode(db *sql.DB, contactID int) (string, error) {
+	return GetOrCreatePortalCodeContext(context.Background(), db, contactID)
+}
+
+func GetOrCreatePortalCodeContext(ctx context.Context, db *sql.DB, contactID int) (string, error) {
 	var code string
-	err := db.QueryRow("SELECT COALESCE(portal_code,'') FROM contacts WHERE id = ?", contactID).Scan(&code)
+	err := db.QueryRowContext(ctx, "SELECT COALESCE(portal_code,'') FROM contacts WHERE id = ?", contactID).Scan(&code)
 	if err != nil {
 		return "", fmt.Errorf("get portal code: %w", err)
 	}
 	if code != "" {
 		return code, nil
 	}
-	return RegeneratePortalCode(db, contactID)
+	return savePortalCodeContext(ctx, db, contactID, true)
 }
 
 // RegeneratePortalCode assigns a fresh code ("andi-829"), invalidating any
 // link issued before. Only the 3 digits are secret, so /p/ is rate limited.
 func RegeneratePortalCode(db *sql.DB, contactID int) (string, error) {
+	return savePortalCodeContext(context.Background(), db, contactID, false)
+}
+
+func savePortalCodeContext(ctx context.Context, db *sql.DB, contactID int, onlyIfEmpty bool) (string, error) {
 	var name string
-	if err := db.QueryRow("SELECT name FROM contacts WHERE id = ?", contactID).Scan(&name); err != nil {
+	if err := db.QueryRowContext(ctx, "SELECT name FROM contacts WHERE id = ?", contactID).Scan(&name); err != nil {
 		return "", fmt.Errorf("get contact name: %w", err)
 	}
 	prefix := portalCodePrefix(name)
@@ -62,8 +71,23 @@ func RegeneratePortalCode(db *sql.DB, contactID int) (string, error) {
 			return "", fmt.Errorf("generate portal code: %w", err)
 		}
 		code := fmt.Sprintf("%s-%03d", prefix, n.Int64())
-		_, err = db.Exec("UPDATE contacts SET portal_code = ? WHERE id = ?", code, contactID)
+		query := "UPDATE contacts SET portal_code = ? WHERE id = ?"
+		if onlyIfEmpty {
+			query += " AND (portal_code IS NULL OR portal_code = '')"
+		}
+		result, err := db.ExecContext(ctx, query, code, contactID)
 		if err == nil {
+			if onlyIfEmpty {
+				updated, rowsErr := result.RowsAffected()
+				if rowsErr != nil {
+					return "", fmt.Errorf("save portal code rows: %w", rowsErr)
+				}
+				if updated == 0 {
+					if scanErr := db.QueryRowContext(ctx, "SELECT COALESCE(portal_code,'') FROM contacts WHERE id=?", contactID).Scan(&code); scanErr != nil {
+						return "", fmt.Errorf("load saved portal code: %w", scanErr)
+					}
+				}
+			}
 			return code, nil
 		}
 		if !strings.Contains(err.Error(), "UNIQUE") {

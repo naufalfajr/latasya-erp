@@ -123,8 +123,12 @@ func ListContactsContext(ctx context.Context, db *sql.DB, f ContactFilter) ([]Co
 }
 
 func GetContact(db *sql.DB, id int) (*Contact, error) {
+	return GetContactContext(context.Background(), db, id)
+}
+
+func GetContactContext(ctx context.Context, db *sql.DB, id int) (*Contact, error) {
 	c := &Contact{}
-	err := db.QueryRow(
+	err := db.QueryRowContext(ctx,
 		`SELECT id, name, contact_type, COALESCE(phone,''), COALESCE(email,''),
 		COALESCE(address,''), COALESCE(notes,''), maps_link, class, distance_km, has_sibling_discount, is_return_only, COALESCE(route_id, 0), is_active, created_at, updated_at, COALESCE(portal_code,'')
 		FROM contacts WHERE id = ?`, id,

@@ -41,6 +41,13 @@ type Document struct {
 	Company *model.CompanyProfile
 }
 
+type ShareInfo struct {
+	InvoiceNumber string
+	ContactName   string
+	Phone         string
+	PortalCode    string
+}
+
 func (m *Module) List(ctx context.Context, filter Filter) (*ListResult, error) {
 	total, err := m.Count(ctx, filter)
 	if err != nil {
@@ -161,6 +168,32 @@ func (m *Module) Document(ctx context.Context, id int) (*Document, error) {
 func (m *Module) RevenueAccounts(ctx context.Context) ([]model.Account, error) {
 	active := true
 	return model.ListAccountsContext(ctx, m.db, model.AccountFilter{Type: "revenue", IsActive: &active})
+}
+
+func (m *Module) PrepareShare(ctx context.Context, actor Actor, id int) (*ShareInfo, error) {
+	if err := requireManager(actor); err != nil {
+		return nil, err
+	}
+	inv, err := m.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if inv.Status == model.StatusDraft {
+		return nil, &ConflictError{Message: "draft invoice is not shareable"}
+	}
+	contact, err := model.GetContactContext(ctx, m.db, inv.ContactID)
+	if err != nil {
+		return nil, fmt.Errorf("load invoice contact: %w", err)
+	}
+	info := &ShareInfo{InvoiceNumber: inv.InvoiceNumber, ContactName: contact.Name, Phone: contact.Phone}
+	if contact.Phone == "" {
+		return info, nil
+	}
+	info.PortalCode, err = model.GetOrCreatePortalCodeContext(ctx, m.db, contact.ID)
+	if err != nil {
+		return nil, fmt.Errorf("load portal code: %w", err)
+	}
+	return info, nil
 }
 
 func invoiceWhere(filter Filter) (string, []any) {

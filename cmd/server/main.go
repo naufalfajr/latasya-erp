@@ -161,7 +161,7 @@ func main() {
 	apiMux.Handle("PUT /api/v1/journals/{id}", idem(http.HandlerFunc(journalsAPI.Update)))
 	apiMux.HandleFunc("DELETE /api/v1/journals/{id}", journalsAPI.Delete)
 
-	invoicesAPI := &v1invoices.Handler{DB: db, Invoices: invoiceModule}
+	invoicesAPI := &v1invoices.Handler{Invoices: invoiceModule}
 	apiMux.HandleFunc("GET /api/v1/invoices", invoicesAPI.List)
 	apiMux.HandleFunc("GET /api/v1/invoices/{id}", invoicesAPI.Get)
 	apiMux.HandleFunc("GET /api/v1/invoices/{id}/pdf", invoicesAPI.PDF)

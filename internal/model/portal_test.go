@@ -3,6 +3,7 @@ package model_test
 import (
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/naufal/latasya-erp/internal/model"
@@ -214,6 +215,50 @@ func TestGetOrCreatePortalCode_StableAcrossCalls(t *testing.T) {
 	}
 	if code1 != code2 {
 		t.Errorf("code changed across calls: %q != %q", code1, code2)
+	}
+}
+
+func TestGetOrCreatePortalCode_ConcurrentCallsReturnPersistedWinner(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	contact := &model.Contact{Name: "Concurrent Portal", ContactType: "customer", IsActive: true}
+	if err := model.CreateContact(db, contact); err != nil {
+		t.Fatal(err)
+	}
+	contacts, err := model.ListContacts(db, model.ContactFilter{Search: contact.Name})
+	if err != nil || len(contacts) != 1 {
+		t.Fatalf("contact lookup: %v %#v", err, contacts)
+	}
+
+	const callers = 20
+	codes := make(chan string, callers)
+	errs := make(chan error, callers)
+	var wg sync.WaitGroup
+	for range callers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			code, err := model.GetOrCreatePortalCode(db, contacts[0].ID)
+			if err != nil {
+				errs <- err
+				return
+			}
+			codes <- code
+		}()
+	}
+	wg.Wait()
+	close(codes)
+	close(errs)
+	for err := range errs {
+		t.Errorf("GetOrCreatePortalCode: %v", err)
+	}
+	var persisted string
+	if err := db.QueryRow("SELECT portal_code FROM contacts WHERE id=?", contacts[0].ID).Scan(&persisted); err != nil {
+		t.Fatal(err)
+	}
+	for code := range codes {
+		if code != persisted {
+			t.Errorf("returned %q, persisted %q", code, persisted)
+		}
 	}
 }
 

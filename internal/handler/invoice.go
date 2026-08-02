@@ -326,8 +326,17 @@ func (h *Handler) InvoiceWhatsApp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	inv, err := h.Invoices.Get(r.Context(), id)
+	user := auth.UserFromContext(r.Context())
+	share, err := h.Invoices.PrepareShare(r.Context(), invoiceModule.Actor{
+		UserID: user.ID, CanManage: user.HasCapability(model.CapInvoicesManage),
+	}, id)
 	if err != nil {
+		var conflict *invoiceModule.ConflictError
+		if errors.As(err, &conflict) {
+			h.setFlash(w, "Kirim invoice ini dulu (Mark as Sent) sebelum membagikan link ke orang tua.")
+			http.Redirect(w, r, h.BasePath+fmt.Sprintf("/invoices/%d", id), http.StatusSeeOther)
+			return
+		}
 		if errors.Is(err, invoiceModule.ErrNotFound) {
 			http.NotFound(w, r)
 		} else {
@@ -335,36 +344,19 @@ func (h *Handler) InvoiceWhatsApp(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	if inv.Status == model.StatusDraft {
-		h.setFlash(w, "Kirim invoice ini dulu (Mark as Sent) sebelum membagikan link ke orang tua.")
-		http.Redirect(w, r, h.BasePath+fmt.Sprintf("/invoices/%d", id), http.StatusSeeOther)
-		return
-	}
-
-	contact, err := model.GetContact(h.DB, inv.ContactID)
-	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-	if contact.Phone == "" {
+	if share.Phone == "" {
 		h.setFlash(w, "Nomor telepon kontak belum diisi.")
 		http.Redirect(w, r, h.BasePath+fmt.Sprintf("/invoices/%d", id), http.StatusSeeOther)
 		return
 	}
 
-	code, err := model.GetOrCreatePortalCode(h.DB, contact.ID)
-	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-
-	portalURL := h.publicOrigin(r) + "/p/" + code
+	portalURL := h.publicOrigin(r) + "/p/" + share.PortalCode
 	message := fmt.Sprintf(
 		"Assalamualaikum Wr. Wb., kami dari Antar Jemput Latasya. Berikut link invoice Ananda %s (%s):\n%s\n\n"+
 			"Link berisi daftar invoice dan akan terus aktif sesuai masa keikutsertaan antar jemput, "+
 			"Terima kasih",
-		contact.Name, inv.InvoiceNumber, portalURL)
-	http.Redirect(w, r, buildWALink(contact.Phone, message), http.StatusFound)
+		share.ContactName, share.InvoiceNumber, portalURL)
+	http.Redirect(w, r, buildWALink(share.Phone, message), http.StatusFound)
 }
 
 func (h *Handler) InvoicePayment(w http.ResponseWriter, r *http.Request) {
