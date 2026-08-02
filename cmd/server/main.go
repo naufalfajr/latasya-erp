@@ -41,9 +41,11 @@ import (
 	"github.com/naufal/latasya-erp/internal/database"
 	"github.com/naufal/latasya-erp/internal/googlecalendar"
 	"github.com/naufal/latasya-erp/internal/handler"
+	"github.com/naufal/latasya-erp/internal/idempotency"
 	"github.com/naufal/latasya-erp/internal/invoice"
 	"github.com/naufal/latasya-erp/internal/journal"
 	"github.com/naufal/latasya-erp/internal/model"
+	"github.com/naufal/latasya-erp/internal/reporting"
 	"github.com/naufal/latasya-erp/internal/schoolcalendar"
 	"github.com/naufal/latasya-erp/internal/tmpl"
 )
@@ -70,13 +72,14 @@ func main() {
 		slog.Error("failed to seed database", "error", err)
 		os.Exit(1)
 	}
+	idempotencyStore := idempotency.New(db)
 
 	go auth.CleanExpiredSessions(db)
 	go func() {
 		ticker := time.NewTicker(time.Hour)
 		defer ticker.Stop()
 		for range ticker.C {
-			model.CleanExpiredIdempotencyKeys(db)
+			idempotencyStore.CleanExpired(context.Background())
 		}
 	}()
 
@@ -89,6 +92,7 @@ func main() {
 	apiTokenModule := apitoken.New(db)
 	auditModule := audit.New(db)
 	schoolCalendarModule := schoolcalendar.New(db)
+	reportingModule := reporting.New(db)
 	contactsModule := contactModule.New(db)
 	companyProfileModule := companyModule.New(db)
 	h := &handler.Handler{
@@ -108,6 +112,7 @@ func main() {
 		SchoolCalendar: schoolCalendarModule,
 		Contacts:       contactsModule,
 		Company:        companyProfileModule,
+		Reporting:      reportingModule,
 		GoogleCalendarConfig: googlecalendar.Config{
 			ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
 			ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
@@ -159,7 +164,7 @@ func main() {
 	contacts := &v1contacts.Handler{Contacts: contactsModule}
 	contacts.RegisterRoutes(apiMux)
 
-	idem := v1.Idempotency(db)
+	idem := v1.Idempotency(idempotencyStore)
 
 	incomeAPI := &v1income.Handler{Journals: journalModule}
 	incomeAPI.RegisterRoutes(apiMux, idem)
@@ -182,12 +187,8 @@ func main() {
 	creditNotes := &v1creditnotes.Handler{CreditNotes: creditNoteModule}
 	creditNotes.RegisterRoutes(apiMux, idem)
 
-	reportsAPI := &v1reports.Handler{DB: db, Accounts: accountModule}
-	apiMux.HandleFunc("GET /api/v1/reports/trial-balance", reportsAPI.TrialBalance)
-	apiMux.HandleFunc("GET /api/v1/reports/profit-loss", reportsAPI.ProfitLoss)
-	apiMux.HandleFunc("GET /api/v1/reports/balance-sheet", reportsAPI.BalanceSheet)
-	apiMux.HandleFunc("GET /api/v1/reports/cash-flow", reportsAPI.CashFlow)
-	apiMux.HandleFunc("GET /api/v1/reports/general-ledger", reportsAPI.GeneralLedger)
+	reportsAPI := &v1reports.Handler{Reporting: reportingModule, Accounts: accountModule}
+	reportsAPI.RegisterRoutes(apiMux)
 
 	usersAPI := &v1users.Handler{Access: accessModule}
 	usersAPI.RegisterRoutes(apiMux)
@@ -198,8 +199,8 @@ func main() {
 	auditAPI := &v1audit.Handler{Audit: auditModule}
 	auditAPI.RegisterRoutes(apiMux)
 
-	dashboardAPI := &v1dashboard.Handler{DB: db}
-	apiMux.HandleFunc("GET /api/v1/dashboard", dashboardAPI.Get)
+	dashboardAPI := &v1dashboard.Handler{Reporting: reportingModule}
+	dashboardAPI.RegisterRoutes(apiMux)
 
 	schoolCalendarAPI := &v1schoolcalendar.Handler{Calendar: schoolCalendarModule, GoogleCalendarConfig: h.GoogleCalendarConfig}
 	schoolCalendarAPI.RegisterRoutes(apiMux)
@@ -209,12 +210,10 @@ func main() {
 
 	// Public site: company profile at the bare domain, plus the parent
 	// invoice portal. No auth required.
-	mux.HandleFunc("GET /{$}", h.PublicHome)
 	// Short parent link. Rate limited: guessable code, no login behind it.
 	// One limiter instance, so both routes share a bucket per IP.
 	portalLimiter := v1.PortalCodeLimiter()
-	mux.Handle("GET /p/{code}", portalLimiter(http.HandlerFunc(h.PortalIndex)))
-	mux.Handle("GET /p/{code}/invoice/{id}/pdf", portalLimiter(http.HandlerFunc(h.PortalInvoicePDF)))
+	h.RegisterPublicRoutes(mux, portalLimiter)
 
 	// Auth routes (no auth required)
 	mux.HandleFunc("GET /dashboard/login", h.LoginPage)
@@ -227,7 +226,7 @@ func main() {
 	// untouched — only outbound redirects and rendered links need it,
 	// via h.BasePath.
 	protected := http.NewServeMux()
-	protected.HandleFunc("GET /{$}", h.Dashboard)
+	h.RegisterReportingRoutes(protected)
 
 	h.RegisterAccountRoutes(protected)
 
@@ -238,13 +237,6 @@ func main() {
 
 	// Invoices
 	h.RegisterInvoiceRoutes(protected)
-
-	// Reports
-	protected.HandleFunc("GET /reports/trial-balance", h.TrialBalance)
-	protected.HandleFunc("GET /reports/profit-loss", h.ProfitLoss)
-	protected.HandleFunc("GET /reports/balance-sheet", h.BalanceSheet)
-	protected.HandleFunc("GET /reports/cash-flow", h.CashFlowReport)
-	protected.HandleFunc("GET /reports/general-ledger", h.GeneralLedger)
 
 	// User Management (requires users.manage capability — admin by default)
 	userMux := http.NewServeMux()

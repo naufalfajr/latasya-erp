@@ -1,10 +1,11 @@
-package model_test
+package idempotency_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
-	"github.com/naufal/latasya-erp/internal/model"
+	"github.com/naufal/latasya-erp/internal/idempotency"
 	"github.com/naufal/latasya-erp/internal/testutil"
 )
 
@@ -28,11 +29,12 @@ func TestCleanExpiredIdempotencyKeys(t *testing.T) {
 	}
 
 	liveKey := "live-key"
-	if err := model.StoreIdempotency(db, liveKey, userID, "hash2", 201, []byte("{}")); err != nil {
+	store := idempotency.New(db)
+	if err := store.Save(context.Background(), liveKey, userID, "hash2", 201, []byte("{}")); err != nil {
 		t.Fatalf("store live key: %v", err)
 	}
 
-	model.CleanExpiredIdempotencyKeys(db)
+	store.CleanExpired(context.Background())
 
 	var count int
 	if err := db.QueryRow("SELECT COUNT(*) FROM idempotency_keys WHERE key = ?", expiredKey).Scan(&count); err != nil {
@@ -72,11 +74,33 @@ func TestLookupIdempotency_ExpiresSameCalendarDay(t *testing.T) {
 		t.Fatalf("insert expired key: %v", err)
 	}
 
-	rec, err := model.LookupIdempotency(db, key, userID)
+	rec, err := idempotency.New(db).Lookup(context.Background(), key, userID)
 	if err != nil {
 		t.Fatalf("lookup: %v", err)
 	}
 	if rec != nil {
 		t.Fatalf("expected expired same-day record to be treated as missing, got %+v", rec)
+	}
+}
+
+func TestSaveReplacesExpiredKey(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	store := idempotency.New(db)
+	var userID int
+	if err := db.QueryRow("SELECT id FROM users WHERE username = 'admin'").Scan(&userID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO idempotency_keys
+		(key,user_id,request_hash,response_status,response_body,expires_at)
+		VALUES (?,?,?,?,?,?)`, "reused", userID, "old", 200, []byte(`{"old":true}`), time.Now().UTC().Add(-time.Minute).Format(time.DateTime)); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(ctx, "reused", userID, "new", 201, []byte(`{"new":true}`)); err != nil {
+		t.Fatal(err)
+	}
+	record, err := store.Lookup(ctx, "reused", userID)
+	if err != nil || record == nil || record.RequestHash != "new" || record.ResponseStatus != 201 || string(record.ResponseBody) != `{"new":true}` {
+		t.Fatalf("record=%+v err=%v", record, err)
 	}
 }

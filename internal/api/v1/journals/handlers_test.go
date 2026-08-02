@@ -13,6 +13,7 @@ import (
 
 	v1 "github.com/naufal/latasya-erp/internal/api/v1"
 	"github.com/naufal/latasya-erp/internal/api/v1/journals"
+	"github.com/naufal/latasya-erp/internal/idempotency"
 	"github.com/naufal/latasya-erp/internal/journal"
 	"github.com/naufal/latasya-erp/internal/model"
 	"github.com/naufal/latasya-erp/internal/testutil"
@@ -21,7 +22,7 @@ import (
 func newTestServer(t *testing.T, db *sql.DB) *httptest.Server {
 	t.Helper()
 	h := &journals.Handler{Journals: journal.New(db)}
-	idem := v1.Idempotency(db)
+	idem := v1.Idempotency(idempotency.New(db))
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux, idem)
 	ts := httptest.NewServer(v1.BearerOrCookie(db)(mux))

@@ -1,6 +1,7 @@
-package model
+package reporting
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"time"
@@ -77,11 +78,11 @@ func ParseDashboardGranularity(raw string, present bool) (string, error) {
 	return raw, nil
 }
 
-// GetDashboardDataAt returns dashboard values through the supplied instant,
+// DashboardAt returns dashboard values through the supplied instant,
 // interpreted in the Asia/Jakarta business timezone. It always returns the
 // most recent dashboardPeriods periods (monthly or quarterly), including the
 // current in-progress period.
-func GetDashboardDataAt(db *sql.DB, granularity string, at time.Time) (*DashboardData, error) {
+func (m *Module) DashboardAt(ctx context.Context, granularity string, at time.Time) (*DashboardData, error) {
 	bucketSize := 1
 	if granularity == "quarterly" {
 		bucketSize = 3
@@ -101,7 +102,7 @@ func GetDashboardDataAt(db *sql.DB, granularity string, at time.Time) (*Dashboar
 		Granularity: granularity,
 		AsOf:        asOfDate,
 	}
-	months, cashConfigured, err := monthlyFinancialTrends(db, rangeStart, asOf, monthsNeeded)
+	months, cashConfigured, err := monthlyFinancialTrends(ctx, m.db, rangeStart, asOf, monthsNeeded)
 	if err != nil {
 		return nil, err
 	}
@@ -114,20 +115,20 @@ func GetDashboardDataAt(db *sql.DB, granularity string, at time.Time) (*Dashboar
 	d.MonthlyRevenue = current.Revenue
 	d.MonthlyExpenses = current.Expenses
 
-	if err := db.QueryRow(`
+	if err := m.db.QueryRowContext(ctx, `
 		SELECT COALESCE(SUM(total - amount_paid), 0)
 		FROM invoices WHERE status IN ('sent', 'partial', 'overdue')
 	`).Scan(&d.OutstandingInvoices); err != nil {
 		return nil, fmt.Errorf("outstanding invoices: %w", err)
 	}
-	if err := db.QueryRow(`
+	if err := m.db.QueryRowContext(ctx, `
 		SELECT COALESCE(SUM(total - amount_paid), 0)
 		FROM bills WHERE status IN ('received', 'partial', 'overdue')
 	`).Scan(&d.OutstandingBills); err != nil {
 		return nil, fmt.Errorf("outstanding bills: %w", err)
 	}
 
-	rows, err := db.Query(`
+	rows, err := m.db.QueryContext(ctx, `
 		SELECT je.id, je.entry_date, COALESCE(je.reference,''), je.description,
 			COALESCE(SUM(jl.debit), 0), COALESCE(je.source_type, 'manual')
 		FROM journal_entries je
@@ -204,7 +205,7 @@ func periodLabel(bucket []monthTrend, bucketSize int) string {
 	return fmt.Sprintf("Q%d %d", quarter, start.Year())
 }
 
-func monthlyFinancialTrends(db *sql.DB, rangeStart, asOf time.Time, months int) ([]monthTrend, bool, error) {
+func monthlyFinancialTrends(ctx context.Context, db *sql.DB, rangeStart, asOf time.Time, months int) ([]monthTrend, bool, error) {
 	startDate := rangeStart.Format("2006-01-02")
 	asOfDate := asOf.Format("2006-01-02")
 	trends := make([]monthTrend, months)
@@ -225,7 +226,7 @@ func monthlyFinancialTrends(db *sql.DB, rangeStart, asOf time.Time, months int) 
 		monthIndex[key] = i
 	}
 
-	rows, err := db.Query(`
+	rows, err := db.QueryContext(ctx, `
 		SELECT substr(je.entry_date, 1, 7),
 			COALESCE(SUM(CASE WHEN a.account_type = 'revenue' THEN jl.credit - jl.debit ELSE 0 END), 0),
 			COALESCE(SUM(CASE WHEN a.account_type = 'expense' THEN jl.debit - jl.credit ELSE 0 END), 0)
@@ -261,7 +262,7 @@ func monthlyFinancialTrends(db *sql.DB, rangeStart, asOf time.Time, months int) 
 	}
 
 	var cashCount int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM accounts WHERE is_cash = 1`).Scan(&cashCount); err != nil {
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM accounts WHERE is_cash = 1`).Scan(&cashCount); err != nil {
 		return nil, false, fmt.Errorf("cash configuration: %w", err)
 	}
 	if cashCount == 0 {
@@ -269,7 +270,7 @@ func monthlyFinancialTrends(db *sql.DB, rangeStart, asOf time.Time, months int) 
 	}
 
 	var closing int
-	if err := db.QueryRow(`
+	if err := db.QueryRowContext(ctx, `
 		SELECT COALESCE(SUM(jl.debit - jl.credit), 0)
 		FROM journal_lines jl
 		JOIN journal_entries je ON je.id = jl.entry_id AND je.is_posted = 1
@@ -280,7 +281,7 @@ func monthlyFinancialTrends(db *sql.DB, rangeStart, asOf time.Time, months int) 
 	}
 
 	movements := make(map[string]int, months)
-	rows, err = db.Query(`
+	rows, err = db.QueryContext(ctx, `
 		SELECT substr(je.entry_date, 1, 7), COALESCE(SUM(jl.debit - jl.credit), 0)
 		FROM journal_lines jl
 		JOIN journal_entries je ON je.id = jl.entry_id AND je.is_posted = 1

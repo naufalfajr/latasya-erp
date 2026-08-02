@@ -13,14 +13,15 @@ import (
 	v1 "github.com/naufal/latasya-erp/internal/api/v1"
 	"github.com/naufal/latasya-erp/internal/api/v1/dashboard"
 	"github.com/naufal/latasya-erp/internal/model"
+	"github.com/naufal/latasya-erp/internal/reporting"
 	"github.com/naufal/latasya-erp/internal/testutil"
 )
 
 func newTestServer(t *testing.T, db *sql.DB) *httptest.Server {
 	t.Helper()
-	h := &dashboard.Handler{DB: db}
+	h := &dashboard.Handler{Reporting: reporting.New(db)}
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/v1/dashboard", h.Get)
+	h.RegisterRoutes(mux)
 	ts := httptest.NewServer(v1.BearerOrCookie(db)(mux))
 	t.Cleanup(ts.Close)
 	return ts

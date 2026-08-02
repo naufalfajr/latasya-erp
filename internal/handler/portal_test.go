@@ -21,11 +21,9 @@ func publicTestServer(t *testing.T) (*httptest.Server, *sql.DB) {
 	h := testutil.SetupTestHandler(t, db)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /{$}", h.PublicHome)
 	// No PortalCodeLimiter here: it is exercised in internal/api/v1, and
 	// omitting it keeps miss-looping tests from throttling themselves.
-	mux.HandleFunc("GET /p/{code}", h.PortalIndex)
-	mux.HandleFunc("GET /p/{code}/invoice/{id}/pdf", h.PortalInvoicePDF)
+	h.RegisterPublicRoutes(mux, func(next http.Handler) http.Handler { return next })
 
 	ts := httptest.NewServer(mux)
 	t.Cleanup(ts.Close)

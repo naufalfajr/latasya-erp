@@ -12,6 +12,7 @@ import (
 
 	v1 "github.com/naufal/latasya-erp/internal/api/v1"
 	v1income "github.com/naufal/latasya-erp/internal/api/v1/income"
+	"github.com/naufal/latasya-erp/internal/idempotency"
 	"github.com/naufal/latasya-erp/internal/journal"
 	"github.com/naufal/latasya-erp/internal/model"
 	"github.com/naufal/latasya-erp/internal/testutil"
@@ -22,7 +23,7 @@ func setupServer(t *testing.T) (*httptest.Server, *sql.DB) {
 	db := testutil.SetupTestDB(t)
 
 	h := &v1income.Handler{Journals: journal.New(db)}
-	idem := v1.Idempotency(db)
+	idem := v1.Idempotency(idempotency.New(db))
 
 	apiMux := http.NewServeMux()
 	h.RegisterRoutes(apiMux, idem)

@@ -10,7 +10,7 @@ import (
 )
 
 // Minimal smoke tests: render end-to-end, assert 200 + one expected keyword
-// per page. Math correctness is covered by internal/model/report_test.go;
+// per page. Math correctness is covered by internal/reporting/report_test.go;
 // these only guard the handler/template/routing seam from regressions.
 
 func TestReport_TrialBalance_Renders(t *testing.T) {

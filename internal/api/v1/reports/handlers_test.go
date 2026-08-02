@@ -14,18 +14,15 @@ import (
 	v1 "github.com/naufal/latasya-erp/internal/api/v1"
 	"github.com/naufal/latasya-erp/internal/api/v1/reports"
 	"github.com/naufal/latasya-erp/internal/model"
+	"github.com/naufal/latasya-erp/internal/reporting"
 	"github.com/naufal/latasya-erp/internal/testutil"
 )
 
 func newTestServer(t *testing.T, db *sql.DB) *httptest.Server {
 	t.Helper()
-	h := &reports.Handler{DB: db, Accounts: account.New(db)}
+	h := &reports.Handler{Reporting: reporting.New(db), Accounts: account.New(db)}
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/v1/reports/trial-balance", h.TrialBalance)
-	mux.HandleFunc("GET /api/v1/reports/profit-loss", h.ProfitLoss)
-	mux.HandleFunc("GET /api/v1/reports/balance-sheet", h.BalanceSheet)
-	mux.HandleFunc("GET /api/v1/reports/cash-flow", h.CashFlow)
-	mux.HandleFunc("GET /api/v1/reports/general-ledger", h.GeneralLedger)
+	h.RegisterRoutes(mux)
 	ts := httptest.NewServer(v1.BearerOrCookie(db)(mux))
 	t.Cleanup(ts.Close)
 	return ts

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/naufal/latasya-erp/internal/audit"
+	"github.com/naufal/latasya-erp/internal/documentnumber"
 	"github.com/naufal/latasya-erp/internal/model"
 )
 
@@ -78,7 +79,7 @@ func (m *Module) Create(ctx context.Context, actor Actor, d Draft) (*model.Credi
 	if err := requireDraftRefs(ctx, tx, d); err != nil {
 		return nil, err
 	}
-	number, err := model.GenerateDocNumberContext(ctx, tx, "credit_notes", "cn_number", "CN")
+	number, err := documentnumber.Next(ctx, tx, documentnumber.CreditNote)
 	if err != nil {
 		return nil, err
 	}
@@ -202,7 +203,7 @@ func (m *Module) Issue(ctx context.Context, actor Actor, id int) (*model.CreditN
 	if cn.Status != model.StatusDraft {
 		return nil, &ConflictError{Message: fmt.Sprintf("can only issue draft credit notes (current: %s)", cn.Status)}
 	}
-	ref, err := model.GenerateDocNumberContext(ctx, tx, "journal_entries", "reference", "JE")
+	ref, err := documentnumber.Next(ctx, tx, documentnumber.JournalEntry)
 	if err != nil {
 		return nil, err
 	}
@@ -295,7 +296,7 @@ func (m *Module) Void(ctx context.Context, actor Actor, id int) (*model.CreditNo
 	if cn.Status != model.StatusIssued {
 		return nil, &ConflictError{Message: fmt.Sprintf("can only void issued credit notes (current: %s)", cn.Status)}
 	}
-	ref, err := model.GenerateDocNumberContext(ctx, tx, "journal_entries", "reference", "JE")
+	ref, err := documentnumber.Next(ctx, tx, documentnumber.JournalEntry)
 	if err != nil {
 		return nil, err
 	}

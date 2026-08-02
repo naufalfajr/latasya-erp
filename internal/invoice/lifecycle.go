@@ -5,9 +5,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/naufal/latasya-erp/internal/audit"
+	"github.com/naufal/latasya-erp/internal/documentnumber"
 	"github.com/naufal/latasya-erp/internal/model"
 )
 
@@ -268,11 +268,13 @@ func insertJournal(ctx context.Context, tx *sql.Tx, date, description string, us
 	if debit == 0 {
 		return 0, errors.New("journal entry must have at least one debit and credit line")
 	}
-	prefix := fmt.Sprintf("JE-%s", time.Now().Format("200601"))
+	reference, err := documentnumber.Next(ctx, tx, documentnumber.JournalEntry)
+	if err != nil {
+		return 0, err
+	}
 	result, err := tx.ExecContext(ctx, `INSERT INTO journal_entries
 		(entry_date, reference, description, source_type, source_id, is_posted, created_by)
-		SELECT ?, printf('%s-%04d', ?, COALESCE(MAX(CAST(SUBSTR(reference, ?) AS INTEGER)), 0)+1), ?, 'invoice', NULL, 1, ?
-		FROM journal_entries WHERE reference LIKE ?`, date, prefix, len(prefix)+2, description, userID, prefix+"-%")
+		VALUES (?, ?, ?, 'invoice', NULL, 1, ?)`, date, reference, description, userID)
 	if err != nil {
 		return 0, err
 	}

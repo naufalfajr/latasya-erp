@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -121,6 +122,26 @@ func TestCreateAllocatesUniqueReferencesAcrossModuleInstances(t *testing.T) {
 	}
 	if len(beforeTotals) != 2 || !beforeTotals[100] || len(afterTotals) != 2 || !afterTotals[200] || !afterTotals[300] {
 		t.Fatalf("audit snapshots were not serialized: before=%v after=%v", beforeTotals, afterTotals)
+	}
+}
+
+func TestCreateRollsBackReferenceClaimOnInsertFailure(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	module := journal.New(db)
+	asset := accountID(t, db, model.AccountTypeAsset)
+	revenue := accountID(t, db, model.AccountTypeRevenue)
+	draft := journal.ManualDraft{EntryDate: "2026-08-01", Description: "Rollback reference",
+		Lines: []journal.Line{{AccountID: asset, Debit: 100}, {AccountID: revenue, Credit: 100}}}
+
+	if _, err := module.CreateManual(context.Background(), journal.Actor{UserID: 999999, CanManageJournals: true}, draft); err == nil {
+		t.Fatal("invalid actor foreign key should fail after claiming a reference")
+	}
+	created, err := module.CreateManual(context.Background(), journal.Actor{UserID: 1, CanManageJournals: true}, draft)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasSuffix(created.Reference, "-0001") {
+		t.Fatalf("reference=%q should reuse rolled-back sequence 0001", created.Reference)
 	}
 }
 

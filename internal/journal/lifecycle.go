@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/naufal/latasya-erp/internal/audit"
+	"github.com/naufal/latasya-erp/internal/documentnumber"
 	"github.com/naufal/latasya-erp/internal/model"
 )
 
@@ -217,15 +218,15 @@ func (m *Module) create(ctx context.Context, actor Actor, source, date, descript
 	if err := validateManual(ManualDraft{EntryDate: date, Description: description, Lines: lines}); err != nil {
 		return nil, err
 	}
-	reference, err := m.generateReference(ctx)
-	if err != nil {
-		return nil, err
-	}
 	tx, err := m.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("begin journal create: %w", err)
 	}
 	defer tx.Rollback()
+	reference, err := documentnumber.Next(ctx, tx, documentnumber.JournalEntry)
+	if err != nil {
+		return nil, err
+	}
 	result, err := tx.ExecContext(ctx, `INSERT INTO journal_entries
 		(entry_date, reference, description, source_type, is_posted, vehicle_id, created_by)
 		VALUES (?, ?, ?, ?, 1, NULLIF(?,0), ?)`, date, reference, description, source, vehicleID, actor.UserID)
@@ -365,10 +366,6 @@ func insertLines(ctx context.Context, tx *sql.Tx, id int, lines []Line) error {
 		}
 	}
 	return nil
-}
-
-func (m *Module) generateReference(ctx context.Context) (string, error) {
-	return model.GenerateDocNumberContext(ctx, m.db, "journal_entries", "reference", "JE")
 }
 
 func (m *Module) requireAccountTypes(ctx context.Context, expected map[int]string) error {

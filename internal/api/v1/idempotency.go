@@ -2,7 +2,7 @@ package v1
 
 import (
 	"bytes"
-	"database/sql"
+	"context"
 	"fmt"
 	"io"
 	"log/slog"
@@ -10,21 +10,39 @@ import (
 	"sync"
 
 	"github.com/naufal/latasya-erp/internal/auth"
-	"github.com/naufal/latasya-erp/internal/model"
+	"github.com/naufal/latasya-erp/internal/idempotency"
 )
 
-// idempotencyLocks serializes concurrent requests sharing the same
-// (user_id, key) so the wrapped handler runs at most once per key. Without
-// this, two requests racing on a fresh key would both pass the lookup and
-// invoke the handler before either could persist the response.
-var idempotencyLocks sync.Map
+type keyedLock struct {
+	mutex sync.Mutex
+	refs  int
+}
 
-func acquireIdempotencyLock(userID int, key string) *sync.Mutex {
+var idempotencyLocks = struct {
+	sync.Mutex
+	entries map[string]*keyedLock
+}{entries: map[string]*keyedLock{}}
+
+func acquireIdempotencyLock(userID int, key string) func() {
 	lockKey := fmt.Sprintf("%d:%s", userID, key)
-	mu, _ := idempotencyLocks.LoadOrStore(lockKey, &sync.Mutex{})
-	m := mu.(*sync.Mutex)
-	m.Lock()
-	return m
+	idempotencyLocks.Lock()
+	entry := idempotencyLocks.entries[lockKey]
+	if entry == nil {
+		entry = &keyedLock{}
+		idempotencyLocks.entries[lockKey] = entry
+	}
+	entry.refs++
+	idempotencyLocks.Unlock()
+	entry.mutex.Lock()
+	return func() {
+		idempotencyLocks.Lock()
+		entry.refs--
+		if entry.refs == 0 {
+			delete(idempotencyLocks.entries, lockKey)
+		}
+		entry.mutex.Unlock()
+		idempotencyLocks.Unlock()
+	}
 }
 
 // Idempotency returns a middleware that implements Idempotency-Key replay
@@ -36,7 +54,9 @@ func acquireIdempotencyLock(userID int, key string) *sync.Mutex {
 //   - Repeat with matching request hash: cached response is replayed without
 //     invoking the handler.
 //   - Repeat with mismatched request hash: 409 idempotency_conflict.
-func Idempotency(db *sql.DB) func(http.Handler) http.Handler {
+//
+// Deployment invariant: only one application process serves a database.
+func Idempotency(store *idempotency.Store) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodPost {
@@ -63,12 +83,12 @@ func Idempotency(db *sql.DB) func(http.Handler) http.Handler {
 			}
 			r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 
-			requestHash := model.HashRequest(user.ID, r.Method, r.URL.Path, bodyBytes)
+			requestHash := idempotency.HashRequest(user.ID, r.Method, r.URL.Path, bodyBytes)
 
-			mu := acquireIdempotencyLock(user.ID, key)
-			defer mu.Unlock()
+			release := acquireIdempotencyLock(user.ID, key)
+			defer release()
 
-			rec, err := model.LookupIdempotency(db, key, user.ID)
+			rec, err := store.Lookup(r.Context(), key, user.ID)
 			if err != nil {
 				slog.Error("idempotency: lookup failed", "error", err)
 				next.ServeHTTP(w, r)
@@ -91,7 +111,8 @@ func Idempotency(db *sql.DB) func(http.Handler) http.Handler {
 			next.ServeHTTP(rw, r)
 
 			if rw.status >= 200 && rw.status < 300 {
-				if err := model.StoreIdempotency(db, key, user.ID, requestHash, rw.status, rw.body.Bytes()); err != nil {
+				// Persist a completed mutation even if the client disconnected.
+				if err := store.Save(context.WithoutCancel(r.Context()), key, user.ID, requestHash, rw.status, rw.body.Bytes()); err != nil {
 					slog.Error("idempotency: store failed", "error", err)
 				}
 			}

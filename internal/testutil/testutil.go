@@ -20,6 +20,7 @@ import (
 	"github.com/naufal/latasya-erp/internal/invoice"
 	"github.com/naufal/latasya-erp/internal/journal"
 	"github.com/naufal/latasya-erp/internal/model"
+	"github.com/naufal/latasya-erp/internal/reporting"
 	"github.com/naufal/latasya-erp/internal/schoolcalendar"
 	"github.com/naufal/latasya-erp/internal/tmpl"
 
@@ -158,6 +159,7 @@ func SetupTestHandler(t *testing.T, db *sql.DB) *handler.Handler {
 		SchoolCalendar: schoolcalendar.New(db),
 		Contacts:       contact.New(db),
 		Company:        company.New(db),
+		Reporting:      reporting.New(db),
 	}
 }
 

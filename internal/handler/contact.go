@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -14,7 +15,7 @@ import (
 
 type contactPageData struct {
 	Contacts      []model.Contact
-	RouteCapacity []model.RouteCapacity
+	RouteCapacity []contactModule.RouteCapacity
 	Filter        string
 	Search        string
 	Sort          string
@@ -29,7 +30,7 @@ func (h *Handler) ListContacts(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
-	capacity, _ := model.ListRouteCapacity(h.DB)
+	capacity, _ := h.Contacts.ListRouteCapacity(r.Context())
 	h.render(w, r, "templates/contacts/index.html", "Contacts", contactPageData{Contacts: result.Contacts, RouteCapacity: capacity, Filter: f.Type, Search: f.Search, Sort: f.Sort, Order: f.Order, SortURLs: h.contactSortURLs(r, f.Sort, f.Order)})
 }
 
@@ -50,14 +51,14 @@ func (h *Handler) contactSortURLs(r *http.Request, sort, order string) map[strin
 
 type contactFormData struct {
 	Contact   *model.Contact
-	Routes    []model.Route
+	Routes    []contactModule.Route
 	Errors    map[string]string
 	IsEdit    bool
 	PortalURL string
 }
 
 func (h *Handler) NewContact(w http.ResponseWriter, r *http.Request) {
-	h.render(w, r, "templates/contacts/form.html", "New Contact", contactFormData{Contact: &model.Contact{IsActive: true}, Routes: h.contactRoutes()})
+	h.render(w, r, "templates/contacts/form.html", "New Contact", contactFormData{Contact: &model.Contact{IsActive: true}, Routes: h.contactRoutes(r.Context())})
 }
 
 func contactDraft(r *http.Request) contactModule.Draft {
@@ -102,7 +103,7 @@ func (h *Handler) CreateContact(w http.ResponseWriter, r *http.Request) {
 	draft := contactDraft(r)
 	if _, err := h.Contacts.Create(r.Context(), contactActor(r), draft); err != nil {
 		if fields := contactFormErrors(err); fields != nil {
-			h.render(w, r, "templates/contacts/form.html", "New Contact", contactFormData{Contact: contactView(0, draft), Routes: h.contactRoutes(), Errors: fields})
+			h.render(w, r, "templates/contacts/form.html", "New Contact", contactFormData{Contact: contactView(0, draft), Routes: h.contactRoutes(r.Context()), Errors: fields})
 			return
 		}
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -127,7 +128,7 @@ func (h *Handler) EditContact(w http.ResponseWriter, r *http.Request) {
 	if c.PortalCode != "" {
 		portalURL = h.publicOrigin(r) + "/p/" + c.PortalCode
 	}
-	h.render(w, r, "templates/contacts/form.html", "Edit Contact", contactFormData{Contact: c, Routes: h.contactRoutes(), IsEdit: true, PortalURL: portalURL})
+	h.render(w, r, "templates/contacts/form.html", "Edit Contact", contactFormData{Contact: c, Routes: h.contactRoutes(r.Context()), IsEdit: true, PortalURL: portalURL})
 }
 
 func (h *Handler) UpdateContact(w http.ResponseWriter, r *http.Request) {
@@ -143,7 +144,7 @@ func (h *Handler) UpdateContact(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if fields := contactFormErrors(err); fields != nil {
-			h.render(w, r, "templates/contacts/form.html", "Edit Contact", contactFormData{Contact: contactView(id, draft), Routes: h.contactRoutes(), Errors: fields, IsEdit: true})
+			h.render(w, r, "templates/contacts/form.html", "Edit Contact", contactFormData{Contact: contactView(id, draft), Routes: h.contactRoutes(r.Context()), Errors: fields, IsEdit: true})
 			return
 		}
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -196,8 +197,8 @@ func (h *Handler) DeleteContact(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, h.BasePath+"/contacts", http.StatusSeeOther)
 }
 
-func (h *Handler) contactRoutes() []model.Route {
-	routes, _ := model.ListRoutes(h.DB)
+func (h *Handler) contactRoutes(ctx context.Context) []contactModule.Route {
+	routes, _ := h.Contacts.ListRoutes(ctx)
 	return routes
 }
 

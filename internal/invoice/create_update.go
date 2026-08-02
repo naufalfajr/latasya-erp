@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/naufal/latasya-erp/internal/audit"
+	"github.com/naufal/latasya-erp/internal/documentnumber"
 	"github.com/naufal/latasya-erp/internal/model"
 )
 
@@ -53,18 +54,18 @@ func (m *Module) create(ctx context.Context, actor Actor, draft Draft, logAudit 
 		}
 	}
 
-	prefix := fmt.Sprintf("INV-%s", m.now().Format("200601"))
+	number, err := documentnumber.NextAt(ctx, tx, documentnumber.Invoice, m.now())
+	if err != nil {
+		return nil, err
+	}
 	result, err := tx.ExecContext(ctx, `
 		INSERT INTO invoices (
 			invoice_number, contact_id, invoice_date, due_date, status,
 			subtotal, tax_amount, total, amount_paid, notes, created_by
 		)
-		SELECT printf('%s-%04d', ?, COALESCE(MAX(CAST(SUBSTR(invoice_number, ?) AS INTEGER)), 0) + 1),
-			?, ?, ?, ?, ?, ?, ?, 0, ?, ?
-		FROM invoices WHERE invoice_number LIKE ?`,
-		prefix, len(prefix)+2, draft.ContactID, draft.InvoiceDate, draft.DueDate, model.StatusDraft,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+		number, draft.ContactID, draft.InvoiceDate, draft.DueDate, model.StatusDraft,
 		subtotal, draft.TaxAmount, subtotal+draft.TaxAmount, draft.Notes, actor.UserID,
-		prefix+"-%",
 	)
 	if err != nil {
 		return nil, fmt.Errorf("insert invoice: %w", err)

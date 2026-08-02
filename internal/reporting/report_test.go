@@ -1,9 +1,11 @@
-package model_test
+package reporting_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/naufal/latasya-erp/internal/model"
+	"github.com/naufal/latasya-erp/internal/reporting"
 	"github.com/naufal/latasya-erp/internal/testutil"
 )
 
@@ -32,7 +34,7 @@ func TestTrialBalance_Balanced(t *testing.T) {
 		{AccountID: cashID, Debit: 0, Credit: 3000000},
 	})
 
-	rows, err := model.TrialBalance(db, "2026-04-01", "2026-04-30")
+	rows, err := reporting.New(db).TrialBalance(context.Background(), "2026-04-01", "2026-04-30")
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -55,7 +57,7 @@ func TestTrialBalance_Empty(t *testing.T) {
 	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
-	rows, err := model.TrialBalance(db, "2026-04-01", "2026-04-30")
+	rows, err := reporting.New(db).TrialBalance(context.Background(), "2026-04-01", "2026-04-30")
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -89,7 +91,7 @@ func TestProfitLoss(t *testing.T) {
 		{AccountID: cashID, Debit: 0, Credit: 3000000},
 	})
 
-	report, err := model.ProfitLoss(db, "2026-04-01", "2026-04-30")
+	report, err := reporting.New(db).ProfitLoss(context.Background(), "2026-04-01", "2026-04-30")
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -130,7 +132,7 @@ func TestBalanceSheet_Equation(t *testing.T) {
 		{AccountID: cashID, Debit: 0, Credit: 3000000},
 	})
 
-	report, err := model.BalanceSheet(db, "2026-04-30")
+	report, err := reporting.New(db).BalanceSheet(context.Background(), "2026-04-30")
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -175,7 +177,7 @@ func TestGeneralLedger(t *testing.T) {
 		{AccountID: revenueID, Debit: 0, Credit: 3000000},
 	})
 
-	entries, err := model.GeneralLedger(db, cashID, "2026-04-01", "2026-04-30")
+	entries, err := reporting.New(db).GeneralLedger(context.Background(), cashID, "2026-04-01", "2026-04-30")
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -216,7 +218,7 @@ func TestCashFlow(t *testing.T) {
 		{AccountID: cashID, Debit: 0, Credit: 3000000},
 	})
 
-	report, err := model.CashFlow(db, "2026-04-01", "2026-04-30")
+	report, err := reporting.New(db).CashFlow(context.Background(), "2026-04-01", "2026-04-30")
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -250,7 +252,7 @@ func TestCashFlow_UsesClassification(t *testing.T) {
 	post("2026-03-02", model.JournalLine{AccountID: ar, Debit: 500}, model.JournalLine{AccountID: revenue, Credit: 500})
 	post("2026-03-03", model.JournalLine{AccountID: bank, Debit: 300}, model.JournalLine{AccountID: cash, Credit: 300})
 
-	report, err := model.CashFlow(db, "2026-03-01", "2026-03-31")
+	report, err := reporting.New(db).CashFlow(context.Background(), "2026-03-01", "2026-03-31")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,8 +1,17 @@
-package model
+package reporting
 
 import (
-	"database/sql"
+	"context"
 	"fmt"
+
+	"github.com/naufal/latasya-erp/internal/model"
+)
+
+const (
+	accountTypeAsset     = model.AccountTypeAsset
+	accountTypeLiability = model.AccountTypeLiability
+	accountTypeEquity    = model.AccountTypeEquity
+	accountTypeRevenue   = model.AccountTypeRevenue
 )
 
 // TrialBalanceRow represents one account's totals in a trial balance.
@@ -19,7 +28,7 @@ type TrialBalanceRow struct {
 
 // TrialBalance returns the trial balance for a date range.
 // If dateFrom is empty, includes all entries up to dateTo.
-func TrialBalance(db *sql.DB, dateFrom, dateTo string) ([]TrialBalanceRow, error) {
+func (m *Module) TrialBalance(ctx context.Context, dateFrom, dateTo string) ([]TrialBalanceRow, error) {
 	query := `
 		SELECT a.id, a.code, a.name, a.account_type, a.normal_balance,
 			COALESCE(SUM(jl.debit), 0) AS total_debit,
@@ -47,7 +56,7 @@ func TrialBalance(db *sql.DB, dateFrom, dateTo string) ([]TrialBalanceRow, error
 		HAVING COALESCE(SUM(jl.debit), 0) != 0 OR COALESCE(SUM(jl.credit), 0) != 0
 		ORDER BY a.code`
 
-	rows, err := db.Query(query, args...)
+	rows, err := m.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("trial balance query: %w", err)
 	}
@@ -87,7 +96,7 @@ type ProfitLossReport struct {
 }
 
 // ProfitLoss returns the profit & loss report for a date range.
-func ProfitLoss(db *sql.DB, dateFrom, dateTo string) (*ProfitLossReport, error) {
+func (m *Module) ProfitLoss(ctx context.Context, dateFrom, dateTo string) (*ProfitLossReport, error) {
 	query := `
 		SELECT a.code, a.name, a.account_type,
 			COALESCE(SUM(jl.credit), 0) - COALESCE(SUM(jl.debit), 0) AS net_amount
@@ -111,7 +120,7 @@ func ProfitLoss(db *sql.DB, dateFrom, dateTo string) (*ProfitLossReport, error) 
 		HAVING net_amount != 0
 		ORDER BY a.code`
 
-	rows, err := db.Query(query, args...)
+	rows, err := m.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("profit loss query: %w", err)
 	}
@@ -126,7 +135,7 @@ func ProfitLoss(db *sql.DB, dateFrom, dateTo string) (*ProfitLossReport, error) 
 		}
 
 		row := ProfitLossRow{AccountCode: code, AccountName: name, AccountType: acctType}
-		if acctType == AccountTypeRevenue {
+		if acctType == accountTypeRevenue {
 			row.Amount = netAmount // revenue: credit - debit (positive = revenue)
 			report.Revenue = append(report.Revenue, row)
 			report.TotalRevenue += netAmount
@@ -165,7 +174,7 @@ type BalanceSheetReport struct {
 }
 
 // BalanceSheet returns the balance sheet as of a specific date.
-func BalanceSheet(db *sql.DB, asOfDate string) (*BalanceSheetReport, error) {
+func (m *Module) BalanceSheet(ctx context.Context, asOfDate string) (*BalanceSheetReport, error) {
 	query := `
 		SELECT a.code, a.name, a.account_type, a.normal_balance,
 			COALESCE(SUM(jl.debit), 0) AS total_debit,
@@ -179,7 +188,7 @@ func BalanceSheet(db *sql.DB, asOfDate string) (*BalanceSheetReport, error) {
 		HAVING total_debit != 0 OR total_credit != 0
 		ORDER BY a.code`
 
-	rows, err := db.Query(query, asOfDate)
+	rows, err := m.db.QueryContext(ctx, query, asOfDate)
 	if err != nil {
 		return nil, fmt.Errorf("balance sheet query: %w", err)
 	}
@@ -203,13 +212,13 @@ func BalanceSheet(db *sql.DB, asOfDate string) (*BalanceSheetReport, error) {
 
 		row := BalanceSheetRow{AccountCode: code, AccountName: name, Balance: balance}
 		switch acctType {
-		case AccountTypeAsset:
+		case accountTypeAsset:
 			report.Assets.Accounts = append(report.Assets.Accounts, row)
 			report.Assets.Total += balance
-		case AccountTypeLiability:
+		case accountTypeLiability:
 			report.Liabilities.Accounts = append(report.Liabilities.Accounts, row)
 			report.Liabilities.Total += balance
-		case AccountTypeEquity:
+		case accountTypeEquity:
 			report.Equity.Accounts = append(report.Equity.Accounts, row)
 			report.Equity.Total += balance
 		}
@@ -219,7 +228,7 @@ func BalanceSheet(db *sql.DB, asOfDate string) (*BalanceSheetReport, error) {
 	}
 
 	// Calculate retained earnings (net income from revenue - expense accounts)
-	pl, err := ProfitLoss(db, "", asOfDate)
+	pl, err := m.ProfitLoss(ctx, "", asOfDate)
 	if err != nil {
 		return nil, fmt.Errorf("retained earnings: %w", err)
 	}
@@ -241,7 +250,7 @@ type GeneralLedgerEntry struct {
 }
 
 // GeneralLedger returns all transactions for a specific account within a date range.
-func GeneralLedger(db *sql.DB, accountID int, dateFrom, dateTo string) ([]GeneralLedgerEntry, error) {
+func (m *Module) GeneralLedger(ctx context.Context, accountID int, dateFrom, dateTo string) ([]GeneralLedgerEntry, error) {
 	query := `
 		SELECT je.entry_date, COALESCE(je.reference,''), je.description, COALESCE(je.source_type,''), jl.debit, jl.credit
 		FROM journal_lines jl
@@ -259,7 +268,7 @@ func GeneralLedger(db *sql.DB, accountID int, dateFrom, dateTo string) ([]Genera
 	}
 	query += " ORDER BY je.entry_date, je.id"
 
-	rows, err := db.Query(query, args...)
+	rows, err := m.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("general ledger query: %w", err)
 	}
@@ -301,10 +310,10 @@ type CashFlowReport struct {
 
 // CashFlow returns a simplified cash flow report for a date range.
 // It shows debit-minus-credit activity in explicitly classified cash accounts.
-func CashFlow(db *sql.DB, dateFrom, dateTo string) (*CashFlowReport, error) {
+func (m *Module) CashFlow(ctx context.Context, dateFrom, dateTo string) (*CashFlowReport, error) {
 	report := &CashFlowReport{}
 	var cashCount int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM accounts WHERE is_cash = 1`).Scan(&cashCount); err != nil {
+	if err := m.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM accounts WHERE is_cash = 1`).Scan(&cashCount); err != nil {
 		return nil, fmt.Errorf("cash configuration: %w", err)
 	}
 	if cashCount == 0 {
@@ -334,7 +343,7 @@ func CashFlow(db *sql.DB, dateFrom, dateTo string) (*CashFlowReport, error) {
 		HAVING amount != 0
 		ORDER BY a.code`
 
-	rows, err := db.Query(query, args...)
+	rows, err := m.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("cash flow query: %w", err)
 	}
@@ -354,7 +363,7 @@ func CashFlow(db *sql.DB, dateFrom, dateTo string) (*CashFlowReport, error) {
 
 	// Calculate opening/closing cash balances
 	if dateFrom != "" {
-		if err := db.QueryRow(`
+		if err := m.db.QueryRowContext(ctx, `
 			SELECT COALESCE(SUM(jl.debit) - SUM(jl.credit), 0)
 			FROM journal_lines jl
 			JOIN journal_entries je ON je.id = jl.entry_id AND je.is_posted = 1
@@ -375,7 +384,7 @@ func CashFlow(db *sql.DB, dateFrom, dateTo string) (*CashFlowReport, error) {
 		closingQuery += " AND je.entry_date <= ?"
 		closingArgs = append(closingArgs, dateTo)
 	}
-	if err := db.QueryRow(closingQuery, closingArgs...).Scan(&report.ClosingCash); err != nil {
+	if err := m.db.QueryRowContext(ctx, closingQuery, closingArgs...).Scan(&report.ClosingCash); err != nil {
 		return nil, fmt.Errorf("closing cash: %w", err)
 	}
 

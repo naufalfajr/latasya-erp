@@ -21,6 +21,7 @@ import (
 	"github.com/naufal/latasya-erp/internal/invoice"
 	"github.com/naufal/latasya-erp/internal/journal"
 	"github.com/naufal/latasya-erp/internal/model"
+	"github.com/naufal/latasya-erp/internal/reporting"
 	"github.com/naufal/latasya-erp/internal/schoolcalendar"
 )
 
@@ -48,6 +49,7 @@ type Handler struct {
 	SchoolCalendar       *schoolcalendar.Module
 	Contacts             *contact.Module
 	Company              *company.Module
+	Reporting            *reporting.Module
 
 	mu    sync.RWMutex
 	cache map[string]*template.Template

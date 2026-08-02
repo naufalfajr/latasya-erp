@@ -1,6 +1,7 @@
-package model
+package idempotency
 
 import (
+	"context"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
@@ -19,13 +20,17 @@ type IdempotencyRecord struct {
 	ExpiresAt      time.Time
 }
 
+type Store struct{ db *sql.DB }
+
+func New(db *sql.DB) *Store { return &Store{db: db} }
+
 // LookupIdempotency looks up an existing idempotency record for (key, userID).
 // Returns (nil, nil) if not found or expired. Records past their expires_at
 // are treated as missing so clients can reuse a key after the TTL window.
-func LookupIdempotency(db *sql.DB, key string, userID int) (*IdempotencyRecord, error) {
+func (s *Store) Lookup(ctx context.Context, key string, userID int) (*IdempotencyRecord, error) {
 	var rec IdempotencyRecord
 	var expiresAt string
-	err := db.QueryRow(`
+	err := s.db.QueryRowContext(ctx, `
         SELECT key, user_id, request_hash, response_status, response_body, expires_at
         FROM idempotency_keys
         WHERE key = ? AND user_id = ? AND expires_at > datetime('now')
@@ -44,15 +49,21 @@ func LookupIdempotency(db *sql.DB, key string, userID int) (*IdempotencyRecord, 
 	return &rec, nil
 }
 
-// StoreIdempotency stores a response for future replay. Uses INSERT OR IGNORE
-// so a concurrent winner's row is preserved (the loser silently no-ops).
-// TTL is fixed at 24h from now and is NOT extended on replay.
-func StoreIdempotency(db *sql.DB, key string, userID int, requestHash string, status int, body []byte) error {
+// Save stores a response for future replay. A live concurrent winner is
+// preserved, while an expired row is replaced so its key can be reused.
+func (s *Store) Save(ctx context.Context, key string, userID int, requestHash string, status int, body []byte) error {
 	expiresAt := time.Now().UTC().Add(24 * time.Hour).Format(time.DateTime)
-	_, err := db.Exec(`
-        INSERT OR IGNORE INTO idempotency_keys (key, user_id, request_hash, response_status, response_body, expires_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-    `, key, userID, requestHash, status, body, expiresAt)
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO idempotency_keys (key, user_id, request_hash, response_status, response_body, expires_at)
+		VALUES (?, ?, ?, ?, ?, ?)
+		ON CONFLICT(key, user_id) DO UPDATE SET
+			request_hash=excluded.request_hash,
+			response_status=excluded.response_status,
+			response_body=excluded.response_body,
+			expires_at=excluded.expires_at,
+			created_at=datetime('now')
+		WHERE idempotency_keys.expires_at <= datetime('now')
+	`, key, userID, requestHash, status, body, expiresAt)
 	if err != nil {
 		return fmt.Errorf("store idempotency: %w", err)
 	}
@@ -61,8 +72,8 @@ func StoreIdempotency(db *sql.DB, key string, userID int, requestHash string, st
 
 // CleanExpiredIdempotencyKeys deletes expired idempotency records. Logs but
 // does not return errors — it's invoked from a background ticker goroutine.
-func CleanExpiredIdempotencyKeys(db *sql.DB) {
-	if _, err := db.Exec(`DELETE FROM idempotency_keys WHERE expires_at < datetime('now')`); err != nil {
+func (s *Store) CleanExpired(ctx context.Context) {
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM idempotency_keys WHERE expires_at <= datetime('now')`); err != nil {
 		slog.Error("clean expired idempotency keys", "error", err)
 	}
 }

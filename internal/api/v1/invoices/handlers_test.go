@@ -15,6 +15,7 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 	v1 "github.com/naufal/latasya-erp/internal/api/v1"
 	v1invoices "github.com/naufal/latasya-erp/internal/api/v1/invoices"
+	"github.com/naufal/latasya-erp/internal/idempotency"
 	invoiceModule "github.com/naufal/latasya-erp/internal/invoice"
 	"github.com/naufal/latasya-erp/internal/model"
 	"github.com/naufal/latasya-erp/internal/testutil"
@@ -63,7 +64,7 @@ func setupServer(t *testing.T) (*httptest.Server, *sql.DB) {
 
 	apiMux := http.NewServeMux()
 	h := &v1invoices.Handler{Invoices: invoiceModule.New(db)}
-	idem := v1.Idempotency(db)
+	idem := v1.Idempotency(idempotency.New(db))
 	h.RegisterRoutes(apiMux, idem)
 
 	mux := http.NewServeMux()

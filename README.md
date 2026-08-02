@@ -251,7 +251,7 @@ Predefined for an Indonesian transport business:
 - **Template rendering**: `handler.render(w, r, "templates/foo/bar.html", "Title", data, ...extraTemplates)` loads base + partials + page. Cached in production, re-parsed every request when `DEV_MODE=true`. Each page is parsed separately to avoid `{{define "content"}}` collisions.
 - **Authorization**: Write endpoints are wrapped with `auth.CapabilityOnly(model.CapXxxManage, handler)` — the capability-to-role mapping lives in the `roles` table and is editable via `/roles`. Admin implicitly holds every capability.
 - **Journal entries are the core**: Income, expenses, invoices, and bills all create journal entries. No separate transaction tables — reports read from `journal_entries` and `journal_lines`.
-- **SQLite single connection**: `SetMaxOpenConns(1)` prevents "database is locked". Generate document numbers *before* starting transactions.
+- **SQLite single connection**: `SetMaxOpenConns(1)` prevents "database is locked". Claim document numbers through `internal/documentnumber` using the business operation's active transaction, so a rollback also releases the sequence claim.
 - **Tests**: Each test calls `testutil.SetupTestDB()` for an isolated in-memory DB. `handler_test.go` sets up a full `httptest.Server` with all routes wired, mirroring `cmd/server/main.go`.
 
 ### Conventions

@@ -176,3 +176,9 @@ func (h *Handler) PortalInvoicePDF(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=%q", inv.InvoiceNumber+".pdf"))
 	w.Write(data)
 }
+
+func (h *Handler) RegisterPublicRoutes(mux *http.ServeMux, portalMiddleware func(http.Handler) http.Handler) {
+	mux.HandleFunc("GET /{$}", h.PublicHome)
+	mux.Handle("GET /p/{code}", portalMiddleware(http.HandlerFunc(h.PortalIndex)))
+	mux.Handle("GET /p/{code}/invoice/{id}/pdf", portalMiddleware(http.HandlerFunc(h.PortalInvoicePDF)))
+}

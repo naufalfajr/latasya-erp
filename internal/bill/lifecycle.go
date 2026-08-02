@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/naufal/latasya-erp/internal/audit"
+	"github.com/naufal/latasya-erp/internal/documentnumber"
 	"github.com/naufal/latasya-erp/internal/model"
 )
 
@@ -77,7 +78,7 @@ func (m *Module) Create(ctx context.Context, actor Actor, d Draft) (*model.Bill,
 	if err := requireDraftRefs(ctx, tx, d); err != nil {
 		return nil, err
 	}
-	number, err := model.GenerateDocNumberContext(ctx, tx, "bills", "bill_number", "BILL")
+	number, err := documentnumber.Next(ctx, tx, documentnumber.Bill)
 	if err != nil {
 		return nil, err
 	}
@@ -201,7 +202,7 @@ func (m *Module) Receive(ctx context.Context, actor Actor, id int) (*model.Bill,
 	if b.Status != model.StatusDraft {
 		return nil, &ConflictError{Message: fmt.Sprintf("can only receive draft bills (current: %s)", b.Status)}
 	}
-	reference, err := model.GenerateDocNumberContext(ctx, tx, "journal_entries", "reference", "JE")
+	reference, err := documentnumber.Next(ctx, tx, documentnumber.JournalEntry)
 	if err != nil {
 		return nil, err
 	}
@@ -275,7 +276,7 @@ func (m *Module) RecordPayment(ctx context.Context, actor Actor, id int, p Payme
 	if p.Amount > remaining {
 		return nil, &ConflictError{Message: fmt.Sprintf("payment amount (%d) exceeds remaining balance (%d)", p.Amount, remaining)}
 	}
-	reference, err := model.GenerateDocNumberContext(ctx, tx, "journal_entries", "reference", "JE")
+	reference, err := documentnumber.Next(ctx, tx, documentnumber.JournalEntry)
 	if err != nil {
 		return nil, err
 	}

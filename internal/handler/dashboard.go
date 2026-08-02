@@ -3,17 +3,17 @@ package handler
 import (
 	"net/http"
 
-	"github.com/naufal/latasya-erp/internal/model"
+	"github.com/naufal/latasya-erp/internal/reporting"
 )
 
 func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
-	granularity, err := model.ParseDashboardGranularity(query.Get("granularity"), query.Has("granularity"))
+	granularity, err := reporting.ParseDashboardGranularity(query.Get("granularity"), query.Has("granularity"))
 	if err != nil {
 		http.Error(w, "Invalid granularity parameter: use monthly or quarterly", http.StatusBadRequest)
 		return
 	}
-	data, err := model.GetDashboardDataAt(h.DB, granularity, model.BusinessNow())
+	data, err := h.Reporting.DashboardAt(r.Context(), granularity, reporting.BusinessNow())
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return

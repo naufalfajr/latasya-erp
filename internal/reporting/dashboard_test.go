@@ -1,10 +1,12 @@
-package model_test
+package reporting_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/naufal/latasya-erp/internal/model"
+	"github.com/naufal/latasya-erp/internal/reporting"
 	"github.com/naufal/latasya-erp/internal/testutil"
 )
 
@@ -53,7 +55,7 @@ func TestDashboardMonthlyTrends_AccrualAndCashIntegrity(t *testing.T) {
 	}
 
 	asOf := time.Date(2026, time.March, 20, 18, 0, 0, 0, time.FixedZone("WIB", 7*60*60))
-	got, err := model.GetDashboardDataAt(db, "monthly", asOf)
+	got, err := reporting.New(db).DashboardAt(context.Background(), "monthly", asOf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +91,7 @@ func TestDashboardMonthlyTrends_UsesJakartaMonthBoundary(t *testing.T) {
 	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	// 18:30 UTC on July 31 is already August 1 in Jakarta.
-	got, err := model.GetDashboardDataAt(db, "monthly", time.Date(2026, time.July, 31, 18, 30, 0, 0, time.UTC))
+	got, err := reporting.New(db).DashboardAt(context.Background(), "monthly", time.Date(2026, time.July, 31, 18, 30, 0, 0, time.UTC))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +106,7 @@ func TestDashboardMonthlyTrends_NoCashClassification(t *testing.T) {
 	if _, err := db.Exec(`UPDATE accounts SET is_cash = 0`); err != nil {
 		t.Fatal(err)
 	}
-	got, err := model.GetDashboardDataAt(db, "monthly", time.Date(2026, time.June, 5, 0, 0, 0, 0, time.UTC))
+	got, err := reporting.New(db).DashboardAt(context.Background(), "monthly", time.Date(2026, time.June, 5, 0, 0, 0, 0, time.UTC))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,7 +149,7 @@ func TestDashboardQuarterlyTrends_AlignToCalendarQuarters(t *testing.T) {
 
 	// Asia/Jakarta is UTC+7, so 10:00 UTC on Feb 15 is 17:00 local — still Feb 15 local.
 	asOf := time.Date(2026, time.February, 15, 10, 0, 0, 0, time.UTC)
-	got, err := model.GetDashboardDataAt(db, "quarterly", asOf)
+	got, err := reporting.New(db).DashboardAt(context.Background(), "quarterly", asOf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -176,7 +178,7 @@ func TestGetDashboardDataNow(t *testing.T) {
 	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
-	got, err := model.GetDashboardDataAt(db, "monthly", model.BusinessNow())
+	got, err := reporting.New(db).DashboardAt(context.Background(), "monthly", reporting.BusinessNow())
 	if err != nil {
 		t.Fatal(err)
 	}
