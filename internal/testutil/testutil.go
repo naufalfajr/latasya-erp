@@ -6,8 +6,11 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/naufal/latasya-erp/internal/account"
 	"github.com/naufal/latasya-erp/internal/auth"
 	"github.com/naufal/latasya-erp/internal/bill"
+	"github.com/naufal/latasya-erp/internal/company"
+	"github.com/naufal/latasya-erp/internal/contact"
 	"github.com/naufal/latasya-erp/internal/creditnote"
 	"github.com/naufal/latasya-erp/internal/database"
 	"github.com/naufal/latasya-erp/internal/handler"
@@ -144,6 +147,9 @@ func SetupTestHandler(t *testing.T, db *sql.DB) *handler.Handler {
 		Journals:    journal.New(db),
 		Bills:       bill.New(db),
 		CreditNotes: creditnote.New(db),
+		Accounts:    account.New(db),
+		Contacts:    contact.New(db),
+		Company:     company.New(db),
 	}
 }
 

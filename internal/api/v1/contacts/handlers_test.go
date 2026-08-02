@@ -12,6 +12,7 @@ import (
 
 	v1 "github.com/naufal/latasya-erp/internal/api/v1"
 	v1contacts "github.com/naufal/latasya-erp/internal/api/v1/contacts"
+	contactModule "github.com/naufal/latasya-erp/internal/contact"
 	"github.com/naufal/latasya-erp/internal/model"
 	"github.com/naufal/latasya-erp/internal/testutil"
 )
@@ -21,12 +22,8 @@ func setupServer(t *testing.T) (*httptest.Server, *sql.DB) {
 	db := testutil.SetupTestDB(t)
 
 	apiMux := http.NewServeMux()
-	h := &v1contacts.Handler{DB: db}
-	apiMux.HandleFunc("GET /api/v1/contacts", h.List)
-	apiMux.HandleFunc("GET /api/v1/contacts/{id}", h.Get)
-	apiMux.HandleFunc("POST /api/v1/contacts", h.Create)
-	apiMux.HandleFunc("PUT /api/v1/contacts/{id}", h.Update)
-	apiMux.HandleFunc("DELETE /api/v1/contacts/{id}", h.Delete)
+	h := &v1contacts.Handler{Contacts: contactModule.New(db)}
+	h.RegisterRoutes(apiMux)
 
 	mux := http.NewServeMux()
 	mux.Handle("/api/v1/", v1.BearerOrCookie(db)(apiMux))

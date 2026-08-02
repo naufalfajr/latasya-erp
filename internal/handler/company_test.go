@@ -165,7 +165,7 @@ func TestUpdateCompanyProfile_HTTP(t *testing.T) {
 		t.Fatalf("expected 303, got %d", resp.StatusCode)
 	}
 
-	co, err := model.GetCompanyProfile(db)
+	co, err := testutil.GetCompanyProfile(db)
 	if err != nil {
 		t.Fatalf("GetCompanyProfile: %v", err)
 	}

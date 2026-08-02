@@ -12,6 +12,7 @@ import (
 	"time"
 
 	latasyaerp "github.com/naufal/latasya-erp"
+	"github.com/naufal/latasya-erp/internal/account"
 	v1 "github.com/naufal/latasya-erp/internal/api/v1"
 	v1accounts "github.com/naufal/latasya-erp/internal/api/v1/accounts"
 	v1apitokens "github.com/naufal/latasya-erp/internal/api/v1/apitokens"
@@ -32,6 +33,8 @@ import (
 	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/auth"
 	"github.com/naufal/latasya-erp/internal/bill"
+	companyModule "github.com/naufal/latasya-erp/internal/company"
+	contactModule "github.com/naufal/latasya-erp/internal/contact"
 	"github.com/naufal/latasya-erp/internal/creditnote"
 	"github.com/naufal/latasya-erp/internal/database"
 	"github.com/naufal/latasya-erp/internal/googlecalendar"
@@ -78,6 +81,9 @@ func main() {
 	journalModule := journal.New(db)
 	billModule := bill.New(db)
 	creditNoteModule := creditnote.New(db)
+	accountModule := account.New(db)
+	contactsModule := contactModule.New(db)
+	companyProfileModule := companyModule.New(db)
 	h := &handler.Handler{
 		DB:          db,
 		TemplateFS:  latasyaerp.TemplateFS,
@@ -88,6 +94,9 @@ func main() {
 		Journals:    journalModule,
 		Bills:       billModule,
 		CreditNotes: creditNoteModule,
+		Accounts:    accountModule,
+		Contacts:    contactsModule,
+		Company:     companyProfileModule,
 		GoogleCalendarConfig: googlecalendar.Config{
 			ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
 			ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
@@ -133,19 +142,11 @@ func main() {
 	apiMux.HandleFunc("GET /api/v1/auth/csrf", authAPI.CSRF)
 	apiMux.HandleFunc("POST /api/v1/auth/password/change", authAPI.PasswordChange)
 
-	accts := &v1accounts.Handler{DB: db}
-	apiMux.HandleFunc("GET /api/v1/accounts", accts.List)
-	apiMux.HandleFunc("GET /api/v1/accounts/{id}", accts.Get)
-	apiMux.HandleFunc("POST /api/v1/accounts", accts.Create)
-	apiMux.HandleFunc("PUT /api/v1/accounts/{id}", accts.Update)
-	apiMux.HandleFunc("DELETE /api/v1/accounts/{id}", accts.Delete)
+	accts := &v1accounts.Handler{Accounts: accountModule}
+	accts.RegisterRoutes(apiMux)
 
-	contacts := &v1contacts.Handler{DB: db}
-	apiMux.HandleFunc("GET /api/v1/contacts", contacts.List)
-	apiMux.HandleFunc("GET /api/v1/contacts/{id}", contacts.Get)
-	apiMux.HandleFunc("POST /api/v1/contacts", contacts.Create)
-	apiMux.HandleFunc("PUT /api/v1/contacts/{id}", contacts.Update)
-	apiMux.HandleFunc("DELETE /api/v1/contacts/{id}", contacts.Delete)
+	contacts := &v1contacts.Handler{Contacts: contactsModule}
+	contacts.RegisterRoutes(apiMux)
 
 	idem := v1.Idempotency(db)
 
@@ -172,7 +173,7 @@ func main() {
 	creditNotes := &v1creditnotes.Handler{CreditNotes: creditNoteModule}
 	creditNotes.RegisterRoutes(apiMux, idem)
 
-	reportsAPI := &v1reports.Handler{DB: db}
+	reportsAPI := &v1reports.Handler{DB: db, Accounts: accountModule}
 	apiMux.HandleFunc("GET /api/v1/reports/trial-balance", reportsAPI.TrialBalance)
 	apiMux.HandleFunc("GET /api/v1/reports/profit-loss", reportsAPI.ProfitLoss)
 	apiMux.HandleFunc("GET /api/v1/reports/balance-sheet", reportsAPI.BalanceSheet)
@@ -232,23 +233,9 @@ func main() {
 	protected := http.NewServeMux()
 	protected.HandleFunc("GET /{$}", h.Dashboard)
 
-	// Accounts (read: any user, write: requires accounts.manage)
-	protected.HandleFunc("GET /accounts", h.ListAccounts)
-	protected.HandleFunc("GET /accounts/new", h.NewAccount)
-	protected.HandleFunc("POST /accounts", auth.CapabilityOnly(model.CapAccountsManage, h.CreateAccount))
-	protected.HandleFunc("GET /accounts/{id}/edit", h.EditAccount)
-	protected.HandleFunc("POST /accounts/{id}", auth.CapabilityOnly(model.CapAccountsManage, h.UpdateAccount))
-	protected.HandleFunc("DELETE /accounts/{id}", auth.CapabilityOnly(model.CapAccountsManage, h.DeleteAccount))
+	h.RegisterAccountRoutes(protected)
 
-	// Contacts
-	protected.HandleFunc("GET /contacts", h.ListContacts)
-	protected.HandleFunc("GET /contacts/new", h.NewContact)
-	protected.HandleFunc("POST /contacts", auth.CapabilityOnly(model.CapContactsManage, h.CreateContact))
-	protected.HandleFunc("GET /contacts/{id}/edit", h.EditContact)
-	protected.HandleFunc("POST /contacts/{id}", auth.CapabilityOnly(model.CapContactsManage, h.UpdateContact))
-	protected.HandleFunc("DELETE /contacts/{id}", auth.CapabilityOnly(model.CapContactsManage, h.DeleteContact))
-	// Admin-only: choosing a weak code weakens an unauthenticated portal.
-	protected.HandleFunc("POST /contacts/{id}/portal-code", auth.AdminOnly(h.SaveContactPortalCode))
+	h.RegisterContactRoutes(protected)
 
 	h.RegisterAccountingRoutes(protected)
 	h.RegisterReceivablesPayablesRoutes(protected)
@@ -301,8 +288,7 @@ func main() {
 	protected.HandleFunc("POST /settings/api-tokens/{id}/revoke", auth.AdminOnly(h.RevokeAPIToken))
 
 	// Company Profile (admin-only settings shown on invoices)
-	protected.HandleFunc("GET /settings/company", auth.AdminOnly(h.CompanyProfilePage))
-	protected.HandleFunc("POST /settings/company", auth.AdminOnly(h.UpdateCompanyProfile))
+	h.RegisterCompanyRoutes(protected)
 
 	// School Calendar (admin-only closures and Google Calendar integration)
 	protected.HandleFunc("GET /settings/school-calendar", auth.AdminOnly(h.SchoolCalendarPage))

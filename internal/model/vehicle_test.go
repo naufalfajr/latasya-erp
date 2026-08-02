@@ -36,7 +36,7 @@ func TestListRouteCapacity(t *testing.T) {
 		t.Fatal("south route not seeded")
 	}
 
-	if err := model.CreateContact(db, &model.Contact{Name: "Student", ContactType: "customer", RouteID: westID, IsActive: true}); err != nil {
+	if err := testutil.CreateContact(db, &model.Contact{Name: "Student", ContactType: "customer", RouteID: westID, IsActive: true}); err != nil {
 		t.Fatalf("create contact: %v", err)
 	}
 

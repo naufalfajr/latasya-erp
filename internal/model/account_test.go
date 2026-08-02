@@ -11,7 +11,7 @@ func TestListAccounts_All(t *testing.T) {
 	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
-	accounts, err := model.ListAccounts(db, model.AccountFilter{})
+	accounts, err := testutil.ListAccounts(db, testutil.AccountFilter{})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -30,7 +30,7 @@ func TestListAccounts_FilterByType(t *testing.T) {
 
 	types := []string{"asset", "liability", "equity", "revenue", "expense"}
 	for _, typ := range types {
-		accounts, err := model.ListAccounts(db, model.AccountFilter{Type: typ})
+		accounts, err := testutil.ListAccounts(db, testutil.AccountFilter{Type: typ})
 		if err != nil {
 			t.Fatalf("filter by %s: %v", typ, err)
 		}
@@ -50,7 +50,7 @@ func TestListAccounts_FilterByActive(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 
 	active := true
-	accounts, err := model.ListAccounts(db, model.AccountFilter{IsActive: &active})
+	accounts, err := testutil.ListAccounts(db, testutil.AccountFilter{IsActive: &active})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -65,7 +65,7 @@ func TestListAccounts_Search(t *testing.T) {
 	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
-	accounts, err := model.ListAccounts(db, model.AccountFilter{Search: "fuel"})
+	accounts, err := testutil.ListAccounts(db, testutil.AccountFilter{Search: "fuel"})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -87,12 +87,12 @@ func TestCreateAccount(t *testing.T) {
 		Description:   "A test account",
 	}
 
-	if err := model.CreateAccount(db, a); err != nil {
+	if err := testutil.CreateAccount(db, a); err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
 	// Verify it was created
-	accounts, _ := model.ListAccounts(db, model.AccountFilter{Search: "Test Account"})
+	accounts, _ := testutil.ListAccounts(db, testutil.AccountFilter{Search: "Test Account"})
 	if len(accounts) != 1 {
 		t.Fatalf("expected 1 account, got %d", len(accounts))
 	}
@@ -109,10 +109,10 @@ func TestCashAccountClassificationValidation(t *testing.T) {
 		Code: "9-CASH", Name: "Petty Cash", AccountType: "asset",
 		NormalBalance: "debit", IsCash: true, IsActive: true,
 	}
-	if err := model.CreateAccount(db, valid); err != nil {
+	if err := testutil.CreateAccount(db, valid); err != nil {
 		t.Fatalf("create valid cash account: %v", err)
 	}
-	got, err := model.GetAccount(db, valid.ID)
+	got, err := testutil.GetAccount(db, valid.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,14 +131,14 @@ func TestCashAccountClassificationValidation(t *testing.T) {
 				Code: "9-BAD-" + tc.name, Name: tc.name, AccountType: tc.accountType,
 				NormalBalance: tc.normalBalance, IsCash: true, IsActive: true,
 			}
-			if err := model.CreateAccount(db, a); err == nil {
+			if err := testutil.CreateAccount(db, a); err == nil {
 				t.Fatal("expected cash classification validation error")
 			}
 		})
 	}
 
 	got.AccountType = "revenue"
-	if err := model.UpdateAccount(db, got); err == nil {
+	if err := testutil.UpdateAccount(db, got); err == nil {
 		t.Fatal("expected update to reject conflicting cash classification")
 	}
 }
@@ -155,7 +155,7 @@ func TestCreateAccount_DuplicateCode(t *testing.T) {
 		IsActive:      true,
 	}
 
-	err := model.CreateAccount(db, a)
+	err := testutil.CreateAccount(db, a)
 	if err == nil {
 		t.Fatal("expected error for duplicate code")
 	}
@@ -166,12 +166,12 @@ func TestGetAccount(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 
 	// Get first account
-	accounts, _ := model.ListAccounts(db, model.AccountFilter{})
+	accounts, _ := testutil.ListAccounts(db, testutil.AccountFilter{})
 	if len(accounts) == 0 {
 		t.Fatal("no accounts found")
 	}
 
-	account, err := model.GetAccount(db, accounts[0].ID)
+	account, err := testutil.GetAccount(db, accounts[0].ID)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -189,20 +189,20 @@ func TestUpdateAccount(t *testing.T) {
 		Code: "9-0002", Name: "Original", AccountType: "asset",
 		NormalBalance: "debit", IsActive: true,
 	}
-	model.CreateAccount(db, a)
+	testutil.CreateAccount(db, a)
 
-	accounts, _ := model.ListAccounts(db, model.AccountFilter{Search: "Original"})
+	accounts, _ := testutil.ListAccounts(db, testutil.AccountFilter{Search: "Original"})
 	if len(accounts) == 0 {
 		t.Fatal("test account not found")
 	}
 
 	// Update it
 	accounts[0].Name = "Updated"
-	if err := model.UpdateAccount(db, &accounts[0]); err != nil {
+	if err := testutil.UpdateAccount(db, &accounts[0]); err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	updated, _ := model.GetAccount(db, accounts[0].ID)
+	updated, _ := testutil.GetAccount(db, accounts[0].ID)
 	if updated.Name != "Updated" {
 		t.Errorf("expected name 'Updated', got %q", updated.Name)
 	}
@@ -217,19 +217,19 @@ func TestDeleteAccount_NonSystem(t *testing.T) {
 		Code: "9-0003", Name: "To Delete", AccountType: "asset",
 		NormalBalance: "debit", IsActive: true,
 	}
-	model.CreateAccount(db, a)
+	testutil.CreateAccount(db, a)
 
-	accounts, _ := model.ListAccounts(db, model.AccountFilter{Search: "To Delete"})
+	accounts, _ := testutil.ListAccounts(db, testutil.AccountFilter{Search: "To Delete"})
 	if len(accounts) == 0 {
 		t.Fatal("test account not found")
 	}
 
-	if err := model.DeleteAccount(db, accounts[0].ID); err != nil {
+	if err := testutil.DeleteAccount(db, accounts[0].ID); err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
 	// Verify deleted
-	_, err := model.GetAccount(db, accounts[0].ID)
+	_, err := testutil.GetAccount(db, accounts[0].ID)
 	if err == nil {
 		t.Error("expected error for deleted account")
 	}
@@ -240,16 +240,16 @@ func TestDeleteAccount_SystemProtected(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 
 	// Find a system account (Cash on Hand)
-	accounts, _ := model.ListAccounts(db, model.AccountFilter{Search: "Cash on Hand"})
+	accounts, _ := testutil.ListAccounts(db, testutil.AccountFilter{Search: "Cash on Hand"})
 	if len(accounts) == 0 {
 		t.Fatal("Cash on Hand not found")
 	}
 
 	// Try to delete — should not actually delete (WHERE is_system = 0)
-	model.DeleteAccount(db, accounts[0].ID)
+	testutil.DeleteAccount(db, accounts[0].ID)
 
 	// Should still exist
-	_, err := model.GetAccount(db, accounts[0].ID)
+	_, err := testutil.GetAccount(db, accounts[0].ID)
 	if err != nil {
 		t.Error("system account should not be deleted")
 	}
@@ -259,7 +259,7 @@ func TestListAccounts_OrderedByCode(t *testing.T) {
 	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
-	accounts, err := model.ListAccounts(db, model.AccountFilter{})
+	accounts, err := testutil.ListAccounts(db, testutil.AccountFilter{})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}

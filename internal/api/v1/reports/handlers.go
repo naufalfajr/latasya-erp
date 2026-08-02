@@ -7,12 +7,14 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/naufal/latasya-erp/internal/account"
 	v1 "github.com/naufal/latasya-erp/internal/api/v1"
 	"github.com/naufal/latasya-erp/internal/model"
 )
 
 type Handler struct {
-	DB *sql.DB
+	DB       *sql.DB
+	Accounts *account.Module
 }
 
 func idr(n int) string {
@@ -276,7 +278,7 @@ func (h *Handler) GeneralLedger(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	account, err := model.GetAccount(h.DB, accountID)
+	selected, err := h.Accounts.Get(r.Context(), accountID)
 	if err != nil {
 		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "account not found", nil)
 		return
@@ -290,8 +292,8 @@ func (h *Handler) GeneralLedger(w http.ResponseWriter, r *http.Request) {
 
 	resp := generalLedgerResp{
 		AccountID:   accountID,
-		AccountCode: account.Code,
-		AccountName: account.Name,
+		AccountCode: selected.Code,
+		AccountName: selected.Name,
 		From:        from,
 		To:          to,
 		Entries:     make([]generalLedgerEntryResp, 0, len(entries)),

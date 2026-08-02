@@ -39,19 +39,8 @@ func testServer(t *testing.T, basePath ...string) (*httptest.Server, *sql.DB) {
 
 	protected := http.NewServeMux()
 	protected.HandleFunc("GET /{$}", h.Dashboard)
-	protected.HandleFunc("GET /accounts", h.ListAccounts)
-	protected.HandleFunc("GET /accounts/new", h.NewAccount)
-	protected.HandleFunc("POST /accounts", auth.CapabilityOnly("accounts.manage", h.CreateAccount))
-	protected.HandleFunc("GET /accounts/{id}/edit", h.EditAccount)
-	protected.HandleFunc("POST /accounts/{id}", auth.CapabilityOnly("accounts.manage", h.UpdateAccount))
-	protected.HandleFunc("DELETE /accounts/{id}", auth.CapabilityOnly("accounts.manage", h.DeleteAccount))
-	protected.HandleFunc("GET /contacts", h.ListContacts)
-	protected.HandleFunc("GET /contacts/new", h.NewContact)
-	protected.HandleFunc("POST /contacts", auth.CapabilityOnly("contacts.manage", h.CreateContact))
-	protected.HandleFunc("GET /contacts/{id}/edit", h.EditContact)
-	protected.HandleFunc("POST /contacts/{id}", auth.CapabilityOnly("contacts.manage", h.UpdateContact))
-	protected.HandleFunc("DELETE /contacts/{id}", auth.CapabilityOnly("contacts.manage", h.DeleteContact))
-	protected.HandleFunc("POST /contacts/{id}/portal-code", auth.AdminOnly(h.SaveContactPortalCode))
+	h.RegisterAccountRoutes(protected)
+	h.RegisterContactRoutes(protected)
 	h.RegisterAccountingRoutes(protected)
 	h.RegisterInvoiceRoutes(protected)
 	h.RegisterReceivablesPayablesRoutes(protected)
@@ -478,7 +467,7 @@ func TestListContacts_TableColumnsAndRouteSort(t *testing.T) {
 	if err := db.QueryRow("SELECT id FROM routes WHERE name = 'East'").Scan(&routeID); err != nil {
 		t.Fatalf("get route: %v", err)
 	}
-	if err := model.CreateContact(db, &model.Contact{
+	if err := testutil.CreateContact(db, &model.Contact{
 		Name:        "Mapped Customer",
 		ContactType: "customer",
 		MapsLink:    "https://maps.example/pickup",

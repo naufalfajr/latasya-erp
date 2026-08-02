@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/naufal/latasya-erp/internal/audit"
+	"github.com/naufal/latasya-erp/internal/contact"
 	"github.com/naufal/latasya-erp/internal/model"
 )
 
@@ -146,7 +147,7 @@ func (m *Module) GenerateRecurring(ctx context.Context, actor Actor, invoiceDate
 	if len(invoiceDate) < 7 {
 		return nil, &ValidationError{Message: fmt.Sprintf("invalid invoice date: %q", invoiceDate)}
 	}
-	profile, err := model.GetCompanyProfileContext(ctx, m.db)
+	profile, err := m.company.Get(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("load company profile: %w", err)
 	}
@@ -169,15 +170,15 @@ func (m *Module) GenerateRecurring(ctx context.Context, actor Actor, invoiceDate
 	description := strings.NewReplacer("{month}", model.MonthNameID(month), "{year}", strconv.Itoa(year)).Replace(template)
 
 	active := true
-	customers, err := model.ListContactsContext(ctx, m.db, model.ContactFilter{Type: "customer", IsActive: &active})
+	customers, err := m.contacts.List(ctx, contact.Filter{Type: "customer", IsActive: &active})
 	if err != nil {
 		return nil, fmt.Errorf("list active customers: %w", err)
 	}
 	result := &RecurringResult{EffectiveDays: effectiveDays, MultiplierPercent: multiplier, Items: []GeneratedInvoice{}}
-	for _, contact := range customers {
-		item := GeneratedInvoice{ContactID: contact.ID, ContactName: contact.Name}
-		created, err := m.create(ctx, actor, Draft{ContactID: contact.ID, InvoiceDate: invoiceDate, DueDate: dueDate,
-			Lines: []DraftLine{{Description: description, Quantity: 100, UnitPrice: model.ApplyMonthlyPriceMultiplier(contact.Price(), multiplier), AccountID: profile.DefaultRevenueAccountID}}}, false, invoiceDate[:7])
+	for _, customer := range customers.Contacts {
+		item := GeneratedInvoice{ContactID: customer.ID, ContactName: customer.Name}
+		created, err := m.create(ctx, actor, Draft{ContactID: customer.ID, InvoiceDate: invoiceDate, DueDate: dueDate,
+			Lines: []DraftLine{{Description: description, Quantity: 100, UnitPrice: model.ApplyMonthlyPriceMultiplier(customer.Price(), multiplier), AccountID: profile.DefaultRevenueAccountID}}}, false, invoiceDate[:7])
 		if errors.Is(err, errRecurringAlreadyExists) {
 			item.Result = GeneratedSkipped
 			result.Skipped++

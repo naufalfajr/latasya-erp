@@ -23,11 +23,11 @@ func TestCreateContact(t *testing.T) {
 		IsActive:           true,
 	}
 
-	if err := model.CreateContact(db, c); err != nil {
+	if err := testutil.CreateContact(db, c); err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	contacts, _ := model.ListContacts(db, model.ContactFilter{Search: "SD Negeri"})
+	contacts, _ := testutil.ListContacts(db, testutil.ContactFilter{Search: "SD Negeri"})
 	if len(contacts) != 1 {
 		t.Fatalf("expected 1 contact, got %d", len(contacts))
 	}
@@ -80,12 +80,12 @@ func TestListContacts_FilterByType(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 
 	// Create customer and supplier
-	model.CreateContact(db, &model.Contact{Name: "Customer A", ContactType: "customer", IsActive: true})
-	model.CreateContact(db, &model.Contact{Name: "Supplier B", ContactType: "supplier", IsActive: true})
-	model.CreateContact(db, &model.Contact{Name: "Both C", ContactType: "both", IsActive: true})
+	testutil.CreateContact(db, &model.Contact{Name: "Customer A", ContactType: "customer", IsActive: true})
+	testutil.CreateContact(db, &model.Contact{Name: "Supplier B", ContactType: "supplier", IsActive: true})
+	testutil.CreateContact(db, &model.Contact{Name: "Both C", ContactType: "both", IsActive: true})
 
 	// Filter customers — should include "customer" and "both"
-	customers, err := model.ListContacts(db, model.ContactFilter{Type: "customer"})
+	customers, err := testutil.ListContacts(db, testutil.ContactFilter{Type: "customer"})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -94,7 +94,7 @@ func TestListContacts_FilterByType(t *testing.T) {
 	}
 
 	// Filter suppliers — should include "supplier" and "both"
-	suppliers, _ := model.ListContacts(db, model.ContactFilter{Type: "supplier"})
+	suppliers, _ := testutil.ListContacts(db, testutil.ContactFilter{Type: "supplier"})
 	if len(suppliers) != 2 {
 		t.Errorf("expected 2 contacts (supplier + both), got %d", len(suppliers))
 	}
@@ -104,17 +104,17 @@ func TestListContacts_Search(t *testing.T) {
 	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
-	model.CreateContact(db, &model.Contact{Name: "SPBU Pertamina", ContactType: "supplier", Phone: "021555", IsActive: true})
-	model.CreateContact(db, &model.Contact{Name: "SMP Negeri 2", ContactType: "customer", IsActive: true})
+	testutil.CreateContact(db, &model.Contact{Name: "SPBU Pertamina", ContactType: "supplier", Phone: "021555", IsActive: true})
+	testutil.CreateContact(db, &model.Contact{Name: "SMP Negeri 2", ContactType: "customer", IsActive: true})
 
 	// Search by name
-	contacts, _ := model.ListContacts(db, model.ContactFilter{Search: "Pertamina"})
+	contacts, _ := testutil.ListContacts(db, testutil.ContactFilter{Search: "Pertamina"})
 	if len(contacts) != 1 {
 		t.Errorf("expected 1 contact, got %d", len(contacts))
 	}
 
 	// Search by phone
-	contacts, _ = model.ListContacts(db, model.ContactFilter{Search: "021555"})
+	contacts, _ = testutil.ListContacts(db, testutil.ContactFilter{Search: "021555"})
 	if len(contacts) != 1 {
 		t.Errorf("expected 1 contact by phone search, got %d", len(contacts))
 	}
@@ -124,14 +124,14 @@ func TestGetContact(t *testing.T) {
 	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
-	model.CreateContact(db, &model.Contact{Name: "Test Contact", ContactType: "customer", IsActive: true})
+	testutil.CreateContact(db, &model.Contact{Name: "Test Contact", ContactType: "customer", IsActive: true})
 
-	contacts, _ := model.ListContacts(db, model.ContactFilter{Search: "Test Contact"})
+	contacts, _ := testutil.ListContacts(db, testutil.ContactFilter{Search: "Test Contact"})
 	if len(contacts) == 0 {
 		t.Fatal("contact not found")
 	}
 
-	c, err := model.GetContact(db, contacts[0].ID)
+	c, err := testutil.GetContact(db, contacts[0].ID)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -144,19 +144,19 @@ func TestUpdateContact(t *testing.T) {
 	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
-	model.CreateContact(db, &model.Contact{Name: "Original", ContactType: "customer", IsActive: true})
+	testutil.CreateContact(db, &model.Contact{Name: "Original", ContactType: "customer", IsActive: true})
 
-	contacts, _ := model.ListContacts(db, model.ContactFilter{Search: "Original"})
+	contacts, _ := testutil.ListContacts(db, testutil.ContactFilter{Search: "Original"})
 	contacts[0].Name = "Updated"
 	contacts[0].Phone = "0999"
 	contacts[0].DistanceKm = 10.5
 	contacts[0].HasSiblingDiscount = true
 
-	if err := model.UpdateContact(db, &contacts[0]); err != nil {
+	if err := testutil.UpdateContact(db, &contacts[0]); err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	updated, _ := model.GetContact(db, contacts[0].ID)
+	updated, _ := testutil.GetContact(db, contacts[0].ID)
 	if updated.Name != "Updated" {
 		t.Errorf("expected name 'Updated', got %q", updated.Name)
 	}
@@ -172,18 +172,18 @@ func TestDeleteContact(t *testing.T) {
 	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
-	model.CreateContact(db, &model.Contact{Name: "To Delete", ContactType: "supplier", IsActive: true})
+	testutil.CreateContact(db, &model.Contact{Name: "To Delete", ContactType: "supplier", IsActive: true})
 
-	contacts, _ := model.ListContacts(db, model.ContactFilter{Search: "To Delete"})
+	contacts, _ := testutil.ListContacts(db, testutil.ContactFilter{Search: "To Delete"})
 	if len(contacts) == 0 {
 		t.Fatal("contact not found")
 	}
 
-	if err := model.DeleteContact(db, contacts[0].ID); err != nil {
+	if err := testutil.DeleteContact(db, contacts[0].ID); err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	_, err := model.GetContact(db, contacts[0].ID)
+	_, err := testutil.GetContact(db, contacts[0].ID)
 	if err == nil {
 		t.Error("expected error for deleted contact")
 	}
@@ -193,11 +193,11 @@ func TestListContacts_FilterActive(t *testing.T) {
 	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
-	model.CreateContact(db, &model.Contact{Name: "Active", ContactType: "customer", IsActive: true})
-	model.CreateContact(db, &model.Contact{Name: "Inactive", ContactType: "customer", IsActive: false})
+	testutil.CreateContact(db, &model.Contact{Name: "Active", ContactType: "customer", IsActive: true})
+	testutil.CreateContact(db, &model.Contact{Name: "Inactive", ContactType: "customer", IsActive: false})
 
 	active := true
-	contacts, _ := model.ListContacts(db, model.ContactFilter{IsActive: &active})
+	contacts, _ := testutil.ListContacts(db, testutil.ContactFilter{IsActive: &active})
 	for _, c := range contacts {
 		if !c.IsActive {
 			t.Errorf("expected only active contacts, got inactive: %s", c.Name)
@@ -205,7 +205,7 @@ func TestListContacts_FilterActive(t *testing.T) {
 	}
 
 	inactive := false
-	contacts, _ = model.ListContacts(db, model.ContactFilter{IsActive: &inactive})
+	contacts, _ = testutil.ListContacts(db, testutil.ContactFilter{IsActive: &inactive})
 	for _, c := range contacts {
 		if c.IsActive {
 			t.Errorf("expected only inactive contacts, got active: %s", c.Name)
@@ -220,10 +220,10 @@ func TestListContacts_Sort(t *testing.T) {
 	var eastID, westID int
 	db.QueryRow("SELECT id FROM routes WHERE name = 'East'").Scan(&eastID)
 	db.QueryRow("SELECT id FROM routes WHERE name = 'West'").Scan(&westID)
-	model.CreateContact(db, &model.Contact{Name: "B", ContactType: "customer", Class: "2", RouteID: eastID, IsActive: true})
-	model.CreateContact(db, &model.Contact{Name: "A", ContactType: "customer", Class: "1", RouteID: westID, IsActive: false})
+	testutil.CreateContact(db, &model.Contact{Name: "B", ContactType: "customer", Class: "2", RouteID: eastID, IsActive: true})
+	testutil.CreateContact(db, &model.Contact{Name: "A", ContactType: "customer", Class: "1", RouteID: westID, IsActive: false})
 
-	contacts, err := model.ListContacts(db, model.ContactFilter{Sort: "name", Order: "desc"})
+	contacts, err := testutil.ListContacts(db, testutil.ContactFilter{Sort: "name", Order: "desc"})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -231,7 +231,7 @@ func TestListContacts_Sort(t *testing.T) {
 		t.Fatalf("expected B first by name desc, got %s", contacts[0].Name)
 	}
 
-	contacts, err = model.ListContacts(db, model.ContactFilter{Sort: "class", Order: "asc"})
+	contacts, err = testutil.ListContacts(db, testutil.ContactFilter{Sort: "class", Order: "asc"})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -239,7 +239,7 @@ func TestListContacts_Sort(t *testing.T) {
 		t.Fatalf("expected class 1 first, got %s", contacts[0].Class)
 	}
 
-	contacts, err = model.ListContacts(db, model.ContactFilter{Sort: "route", Order: "asc"})
+	contacts, err = testutil.ListContacts(db, testutil.ContactFilter{Sort: "route", Order: "asc"})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -247,7 +247,7 @@ func TestListContacts_Sort(t *testing.T) {
 		t.Fatalf("expected East first by route asc, got %s", contacts[0].RouteName)
 	}
 
-	contacts, err = model.ListContacts(db, model.ContactFilter{Sort: "status", Order: "desc"})
+	contacts, err = testutil.ListContacts(db, testutil.ContactFilter{Sort: "status", Order: "desc"})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -265,10 +265,10 @@ func TestContactRoute(t *testing.T) {
 		t.Fatalf("get route: %v", err)
 	}
 
-	if err := model.CreateContact(db, &model.Contact{Name: "Routed", ContactType: "customer", RouteID: routeID, IsActive: true}); err != nil {
+	if err := testutil.CreateContact(db, &model.Contact{Name: "Routed", ContactType: "customer", RouteID: routeID, IsActive: true}); err != nil {
 		t.Fatalf("create contact: %v", err)
 	}
-	contacts, err := model.ListContacts(db, model.ContactFilter{Search: "Routed"})
+	contacts, err := testutil.ListContacts(db, testutil.ContactFilter{Search: "Routed"})
 	if err != nil {
 		t.Fatalf("list contacts: %v", err)
 	}

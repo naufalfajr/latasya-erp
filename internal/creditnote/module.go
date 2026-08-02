@@ -1,10 +1,21 @@
 package creditnote
 
-import "database/sql"
+import (
+	"database/sql"
 
-type Module struct{ db *sql.DB }
+	"github.com/naufal/latasya-erp/internal/account"
+	"github.com/naufal/latasya-erp/internal/contact"
+)
 
-func New(db *sql.DB) *Module { return &Module{db: db} }
+type Module struct {
+	db       *sql.DB
+	accounts *account.Module
+	contacts *contact.Module
+}
+
+func New(db *sql.DB) *Module {
+	return &Module{db: db, accounts: account.New(db), contacts: contact.New(db)}
+}
 
 type Actor struct {
 	UserID    int

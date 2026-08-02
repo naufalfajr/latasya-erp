@@ -8,8 +8,11 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/naufal/latasya-erp/internal/account"
 	"github.com/naufal/latasya-erp/internal/auth"
 	"github.com/naufal/latasya-erp/internal/bill"
+	"github.com/naufal/latasya-erp/internal/company"
+	"github.com/naufal/latasya-erp/internal/contact"
 	"github.com/naufal/latasya-erp/internal/creditnote"
 	"github.com/naufal/latasya-erp/internal/googlecalendar"
 	"github.com/naufal/latasya-erp/internal/invoice"
@@ -34,6 +37,9 @@ type Handler struct {
 	Journals             *journal.Module
 	Bills                *bill.Module
 	CreditNotes          *creditnote.Module
+	Accounts             *account.Module
+	Contacts             *contact.Module
+	Company              *company.Module
 
 	mu    sync.RWMutex
 	cache map[string]*template.Template

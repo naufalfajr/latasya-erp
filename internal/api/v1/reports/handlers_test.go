@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/naufal/latasya-erp/internal/account"
 	v1 "github.com/naufal/latasya-erp/internal/api/v1"
 	"github.com/naufal/latasya-erp/internal/api/v1/reports"
 	"github.com/naufal/latasya-erp/internal/model"
@@ -18,7 +19,7 @@ import (
 
 func newTestServer(t *testing.T, db *sql.DB) *httptest.Server {
 	t.Helper()
-	h := &reports.Handler{DB: db}
+	h := &reports.Handler{DB: db, Accounts: account.New(db)}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/reports/trial-balance", h.TrialBalance)
 	mux.HandleFunc("GET /api/v1/reports/profit-loss", h.ProfitLoss)

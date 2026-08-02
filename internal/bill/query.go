@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/naufal/latasya-erp/internal/account"
+	"github.com/naufal/latasya-erp/internal/contact"
 	"github.com/naufal/latasya-erp/internal/model"
 )
 
@@ -107,19 +109,19 @@ func (m *Module) Get(ctx context.Context, id int) (*model.Bill, error) { return 
 
 func (m *Module) Options(ctx context.Context) (*FormOptions, error) {
 	active := true
-	contacts, err := model.ListContactsContext(ctx, m.db, model.ContactFilter{Type: "supplier", IsActive: &active})
+	contacts, err := m.contacts.List(ctx, contact.Filter{Type: "supplier", IsActive: &active})
 	if err != nil {
 		return nil, fmt.Errorf("list bill suppliers: %w", err)
 	}
-	expense, err := model.ListAccountsContext(ctx, m.db, model.AccountFilter{Type: model.AccountTypeExpense, IsActive: &active})
+	expense, err := m.accounts.List(ctx, account.Filter{Type: model.AccountTypeExpense, IsActive: &active})
 	if err != nil {
 		return nil, fmt.Errorf("list bill expense accounts: %w", err)
 	}
-	assets, err := model.ListAccountsContext(ctx, m.db, model.AccountFilter{Type: model.AccountTypeAsset, IsActive: &active})
+	assets, err := m.accounts.List(ctx, account.Filter{Type: model.AccountTypeAsset, IsActive: &active})
 	if err != nil {
 		return nil, fmt.Errorf("list bill payment accounts: %w", err)
 	}
-	return &FormOptions{Contacts: contacts, ExpenseAccounts: expense, AssetAccounts: assets}, nil
+	return &FormOptions{Contacts: contacts.Contacts, ExpenseAccounts: expense.Accounts, AssetAccounts: assets.Accounts}, nil
 }
 
 func instant(value string) string {

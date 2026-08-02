@@ -47,7 +47,7 @@ func (h *Handler) PortalIndex(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "private, no-store")
 
 	code := r.PathValue("code")
-	family, err := model.ContactsByPortalCode(h.DB, code)
+	family, err := h.Contacts.FamilyByPortalCode(r.Context(), code)
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
@@ -74,7 +74,7 @@ func (h *Handler) PortalIndex(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
-	company, err := model.GetCompanyProfile(h.DB)
+	company, err := h.Company.Get(r.Context())
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
@@ -144,7 +144,7 @@ func (h *Handler) PortalInvoicePDF(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	family, err := model.ContactsByPortalCode(h.DB, code)
+	family, err := h.Contacts.FamilyByPortalCode(r.Context(), code)
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
@@ -160,7 +160,7 @@ func (h *Handler) PortalInvoicePDF(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	company, err := model.GetCompanyProfile(h.DB)
+	company, err := h.Company.Get(r.Context())
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return

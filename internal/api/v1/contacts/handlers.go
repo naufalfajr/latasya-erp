@@ -2,23 +2,18 @@
 package contacts
 
 import (
-	"database/sql"
 	"errors"
 	"net/http"
 	"strconv"
-	"unicode/utf8"
 
 	v1 "github.com/naufal/latasya-erp/internal/api/v1"
-	"github.com/naufal/latasya-erp/internal/audit"
+	"github.com/naufal/latasya-erp/internal/auth"
+	contactModule "github.com/naufal/latasya-erp/internal/contact"
 	"github.com/naufal/latasya-erp/internal/model"
 )
 
-// Handler holds shared dependencies for the contacts API.
-type Handler struct {
-	DB *sql.DB
-}
+type Handler struct{ Contacts *contactModule.Module }
 
-// contactInput is the JSON request body for Create and Update.
 type contactInput struct {
 	Name               string  `json:"name"`
 	ContactType        string  `json:"contact_type"`
@@ -34,294 +29,139 @@ type contactInput struct {
 	IsActive           *bool   `json:"is_active"`
 }
 
-func validateContactInput(inp *contactInput) map[string]string {
-	fields := make(map[string]string)
-	if inp.Name == "" {
-		fields["name"] = "required"
+func actor(r *http.Request) contactModule.Actor {
+	u := auth.UserFromContext(r.Context())
+	if u == nil {
+		return contactModule.Actor{}
 	}
-	if inp.ContactType == "" {
-		fields["contact_type"] = "required"
-	} else if inp.ContactType != "customer" && inp.ContactType != "supplier" && inp.ContactType != "both" {
-		fields["contact_type"] = "must be customer, supplier, or both"
-	}
-	if utf8.RuneCountInString(inp.Class) > 5 {
-		fields["class"] = "must be 5 characters or fewer"
-	}
-	if inp.DistanceKm < 0 {
-		fields["distance_km"] = "must be 0 or greater"
-	}
-	return fields
+	return contactModule.Actor{UserID: u.ID, CanManage: v1.HasEffectiveCapability(r.Context(), model.CapContactsManage)}
 }
 
-// List handles GET /api/v1/contacts
-// Supports ?type=customer|supplier|both and ?search=
+func writeModuleError(w http.ResponseWriter, r *http.Request, err error, fallback string) {
+	if errors.Is(err, contactModule.ErrForbidden) {
+		v1.WriteError(w, r, http.StatusForbidden, v1.CodeForbidden, "contacts.manage capability required", nil)
+		return
+	}
+	if errors.Is(err, contactModule.ErrNotFound) {
+		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "contact not found", nil)
+		return
+	}
+	var validation *contactModule.ValidationError
+	if errors.As(err, &validation) {
+		v1.WriteError(w, r, http.StatusUnprocessableEntity, v1.CodeValidationFailed, "validation failed", validation.Fields)
+		return
+	}
+	var conflict *contactModule.ConflictError
+	if errors.As(err, &conflict) {
+		v1.WriteError(w, r, http.StatusConflict, v1.CodeConflict, conflict.Message, nil)
+		return
+	}
+	v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, fallback, nil)
+}
+
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	page := v1.ParsePage(r)
-	contactType := r.URL.Query().Get("type")
-	search := r.URL.Query().Get("search")
-
-	contacts, err := model.ListContacts(h.DB, model.ContactFilter{
-		Type:   contactType,
-		Search: search,
-	})
+	result, err := h.Contacts.List(r.Context(), contactModule.Filter{Type: r.URL.Query().Get("type"), Search: r.URL.Query().Get("search"), Limit: page.PerPage, Offset: page.Offset()})
 	if err != nil {
 		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to list contacts", nil)
 		return
 	}
-
-	total := len(contacts)
-	start := page.Offset()
-	end := start + page.PerPage
-	if start > total {
-		start = total
-	}
-	if end > total {
-		end = total
-	}
-
-	v1.WriteList(w, http.StatusOK, contacts[start:end], page, total)
+	v1.WriteList(w, http.StatusOK, result.Contacts, page, result.Total)
 }
 
-// Get handles GET /api/v1/contacts/{id}
 func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "contact not found", nil)
 		return
 	}
-
-	contact, err := model.GetContact(h.DB, id)
+	c, err := h.Contacts.Get(r.Context(), id)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "contact not found", nil)
-			return
-		}
-		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "contact not found", nil)
+		writeModuleError(w, r, err, "failed to get contact")
 		return
 	}
-
-	v1.WriteJSON(w, http.StatusOK, contact)
+	v1.WriteJSON(w, http.StatusOK, c)
 }
 
-// Create handles POST /api/v1/contacts
-// Requires contacts.manage capability. Returns 201 Created.
+func draft(inp contactInput, isActive bool) contactModule.Draft {
+	return contactModule.Draft{Name: inp.Name, ContactType: inp.ContactType, Phone: inp.Phone, Email: inp.Email, Address: inp.Address, Notes: inp.Notes, MapsLink: inp.MapsLink, Class: inp.Class, DistanceKm: inp.DistanceKm, HasSiblingDiscount: inp.HasSiblingDiscount, IsReturnOnly: inp.IsReturnOnly, IsActive: isActive}
+}
+
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	if !v1.HasEffectiveCapability(r.Context(), model.CapContactsManage) {
 		v1.WriteError(w, r, http.StatusForbidden, v1.CodeForbidden, "contacts.manage capability required", nil)
 		return
 	}
-
 	var inp contactInput
 	if err := v1.DecodeJSON(w, r, &inp); err != nil {
 		v1.WriteError(w, r, http.StatusBadRequest, v1.CodeInvalidRequest, "invalid request body", nil)
 		return
 	}
-
-	fields := validateContactInput(&inp)
-	if len(fields) > 0 {
-		v1.WriteError(w, r, http.StatusUnprocessableEntity, v1.CodeValidationFailed, "validation failed", fields)
-		return
-	}
-
 	isActive := true
 	if inp.IsActive != nil {
 		isActive = *inp.IsActive
 	}
-
-	c := &model.Contact{
-		Name:               inp.Name,
-		ContactType:        inp.ContactType,
-		Phone:              inp.Phone,
-		Email:              inp.Email,
-		Address:            inp.Address,
-		Notes:              inp.Notes,
-		MapsLink:           inp.MapsLink,
-		Class:              inp.Class,
-		DistanceKm:         inp.DistanceKm,
-		HasSiblingDiscount: inp.HasSiblingDiscount,
-		IsReturnOnly:       inp.IsReturnOnly,
-		IsActive:           isActive,
-	}
-
-	if err := model.CreateContact(h.DB, c); err != nil {
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to create contact", nil)
-		return
-	}
-
-	var newID int64
-	h.DB.QueryRow("SELECT last_insert_rowid()").Scan(&newID)
-	c.ID = int(newID)
-
-	audit.Log(r.Context(), h.DB, audit.Event{
-		Action:      "contact.create",
-		TargetType:  "contact",
-		TargetID:    newID,
-		TargetLabel: c.Name,
-		Metadata: map[string]any{
-			"after": map[string]any{
-				"name":                 c.Name,
-				"contact_type":         c.ContactType,
-				"email":                c.Email,
-				"phone":                c.Phone,
-				"class":                c.Class,
-				"distance_km":          c.DistanceKm,
-				"has_sibling_discount": c.HasSiblingDiscount,
-				"is_return_only":       c.IsReturnOnly,
-				"is_active":            c.IsActive,
-			},
-		},
-	})
-
-	created, err := model.GetContact(h.DB, c.ID)
+	created, err := h.Contacts.Create(r.Context(), actor(r), draft(inp, isActive))
 	if err != nil {
-		v1.WriteJSON(w, http.StatusCreated, c)
+		writeModuleError(w, r, err, "failed to create contact")
 		return
 	}
 	v1.WriteJSON(w, http.StatusCreated, created)
 }
 
-// Update handles PUT /api/v1/contacts/{id}
-// Requires contacts.manage capability. Returns 200 OK.
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	if !v1.HasEffectiveCapability(r.Context(), model.CapContactsManage) {
 		v1.WriteError(w, r, http.StatusForbidden, v1.CodeForbidden, "contacts.manage capability required", nil)
 		return
 	}
-
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "contact not found", nil)
 		return
 	}
-
-	existing, err := model.GetContact(h.DB, id)
+	existing, err := h.Contacts.Get(r.Context(), id)
 	if err != nil {
-		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "contact not found", nil)
+		writeModuleError(w, r, err, "failed to get contact")
 		return
 	}
-
 	var inp contactInput
 	if err := v1.DecodeJSON(w, r, &inp); err != nil {
 		v1.WriteError(w, r, http.StatusBadRequest, v1.CodeInvalidRequest, "invalid request body", nil)
 		return
 	}
-
-	fields := validateContactInput(&inp)
-	if len(fields) > 0 {
-		v1.WriteError(w, r, http.StatusUnprocessableEntity, v1.CodeValidationFailed, "validation failed", fields)
-		return
-	}
-
 	isActive := existing.IsActive
 	if inp.IsActive != nil {
 		isActive = *inp.IsActive
 	}
-
-	c := &model.Contact{
-		ID:                 id,
-		Name:               inp.Name,
-		ContactType:        inp.ContactType,
-		Phone:              inp.Phone,
-		Email:              inp.Email,
-		Address:            inp.Address,
-		Notes:              inp.Notes,
-		MapsLink:           inp.MapsLink,
-		Class:              inp.Class,
-		DistanceKm:         inp.DistanceKm,
-		HasSiblingDiscount: inp.HasSiblingDiscount,
-		IsReturnOnly:       inp.IsReturnOnly,
-		IsActive:           isActive,
-	}
-
-	if err := model.UpdateContact(h.DB, c); err != nil {
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to update contact", nil)
-		return
-	}
-
-	oldFields := map[string]any{
-		"name":                 existing.Name,
-		"contact_type":         existing.ContactType,
-		"email":                existing.Email,
-		"phone":                existing.Phone,
-		"address":              existing.Address,
-		"notes":                existing.Notes,
-		"maps_link":            existing.MapsLink,
-		"class":                existing.Class,
-		"distance_km":          existing.DistanceKm,
-		"has_sibling_discount": existing.HasSiblingDiscount,
-		"is_return_only":       existing.IsReturnOnly,
-		"is_active":            existing.IsActive,
-	}
-	newFields := map[string]any{
-		"name":                 c.Name,
-		"contact_type":         c.ContactType,
-		"email":                c.Email,
-		"phone":                c.Phone,
-		"address":              c.Address,
-		"notes":                c.Notes,
-		"maps_link":            c.MapsLink,
-		"class":                c.Class,
-		"distance_km":          c.DistanceKm,
-		"has_sibling_discount": c.HasSiblingDiscount,
-		"is_return_only":       c.IsReturnOnly,
-		"is_active":            c.IsActive,
-	}
-	meta := audit.Diff(oldFields, newFields,
-		[]string{"name", "contact_type", "email", "phone", "address", "notes", "maps_link", "class", "distance_km", "has_sibling_discount", "is_return_only", "is_active"})
-	if meta != nil {
-		audit.Log(r.Context(), h.DB, audit.Event{
-			Action:      "contact.update",
-			TargetType:  "contact",
-			TargetID:    int64(id),
-			TargetLabel: existing.Name,
-			Metadata:    meta,
-		})
-	}
-
-	updated, err := model.GetContact(h.DB, id)
+	updated, err := h.Contacts.Update(r.Context(), actor(r), id, draft(inp, isActive))
 	if err != nil {
-		v1.WriteJSON(w, http.StatusOK, c)
+		writeModuleError(w, r, err, "failed to update contact")
 		return
 	}
 	v1.WriteJSON(w, http.StatusOK, updated)
 }
 
-// Delete handles DELETE /api/v1/contacts/{id}
-// Requires contacts.manage capability. Returns 204 No Content.
 func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	if !v1.HasEffectiveCapability(r.Context(), model.CapContactsManage) {
 		v1.WriteError(w, r, http.StatusForbidden, v1.CodeForbidden, "contacts.manage capability required", nil)
 		return
 	}
-
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "contact not found", nil)
 		return
 	}
-
-	existing, _ := model.GetContact(h.DB, id)
-
-	if err := model.DeleteContact(h.DB, id); err != nil {
-		v1.WriteError(w, r, http.StatusConflict, v1.CodeConflict, err.Error(), nil)
+	if _, err := h.Contacts.Delete(r.Context(), actor(r), id); err != nil {
+		writeModuleError(w, r, err, "failed to delete contact")
 		return
 	}
-
-	if existing != nil {
-		audit.Log(r.Context(), h.DB, audit.Event{
-			Action:      "contact.delete",
-			TargetType:  "contact",
-			TargetID:    int64(id),
-			TargetLabel: existing.Name,
-			Metadata: map[string]any{
-				"before": map[string]any{
-					"name":         existing.Name,
-					"contact_type": existing.ContactType,
-					"email":        existing.Email,
-				},
-			},
-		})
-	}
-
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/v1/contacts", h.List)
+	mux.HandleFunc("GET /api/v1/contacts/{id}", h.Get)
+	mux.HandleFunc("POST /api/v1/contacts", h.Create)
+	mux.HandleFunc("PUT /api/v1/contacts/{id}", h.Update)
+	mux.HandleFunc("DELETE /api/v1/contacts/{id}", h.Delete)
 }

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/naufal/latasya-erp/internal/account"
 	"github.com/naufal/latasya-erp/internal/model"
 )
 
@@ -140,31 +141,14 @@ func instant(value string) string {
 }
 
 func (m *Module) Options(ctx context.Context, accountType string, withVehicles bool) (*FormOptions, error) {
-	query := `SELECT id, code, name, account_type, normal_balance, parent_id, is_system, is_active, is_cash,
-		COALESCE(description,''), created_at, updated_at FROM accounts WHERE is_active=1`
-	var args []any
-	if accountType != "" {
-		query += " AND account_type=?"
-		args = append(args, accountType)
-	}
-	query += " ORDER BY code"
-	rows, err := m.db.QueryContext(ctx, query, args...)
+	active := true
+	accounts, err := m.accounts.List(ctx, account.Filter{Type: accountType, IsActive: &active})
 	if err != nil {
 		return nil, fmt.Errorf("list journal accounts: %w", err)
 	}
-	defer rows.Close()
-	result := &FormOptions{Accounts: make([]model.Account, 0), Vehicles: make([]model.Vehicle, 0)}
-	for rows.Next() {
-		var account model.Account
-		if err := rows.Scan(&account.ID, &account.Code, &account.Name, &account.AccountType, &account.NormalBalance,
-			&account.ParentID, &account.IsSystem, &account.IsActive, &account.IsCash, &account.Description,
-			&account.CreatedAt, &account.UpdatedAt); err != nil {
-			return nil, fmt.Errorf("scan journal account: %w", err)
-		}
-		result.Accounts = append(result.Accounts, account)
-	}
+	result := &FormOptions{Accounts: accounts.Accounts, Vehicles: make([]model.Vehicle, 0)}
 	if !withVehicles {
-		return result, rows.Err()
+		return result, nil
 	}
 	vehicleRows, err := m.db.QueryContext(ctx, `SELECT id, code, capacity, is_active FROM vehicles WHERE is_active=1 ORDER BY code`)
 	if err != nil {

@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/naufal/latasya-erp/internal/account"
+	"github.com/naufal/latasya-erp/internal/contact"
 	"github.com/naufal/latasya-erp/internal/model"
 )
 
@@ -117,15 +119,15 @@ func (m *Module) ForInvoice(ctx context.Context, invoiceID int) ([]model.CreditN
 
 func (m *Module) Options(ctx context.Context) (*FormOptions, error) {
 	active := true
-	contacts, err := model.ListContactsContext(ctx, m.db, model.ContactFilter{Type: "customer", IsActive: &active})
+	contacts, err := m.contacts.List(ctx, contact.Filter{Type: "customer", IsActive: &active})
 	if err != nil {
 		return nil, fmt.Errorf("list credit note customers: %w", err)
 	}
-	accounts, err := model.ListAccountsContext(ctx, m.db, model.AccountFilter{Type: model.AccountTypeRevenue, IsActive: &active})
+	accounts, err := m.accounts.List(ctx, account.Filter{Type: model.AccountTypeRevenue, IsActive: &active})
 	if err != nil {
 		return nil, fmt.Errorf("list credit note revenue accounts: %w", err)
 	}
-	return &FormOptions{Contacts: contacts, RevenueAccounts: accounts}, nil
+	return &FormOptions{Contacts: contacts.Contacts, RevenueAccounts: accounts.Accounts}, nil
 }
 func instant(value string) string {
 	parsed, err := time.Parse("2006-01-02 15:04:05", value)

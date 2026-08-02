@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/naufal/latasya-erp/internal/account"
 	"github.com/naufal/latasya-erp/internal/model"
 )
 
@@ -104,7 +105,7 @@ func (h *Handler) GeneralLedger(w http.ResponseWriter, r *http.Request) {
 	accountID, _ := strconv.Atoi(accountIDStr)
 
 	active := true
-	accounts, _ := model.ListAccounts(h.DB, model.AccountFilter{IsActive: &active})
+	accountResult, _ := h.Accounts.List(r.Context(), account.Filter{IsActive: &active})
 
 	var entries []model.GeneralLedgerEntry
 	var selectedAccount *model.Account
@@ -116,7 +117,7 @@ func (h *Handler) GeneralLedger(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 			return
 		}
-		selectedAccount, _ = model.GetAccount(h.DB, accountID)
+		selectedAccount, _ = h.Accounts.Get(r.Context(), accountID)
 		for _, e := range entries {
 			totalDebit += e.Debit
 			totalCredit += e.Credit
@@ -135,7 +136,7 @@ func (h *Handler) GeneralLedger(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.render(w, r, "templates/reports/general_ledger.html", "General Ledger", map[string]any{
-		"Accounts":        accounts,
+		"Accounts":        accountResult.Accounts,
 		"Entries":         entries,
 		"SelectedAccount": selectedAccount,
 		"AccountID":       accountID,

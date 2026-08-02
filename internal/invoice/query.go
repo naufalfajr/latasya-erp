@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/naufal/latasya-erp/internal/account"
+	"github.com/naufal/latasya-erp/internal/contact"
 	"github.com/naufal/latasya-erp/internal/model"
 )
 
@@ -125,28 +127,28 @@ func (m *Module) View(ctx context.Context, id int) (*View, error) {
 		return nil, err
 	}
 	active := true
-	accounts, err := model.ListAccountsContext(ctx, m.db, model.AccountFilter{Type: "asset", IsActive: &active})
+	result, err := m.accounts.List(ctx, account.Filter{Type: "asset", IsActive: &active})
 	if err != nil {
 		return nil, fmt.Errorf("list payment accounts: %w", err)
 	}
-	return &View{Detail: *detail, AssetAccounts: accounts}, nil
+	return &View{Detail: *detail, AssetAccounts: result.Accounts}, nil
 }
 
 func (m *Module) FormOptions(ctx context.Context) (*FormOptions, error) {
 	active := true
-	contacts, err := model.ListContactsContext(ctx, m.db, model.ContactFilter{Type: "customer", IsActive: &active})
+	contacts, err := m.contacts.List(ctx, contact.Filter{Type: "customer", IsActive: &active})
 	if err != nil {
 		return nil, fmt.Errorf("list invoice contacts: %w", err)
 	}
-	revenue, err := model.ListAccountsContext(ctx, m.db, model.AccountFilter{Type: "revenue", IsActive: &active})
+	revenue, err := m.accounts.List(ctx, account.Filter{Type: "revenue", IsActive: &active})
 	if err != nil {
 		return nil, fmt.Errorf("list revenue accounts: %w", err)
 	}
-	profile, err := model.GetCompanyProfileContext(ctx, m.db)
+	profile, err := m.company.Get(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("load invoice defaults: %w", err)
 	}
-	return &FormOptions{Contacts: contacts, RevenueAccounts: revenue,
+	return &FormOptions{Contacts: contacts.Contacts, RevenueAccounts: revenue.Accounts,
 		DefaultRevenueAccountID:      profile.DefaultRevenueAccountID,
 		RecurringDescriptionTemplate: profile.RecurringDescriptionTemplate}, nil
 }
@@ -156,7 +158,7 @@ func (m *Module) Document(ctx context.Context, id int) (*Document, error) {
 	if err != nil {
 		return nil, err
 	}
-	company, err := model.GetCompanyProfileContext(ctx, m.db)
+	company, err := m.company.Get(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("load invoice company profile: %w", err)
 	}
@@ -165,7 +167,11 @@ func (m *Module) Document(ctx context.Context, id int) (*Document, error) {
 
 func (m *Module) RevenueAccounts(ctx context.Context) ([]model.Account, error) {
 	active := true
-	return model.ListAccountsContext(ctx, m.db, model.AccountFilter{Type: "revenue", IsActive: &active})
+	result, err := m.accounts.List(ctx, account.Filter{Type: "revenue", IsActive: &active})
+	if err != nil {
+		return nil, err
+	}
+	return result.Accounts, nil
 }
 
 // PortalInvoices returns finalized invoices visible to a portal family.
@@ -215,15 +221,15 @@ func (m *Module) PrepareShare(ctx context.Context, actor Actor, id int) (*ShareI
 	if inv.Status == model.StatusDraft {
 		return nil, &ConflictError{Message: "draft invoice is not shareable"}
 	}
-	contact, err := model.GetContactContext(ctx, m.db, inv.ContactID)
+	invoiceContact, err := m.contacts.Get(ctx, inv.ContactID)
 	if err != nil {
 		return nil, fmt.Errorf("load invoice contact: %w", err)
 	}
-	info := &ShareInfo{InvoiceNumber: inv.InvoiceNumber, ContactName: contact.Name, Phone: contact.Phone}
-	if contact.Phone == "" {
+	info := &ShareInfo{InvoiceNumber: inv.InvoiceNumber, ContactName: invoiceContact.Name, Phone: invoiceContact.Phone}
+	if invoiceContact.Phone == "" {
 		return info, nil
 	}
-	info.PortalCode, err = model.GetOrCreatePortalCodeContext(ctx, m.db, contact.ID)
+	info.PortalCode, err = m.contacts.GetOrCreatePortalCode(ctx, invoiceContact.ID)
 	if err != nil {
 		return nil, fmt.Errorf("load portal code: %w", err)
 	}

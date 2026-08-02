@@ -11,7 +11,7 @@ func TestGetCompanyProfile_SeededDefaults(t *testing.T) {
 	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
-	co, err := model.GetCompanyProfile(db)
+	co, err := testutil.GetCompanyProfile(db)
 	if err != nil {
 		t.Fatalf("GetCompanyProfile: %v", err)
 	}
@@ -39,11 +39,11 @@ func TestUpdateCompanyProfile_RoundTrip(t *testing.T) {
 		BankAccountHolder: "PT Latasya Jaya",
 		InvoiceFooter:     "Terima kasih.",
 	}
-	if err := model.UpdateCompanyProfile(db, want); err != nil {
+	if err := testutil.UpdateCompanyProfile(db, want); err != nil {
 		t.Fatalf("UpdateCompanyProfile: %v", err)
 	}
 
-	got, err := model.GetCompanyProfile(db)
+	got, err := testutil.GetCompanyProfile(db)
 	if err != nil {
 		t.Fatalf("GetCompanyProfile: %v", err)
 	}
