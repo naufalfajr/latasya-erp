@@ -360,6 +360,34 @@ func TestUpdateInvoiceChecksTargetBeforeDecodingBody(t *testing.T) {
 	}
 }
 
+func TestPaymentPreservesDecodeValidationAndStatusPrecedence(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+	cid := seedContact(t, db)
+	rev := accountID(t, db, "4-1001")
+	id, _ := createInvoice(t, ts, token, defaultInvoiceBody(cid, rev))
+
+	tests := []struct {
+		name string
+		path string
+		body string
+		want int
+	}{
+		{name: "missing_before_decode", path: "/api/v1/invoices/999999/payment", body: "{", want: http.StatusNotFound},
+		{name: "decode_before_status", path: fmt.Sprintf("/api/v1/invoices/%d/payment", id), body: "{", want: http.StatusBadRequest},
+		{name: "validation_before_status", path: fmt.Sprintf("/api/v1/invoices/%d/payment", id), body: `{}`, want: http.StatusUnprocessableEntity},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp := doRawJSONRequest(t, ts, http.MethodPost, tt.path, token, tt.body)
+			defer resp.Body.Close()
+			if resp.StatusCode != tt.want {
+				t.Fatalf("status=%d want %d", resp.StatusCode, tt.want)
+			}
+		})
+	}
+}
+
 func TestSendInvoice(t *testing.T) {
 	ts, db := setupServer(t)
 	token := adminToken(t, db)

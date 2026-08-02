@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/auth"
 	invoiceModule "github.com/naufal/latasya-erp/internal/invoice"
 	"github.com/naufal/latasya-erp/internal/model"
@@ -103,27 +102,12 @@ func (h *Handler) GenerateRecurringInvoices(w http.ResponseWriter, r *http.Reque
 	invoiceDate := now.Format("2006-01-02")
 	dueDate := now.AddDate(0, 0, 10).Format("2006-01-02")
 
-	result, err := model.GenerateRecurringInvoices(h.DB, invoiceDate, dueDate, user.ID)
+	result, err := h.Invoices.GenerateRecurring(r.Context(), invoiceModule.Actor{UserID: user.ID, CanManage: user.HasCapability(model.CapInvoicesManage)}, invoiceDate, dueDate)
 	if err != nil {
 		h.setFlash(w, "Error generating invoices: "+err.Error())
 		http.Redirect(w, r, h.BasePath+"/invoices", http.StatusSeeOther)
 		return
 	}
-
-	audit.Log(r.Context(), h.DB, audit.Event{
-		Action:     "invoice.generate_recurring",
-		TargetType: "invoice",
-		Metadata: map[string]any{
-			"invoice_date":       invoiceDate,
-			"due_date":           dueDate,
-			"effective_days":     result.EffectiveDays,
-			"multiplier_percent": result.MultiplierPercent,
-			"created":            result.Created,
-			"skipped":            result.Skipped,
-			"failed":             result.Failed,
-			"created_invoices":   result.CreatedNumbers(),
-		},
-	})
 
 	msg := fmt.Sprintf("Generated %d draft invoice(s). Skipped %d customer(s).", result.Created, result.Skipped)
 	if result.Failed > 0 {
@@ -148,22 +132,17 @@ func (h *Handler) BulkDeleteInvoices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	deleted, skipped, err := model.BulkDeleteDraftInvoices(h.DB, ids)
+	user := auth.UserFromContext(r.Context())
+	result, err := h.Invoices.BulkDelete(r.Context(), invoiceModule.Actor{UserID: user.ID, CanManage: user.HasCapability(model.CapInvoicesManage)}, ids)
 	if err != nil {
 		h.setFlash(w, "Error deleting invoices: "+err.Error())
 		http.Redirect(w, r, h.BasePath+"/invoices", http.StatusSeeOther)
 		return
 	}
 
-	audit.Log(r.Context(), h.DB, audit.Event{
-		Action:     "invoice.bulk_delete",
-		TargetType: "invoice",
-		Metadata:   map[string]any{"deleted": deleted, "skipped": len(skipped)},
-	})
-
-	msg := fmt.Sprintf("Deleted %d draft invoice(s).", len(deleted))
-	if len(skipped) > 0 {
-		msg += fmt.Sprintf(" Skipped %d (not draft).", len(skipped))
+	msg := fmt.Sprintf("Deleted %d draft invoice(s).", len(result.Deleted))
+	if len(result.Skipped) > 0 {
+		msg += fmt.Sprintf(" Skipped %d (not draft).", len(result.Skipped))
 	}
 	h.setFlash(w, msg)
 	http.Redirect(w, r, h.BasePath+"/invoices", http.StatusSeeOther)
@@ -185,18 +164,12 @@ func (h *Handler) BulkSendInvoices(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := auth.UserFromContext(r.Context())
-	res, err := model.BulkSendInvoices(h.DB, ids, user.ID)
+	res, err := h.Invoices.BulkSend(r.Context(), invoiceModule.Actor{UserID: user.ID, CanManage: user.HasCapability(model.CapInvoicesManage)}, ids)
 	if err != nil {
 		h.setFlash(w, "Error sending invoices: "+err.Error())
 		http.Redirect(w, r, h.BasePath+"/invoices", http.StatusSeeOther)
 		return
 	}
-
-	audit.Log(r.Context(), h.DB, audit.Event{
-		Action:     "invoice.bulk_send",
-		TargetType: "invoice",
-		Metadata:   map[string]any{"sent": res.Sent, "skipped": res.Skipped, "failed": res.Failed},
-	})
 
 	msg := fmt.Sprintf("Marked %d invoice(s) as sent (journal entries posted).", len(res.Sent))
 	if len(res.Skipped) > 0 {
@@ -313,21 +286,9 @@ func (h *Handler) SendInvoice(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := auth.UserFromContext(r.Context())
-	if err := model.SendInvoice(h.DB, id, user.ID); err != nil {
+	if _, err := h.Invoices.Send(r.Context(), invoiceModule.Actor{UserID: user.ID, CanManage: user.HasCapability(model.CapInvoicesManage)}, id); err != nil {
 		h.setFlash(w, "Error: "+err.Error())
 	} else {
-		if inv, err := model.GetInvoice(h.DB, id); err == nil {
-			audit.Log(r.Context(), h.DB, audit.Event{
-				Action:      "invoice.send",
-				TargetType:  "invoice",
-				TargetID:    int64(id),
-				TargetLabel: inv.InvoiceNumber,
-				Metadata: map[string]any{
-					"after":      map[string]any{"status": inv.Status},
-					"journal_id": inv.JournalID,
-				},
-			})
-		}
 		h.setFlash(w, "Invoice sent — journal entry created")
 	}
 
@@ -400,28 +361,10 @@ func (h *Handler) InvoicePayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := model.RecordInvoicePayment(h.DB, id, amount, paymentDate, paymentAccountID, user.ID); err != nil {
+	if _, err := h.Invoices.RecordPayment(r.Context(), invoiceModule.Actor{UserID: user.ID, CanManage: user.HasCapability(model.CapInvoicesManage)}, id,
+		invoiceModule.Payment{Amount: amount, Date: paymentDate, AccountID: paymentAccountID}); err != nil {
 		h.setFlash(w, "Error: "+err.Error())
 	} else {
-		inv, _ := model.GetInvoice(h.DB, id)
-		invoiceNumber := ""
-		status := ""
-		if inv != nil {
-			invoiceNumber = inv.InvoiceNumber
-			status = inv.Status
-		}
-		audit.Log(r.Context(), h.DB, audit.Event{
-			Action:      "invoice.payment",
-			TargetType:  "invoice",
-			TargetID:    int64(id),
-			TargetLabel: invoiceNumber,
-			Metadata: map[string]any{
-				"amount":             amount,
-				"payment_date":       paymentDate,
-				"payment_account_id": paymentAccountID,
-				"status_after":       status,
-			},
-		})
 		h.setFlash(w, "Payment recorded successfully")
 	}
 
@@ -435,31 +378,11 @@ func (h *Handler) DeleteInvoice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Snapshot pre-delete so the audit row carries enough context to
-	// understand what disappeared.
-	existing, _ := model.GetInvoice(h.DB, id)
-
-	if err := model.DeleteInvoice(h.DB, id); err != nil {
+	user := auth.UserFromContext(r.Context())
+	if _, err := h.Invoices.Delete(r.Context(), invoiceModule.Actor{UserID: user.ID, CanManage: user.HasCapability(model.CapInvoicesManage)}, id); err != nil {
 		h.setFlash(w, "Error: "+err.Error())
 		http.Redirect(w, r, h.BasePath+fmt.Sprintf("/invoices/%d", id), http.StatusSeeOther)
 		return
-	}
-
-	if existing != nil {
-		audit.Log(r.Context(), h.DB, audit.Event{
-			Action:      "invoice.delete",
-			TargetType:  "invoice",
-			TargetID:    int64(id),
-			TargetLabel: existing.InvoiceNumber,
-			Metadata: map[string]any{
-				"before": map[string]any{
-					"contact_id":   existing.ContactID,
-					"invoice_date": existing.InvoiceDate,
-					"status":       existing.Status,
-					"total":        existing.Total,
-				},
-			},
-		})
 	}
 
 	h.setFlash(w, "Invoice deleted")

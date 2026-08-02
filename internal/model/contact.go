@@ -1,6 +1,7 @@
 package model
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 )
@@ -60,6 +61,10 @@ type ContactFilter struct {
 }
 
 func ListContacts(db *sql.DB, f ContactFilter) ([]Contact, error) {
+	return ListContactsContext(context.Background(), db, f)
+}
+
+func ListContactsContext(ctx context.Context, db *sql.DB, f ContactFilter) ([]Contact, error) {
 	query := `SELECT c.id, c.name, c.contact_type, COALESCE(c.phone,''), COALESCE(c.email,''),
 		COALESCE(c.address,''), COALESCE(c.notes,''), c.maps_link, c.class, c.distance_km, c.has_sibling_discount, c.is_return_only, COALESCE(c.route_id, 0), c.is_active, c.created_at, c.updated_at,
 		COALESCE(r.name, '')
@@ -98,7 +103,7 @@ func ListContacts(db *sql.DB, f ContactFilter) ([]Contact, error) {
 	}
 	query += " ORDER BY " + column + " " + direction + ", c.name ASC"
 
-	rows, err := db.Query(query, args...)
+	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list contacts: %w", err)
 	}

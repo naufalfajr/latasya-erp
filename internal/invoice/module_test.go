@@ -174,6 +174,60 @@ func TestUpdateReturnsCompleteInvoiceAndTypedErrors(t *testing.T) {
 	}
 }
 
+func TestSendPaymentAndDeleteLifecycle(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	module := invoice.New(db)
+	contactID, accountID := invoiceFixtures(t, db)
+	actor := invoice.Actor{UserID: 1, CanManage: true}
+	create := func(description string) *model.Invoice {
+		t.Helper()
+		created, err := module.Create(context.Background(), actor, invoice.Draft{
+			ContactID: contactID, InvoiceDate: "2026-08-02", DueDate: "2026-08-12",
+			Lines: []invoice.DraftLine{{Description: description, Quantity: 100, UnitPrice: 200_000, AccountID: accountID}},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return created
+	}
+
+	toSend := create("Send")
+	sent, err := module.Send(context.Background(), actor, toSend.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sent.Status != model.StatusSent || sent.JournalID == nil {
+		t.Fatalf("sent=%#v", sent)
+	}
+	if _, err := module.Send(context.Background(), actor, toSend.ID); err == nil {
+		t.Fatal("second Send succeeded")
+	}
+
+	var cashID int
+	if err := db.QueryRow("SELECT id FROM accounts WHERE code='1-1001'").Scan(&cashID); err != nil {
+		t.Fatal(err)
+	}
+	paid, err := module.RecordPayment(context.Background(), actor, sent.ID, invoice.Payment{Amount: 200_000, Date: "2026-08-03", AccountID: cashID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if paid.Status != model.StatusPaid || paid.AmountPaid != 200_000 {
+		t.Fatalf("paid=%#v", paid)
+	}
+
+	toDelete := create("Delete")
+	deleted, err := module.Delete(context.Background(), actor, toDelete.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if deleted.ID != toDelete.ID {
+		t.Fatalf("deleted id=%d want %d", deleted.ID, toDelete.ID)
+	}
+	if _, err := module.Delete(context.Background(), actor, toDelete.ID); !errors.Is(err, invoice.ErrNotFound) {
+		t.Fatalf("second Delete error=%v want not found", err)
+	}
+}
+
 func invoiceFixtures(t *testing.T, db *sql.DB) (int, int) {
 	t.Helper()
 	result, err := db.Exec("INSERT INTO contacts (name, contact_type) VALUES ('Module Customer', 'customer')")

@@ -1,6 +1,7 @@
 package model
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -272,6 +273,10 @@ func UpdateGoogleCalendarSyncStatus(db *sql.DB, status, syncError string) error 
 }
 
 func EffectiveSchoolDays(db *sql.DB, month string) (int, error) {
+	return EffectiveSchoolDaysContext(context.Background(), db, month)
+}
+
+func EffectiveSchoolDaysContext(ctx context.Context, db *sql.DB, month string) (int, error) {
 	start, end, err := schoolMonthBounds(month)
 	if err != nil {
 		return 0, err
@@ -284,7 +289,7 @@ func EffectiveSchoolDays(db *sql.DB, month string) (int, error) {
 		}
 	}
 
-	rows, err := db.Query(
+	rows, err := db.QueryContext(ctx,
 		`SELECT start_date, end_date FROM school_closures
 		 WHERE start_date <= ? AND end_date >= ?`,
 		end.Format(schoolDateLayout), start.Format(schoolDateLayout),

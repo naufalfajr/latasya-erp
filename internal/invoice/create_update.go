@@ -11,6 +11,10 @@ import (
 )
 
 func (m *Module) Create(ctx context.Context, actor Actor, draft Draft) (*model.Invoice, error) {
+	return m.create(ctx, actor, draft, true)
+}
+
+func (m *Module) create(ctx context.Context, actor Actor, draft Draft, logAudit bool) (*model.Invoice, error) {
 	if err := requireManager(actor); err != nil {
 		return nil, err
 	}
@@ -59,21 +63,23 @@ func (m *Module) Create(ctx context.Context, actor Actor, draft Draft) (*model.I
 		return nil, fmt.Errorf("commit invoice create: %w", err)
 	}
 
-	audit.Log(ctx, m.db, audit.Event{
-		Action:      "invoice.create",
-		TargetType:  "invoice",
-		TargetID:    int64(created.ID),
-		TargetLabel: created.InvoiceNumber,
-		ActorID:     int64(actor.UserID),
-		Metadata: map[string]any{"after": map[string]any{
-			"contact_id":   created.ContactID,
-			"invoice_date": created.InvoiceDate,
-			"due_date":     created.DueDate,
-			"tax_amount":   created.TaxAmount,
-			"total":        created.Total,
-			"line_count":   len(created.Lines),
-		}},
-	})
+	if logAudit {
+		audit.Log(ctx, m.db, audit.Event{
+			Action:      "invoice.create",
+			TargetType:  "invoice",
+			TargetID:    int64(created.ID),
+			TargetLabel: created.InvoiceNumber,
+			ActorID:     int64(actor.UserID),
+			Metadata: map[string]any{"after": map[string]any{
+				"contact_id":   created.ContactID,
+				"invoice_date": created.InvoiceDate,
+				"due_date":     created.DueDate,
+				"tax_amount":   created.TaxAmount,
+				"total":        created.Total,
+				"line_count":   len(created.Lines),
+			}},
+		})
+	}
 	return created, nil
 }
 

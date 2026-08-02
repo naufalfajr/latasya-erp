@@ -2,12 +2,15 @@ package invoice
 
 import (
 	"database/sql"
+	"sync"
 	"time"
 )
 
 type Module struct {
-	db  *sql.DB
-	now func() time.Time
+	db          *sql.DB
+	now         func() time.Time
+	recurringMu sync.Mutex
+	bulkSendMu  sync.Mutex
 }
 
 func New(db *sql.DB) *Module {

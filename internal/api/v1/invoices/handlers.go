@@ -12,7 +12,6 @@ import (
 	"time"
 
 	v1 "github.com/naufal/latasya-erp/internal/api/v1"
-	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/auth"
 	invoiceModule "github.com/naufal/latasya-erp/internal/invoice"
 	"github.com/naufal/latasya-erp/internal/model"
@@ -311,35 +310,11 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	existing, err := model.GetInvoice(h.DB, id)
-	if err != nil {
-		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "invoice not found", nil)
+	user := auth.UserFromContext(r.Context())
+	if _, err := h.Invoices.Delete(r.Context(), invoiceModule.Actor{UserID: user.ID, CanManage: v1.HasEffectiveCapability(r.Context(), model.CapInvoicesManage)}, id); err != nil {
+		writeModuleError(w, r, err, "failed to delete invoice")
 		return
 	}
-	if existing.Status != model.StatusDraft {
-		v1.WriteError(w, r, http.StatusConflict, v1.CodeConflict,
-			"can only delete draft invoices (current: "+existing.Status+")", nil)
-		return
-	}
-
-	if err := model.DeleteInvoice(h.DB, id); err != nil {
-		v1.WriteError(w, r, http.StatusConflict, v1.CodeConflict, err.Error(), nil)
-		return
-	}
-
-	audit.Log(r.Context(), h.DB, audit.Event{
-		Action:      "invoice.delete",
-		TargetType:  "invoice",
-		TargetID:    int64(id),
-		TargetLabel: existing.InvoiceNumber,
-		Metadata: map[string]any{
-			"before": map[string]any{
-				"contact_id":   existing.ContactID,
-				"invoice_date": existing.InvoiceDate,
-				"total":        existing.Total,
-			},
-		},
-	})
 
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -358,42 +333,11 @@ func (h *Handler) Send(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	existing, err := model.GetInvoice(h.DB, id)
+	updated, err := h.Invoices.Send(r.Context(), invoiceModule.Actor{UserID: user.ID, CanManage: v1.HasEffectiveCapability(r.Context(), model.CapInvoicesManage)}, id)
 	if err != nil {
-		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "invoice not found", nil)
+		writeModuleError(w, r, err, "failed to send invoice")
 		return
 	}
-	if existing.Status != model.StatusDraft {
-		v1.WriteError(w, r, http.StatusConflict, v1.CodeConflict,
-			"can only send draft invoices (current: "+existing.Status+")", nil)
-		return
-	}
-
-	if err := model.SendInvoice(h.DB, id, user.ID); err != nil {
-		if strings.Contains(err.Error(), "can only send") {
-			v1.WriteError(w, r, http.StatusConflict, v1.CodeConflict, err.Error(), nil)
-			return
-		}
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to send invoice", nil)
-		return
-	}
-
-	updated, err := model.GetInvoice(h.DB, id)
-	if err != nil {
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to retrieve invoice", nil)
-		return
-	}
-
-	audit.Log(r.Context(), h.DB, audit.Event{
-		Action:      "invoice.send",
-		TargetType:  "invoice",
-		TargetID:    int64(id),
-		TargetLabel: updated.InvoiceNumber,
-		Metadata: map[string]any{
-			"after":      map[string]any{"status": updated.Status},
-			"journal_id": updated.JournalID,
-		},
-	})
 
 	v1.WriteJSON(w, http.StatusOK, map[string]any{"data": updated})
 }
@@ -413,30 +357,15 @@ func (h *Handler) GenerateRecurring(w http.ResponseWriter, r *http.Request) {
 	invoiceDate := now.Format("2006-01-02")
 	dueDate := now.AddDate(0, 0, 10).Format("2006-01-02")
 
-	result, err := model.GenerateRecurringInvoices(h.DB, invoiceDate, dueDate, user.ID)
+	result, err := h.Invoices.GenerateRecurring(r.Context(), invoiceModule.Actor{UserID: user.ID, CanManage: v1.HasEffectiveCapability(r.Context(), model.CapInvoicesManage)}, invoiceDate, dueDate)
 	if err != nil {
-		if errors.Is(err, model.ErrNoDefaultRevenueAccount) {
+		if errors.Is(err, invoiceModule.ErrNoDefaultRevenueAccount) {
 			v1.WriteError(w, r, http.StatusUnprocessableEntity, v1.CodeValidationFailed, err.Error(), nil)
 			return
 		}
 		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to generate recurring invoices", nil)
 		return
 	}
-
-	audit.Log(r.Context(), h.DB, audit.Event{
-		Action:     "invoice.generate_recurring",
-		TargetType: "invoice",
-		Metadata: map[string]any{
-			"invoice_date":       invoiceDate,
-			"due_date":           dueDate,
-			"effective_days":     result.EffectiveDays,
-			"multiplier_percent": result.MultiplierPercent,
-			"created":            result.Created,
-			"skipped":            result.Skipped,
-			"failed":             result.Failed,
-			"created_invoices":   result.CreatedNumbers(),
-		},
-	})
 
 	v1.WriteJSON(w, http.StatusOK, map[string]any{"data": result})
 }
@@ -465,23 +394,18 @@ func (h *Handler) BulkDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	deleted, skipped, err := model.BulkDeleteDraftInvoices(h.DB, inp.IDs)
+	user := auth.UserFromContext(r.Context())
+	result, err := h.Invoices.BulkDelete(r.Context(), invoiceModule.Actor{UserID: user.ID, CanManage: v1.HasEffectiveCapability(r.Context(), model.CapInvoicesManage)}, inp.IDs)
 	if err != nil {
 		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to delete invoices", nil)
 		return
 	}
 
-	audit.Log(r.Context(), h.DB, audit.Event{
-		Action:     "invoice.bulk_delete",
-		TargetType: "invoice",
-		Metadata:   map[string]any{"deleted": deleted, "skipped": skipped},
-	})
-
 	v1.WriteJSON(w, http.StatusOK, map[string]any{
 		"data": map[string]any{
-			"deleted":          len(deleted),
-			"deleted_invoices": deleted,
-			"skipped":          skipped,
+			"deleted":          len(result.Deleted),
+			"deleted_invoices": result.Deleted,
+			"skipped":          result.Skipped,
 		},
 	})
 }
@@ -511,17 +435,11 @@ func (h *Handler) BulkSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res, err := model.BulkSendInvoices(h.DB, inp.IDs, user.ID)
+	res, err := h.Invoices.BulkSend(r.Context(), invoiceModule.Actor{UserID: user.ID, CanManage: v1.HasEffectiveCapability(r.Context(), model.CapInvoicesManage)}, inp.IDs)
 	if err != nil {
 		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to send invoices", nil)
 		return
 	}
-
-	audit.Log(r.Context(), h.DB, audit.Event{
-		Action:     "invoice.bulk_send",
-		TargetType: "invoice",
-		Metadata:   map[string]any{"sent": res.Sent, "skipped": res.Skipped, "failed": res.Failed},
-	})
 
 	v1.WriteJSON(w, http.StatusOK, map[string]any{
 		"data": map[string]any{
@@ -547,9 +465,9 @@ func (h *Handler) Payment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	existing, err := model.GetInvoice(h.DB, id)
-	if err != nil {
-		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "invoice not found", nil)
+	actor := invoiceModule.Actor{UserID: user.ID, CanManage: v1.HasEffectiveCapability(r.Context(), model.CapInvoicesManage)}
+	if err := h.Invoices.CheckExists(r.Context(), actor, id); err != nil {
+		writeModuleError(w, r, err, "failed to record payment")
 		return
 	}
 
@@ -575,44 +493,13 @@ func (h *Handler) Payment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if existing.Status == model.StatusDraft || existing.Status == "cancelled" || existing.Status == model.StatusPaid {
-		v1.WriteError(w, r, http.StatusConflict, v1.CodeConflict,
-			"cannot record payment for "+existing.Status+" invoice", nil)
-		return
-	}
-
-	if err := model.RecordInvoicePayment(h.DB, id, amount, inp.PaymentDate, inp.PaymentAccount, user.ID); err != nil {
-		if strings.Contains(err.Error(), "exceeds remaining") {
-			v1.WriteError(w, r, http.StatusUnprocessableEntity, v1.CodeValidationFailed, err.Error(),
-				map[string]string{"amount": "exceeds remaining balance"})
-			return
-		}
-		if strings.Contains(err.Error(), "cannot record payment") {
-			v1.WriteError(w, r, http.StatusConflict, v1.CodeConflict, err.Error(), nil)
-			return
-		}
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to record payment", nil)
-		return
-	}
-
-	updated, err := model.GetInvoice(h.DB, id)
-	if err != nil {
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to retrieve invoice", nil)
-		return
-	}
-
-	audit.Log(r.Context(), h.DB, audit.Event{
-		Action:      "invoice.payment",
-		TargetType:  "invoice",
-		TargetID:    int64(id),
-		TargetLabel: updated.InvoiceNumber,
-		Metadata: map[string]any{
-			"amount":             amount,
-			"payment_date":       inp.PaymentDate,
-			"payment_account_id": inp.PaymentAccount,
-			"status_after":       updated.Status,
-		},
+	updated, err := h.Invoices.RecordPayment(r.Context(), actor, id, invoiceModule.Payment{
+		Amount: amount, Date: inp.PaymentDate, AccountID: inp.PaymentAccount,
 	})
+	if err != nil {
+		writeModuleError(w, r, err, "failed to record payment")
+		return
+	}
 
 	v1.WriteJSON(w, http.StatusOK, map[string]any{"data": updated})
 }

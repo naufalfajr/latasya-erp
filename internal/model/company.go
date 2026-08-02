@@ -1,6 +1,7 @@
 package model
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 )
@@ -22,9 +23,13 @@ type CompanyProfile struct {
 }
 
 func GetCompanyProfile(db *sql.DB) (*CompanyProfile, error) {
+	return GetCompanyProfileContext(context.Background(), db)
+}
+
+func GetCompanyProfileContext(ctx context.Context, db *sql.DB) (*CompanyProfile, error) {
 	c := &CompanyProfile{}
 	var defaultAcctID *int
-	err := db.QueryRow(
+	err := db.QueryRowContext(ctx,
 		`SELECT name, tagline, address, phone, email, npwp,
 			bank_name, bank_account_number, bank_account_holder, invoice_footer,
 			default_revenue_account_id, recurring_description_template, updated_at
