@@ -284,34 +284,3 @@ if (_invoiceDateInput) {
 if (document.getElementById('contact_id').value) prefillFirstLine(getSelectedContactBasePrice());
 </script>
 {{end}}
-
-{{define "invoice-line-row"}}
-<tr>
-    <td>
-        <input type="text" name="line_description" placeholder="Description"
-            class="input input-sm w-full" value="{{.Line.Description}}">
-    </td>
-    <td>
-        <select name="line_account_id" class="select select-sm w-full">
-            <option value="">Account</option>
-            {{$selAcct := .Line.AccountID}}
-            {{range .Accounts}}
-            <option value="{{.ID}}" {{if eq .ID $selAcct}}selected{{end}}>{{.Code}} - {{.Name}}</option>
-            {{end}}
-        </select>
-    </td>
-    <td>
-        <input type="number" name="line_quantity" class="input input-sm w-full"
-            value="{{if gt .Line.Quantity 0}}{{formatQty .Line.Quantity}}{{else}}1{{end}}"
-            step="0.01" min="0">
-    </td>
-    <td>
-        <input type="number" name="line_unit_price" placeholder="0" class="input input-sm w-full font-mono"
-            value="{{if gt .Line.UnitPrice 0}}{{.Line.UnitPrice}}{{end}}" min="0">
-    </td>
-    <td class="font-mono text-sm line-amount">{{if gt .Line.Amount 0}}{{.Line.Amount}}{{else}}0{{end}}</td>
-    <td>
-        <button type="button" class="btn btn-ghost btn-xs text-error" onclick="removeInvLine(this)">X</button>
-    </td>
-</tr>
-{{end}}

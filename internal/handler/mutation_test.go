@@ -120,6 +120,35 @@ func TestDeleteInvoice_Success(t *testing.T) {
 	}
 }
 
+func TestDeleteInvoice_HTMXRedirectIncludesBasePath(t *testing.T) {
+	ts, db := testServer(t, "/dashboard")
+	cookies := loginAsAdmin(t, ts, "/dashboard")
+	db.Exec("INSERT INTO contacts (name, contact_type, is_active) VALUES ('BasePath Customer', 'customer', 1)")
+	var contactID, revenueID int
+	db.QueryRow("SELECT id FROM contacts WHERE name='BasePath Customer'").Scan(&contactID)
+	db.QueryRow("SELECT id FROM accounts WHERE code='4-1001'").Scan(&revenueID)
+	form := fmt.Sprintf("contact_id=%d&invoice_date=2026-04-04&due_date=2026-04-30&line_description=x&line_account_id=%d&line_quantity=1&line_unit_price=100000", contactID, revenueID)
+	req, _ := requestWithCookies(db, "POST", ts.URL+"/dashboard/invoices", cookies, form)
+	resp, err := noRedirectClient().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	var invoiceID int
+	db.QueryRow("SELECT id FROM invoices ORDER BY id DESC LIMIT 1").Scan(&invoiceID)
+
+	req, _ = requestWithCookies(db, "DELETE", ts.URL+"/dashboard/invoices/"+strconv.Itoa(invoiceID), cookies, "")
+	req.Header.Set("HX-Request", "true")
+	resp, err = noRedirectClient().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if redirect := resp.Header.Get("HX-Redirect"); redirect != "/dashboard/invoices" {
+		t.Fatalf("HX-Redirect=%q want /dashboard/invoices", redirect)
+	}
+}
+
 // --- Bill -------------------------------------------------------------------
 
 func TestUpdateBill_Success(t *testing.T) {

@@ -763,6 +763,12 @@ func TestInvoiceLinePartial_HTMX(t *testing.T) {
 	if !strings.Contains(body, `name="line_account_id"`) || !strings.Contains(body, "4-1001") {
 		t.Errorf("expected invoice-line partial with a revenue account option, got body of length %d", len(body))
 	}
+	if strings.Count(body, "<tr>") != 1 || strings.Contains(body, "<html") || strings.Contains(body, "<body") {
+		t.Errorf("expected one standalone table-row fragment, got %q", body)
+	}
+	if contentType := resp.Header.Get("Content-Type"); contentType != "text/html; charset=utf-8" {
+		t.Errorf("Content-Type = %q", contentType)
+	}
 }
 
 // --- helpers -----------------------------------------------------------------

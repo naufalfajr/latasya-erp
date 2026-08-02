@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -403,7 +404,7 @@ func (h *Handler) DeleteInvoice(w http.ResponseWriter, r *http.Request) {
 
 	h.setFlash(w, "Invoice deleted")
 	if r.Header.Get("HX-Request") == "true" {
-		w.Header().Set("HX-Redirect", "/invoices")
+		w.Header().Set("HX-Redirect", h.BasePath+"/invoices")
 		w.WriteHeader(http.StatusOK)
 		return
 	}
@@ -491,9 +492,16 @@ func (h *Handler) InvoiceLinePartial(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	t.ExecuteTemplate(w, "invoice-line", map[string]any{
+	var fragment bytes.Buffer
+	if err := t.ExecuteTemplate(&fragment, "invoice-line-row", map[string]any{
 		"Accounts": accounts,
-	})
+		"Line":     model.InvoiceLine{Quantity: 100},
+	}); err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Write(fragment.Bytes())
 }
 
 func parseInvoiceLines(r *http.Request) []model.InvoiceLine {
