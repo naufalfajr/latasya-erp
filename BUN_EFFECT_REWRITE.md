@@ -1,7 +1,8 @@
 # Bun + Effect Rewrite
 
-Status: implementation complete and cutover-ready. Production deployment and
-removal of the Go rollback reference remain separate operational decisions.
+Status: archived after a successful production trial. Go remains the selected
+production implementation; `rewrite/bun-effect` is retained for a possible
+future migration.
 
 ## Objective
 
@@ -11,6 +12,46 @@ the current ERP's observable behavior, stored data, and operating model.
 The current Go application remains the reference implementation until every
 parity gate passes. Passing a narrow set of new tests is not sufficient evidence
 of parity.
+
+## Production trial and decision
+
+The Effect implementation was deployed to production on 2 August 2026. Build
+`2d51341a2cd18329d95a8ffe464b9fa0eee2844f` opened the existing database,
+reported all 23 migrations, and passed authenticated browser verification of
+the public pages, 31 primary SSR routes, representative record views, reports,
+settings, and HTMX live-search and dynamic-row interactions. The Bun suite
+passed 166 tests with 1,300 assertions.
+
+An isolated VPS benchmark compared the deployed Bun executable with the Go
+rollback executable using separate copies of the same 736 KiB production
+database. Each runtime handled 250 requests at concurrency eight for
+`/healthz`, `/`, and `/dashboard/login`, with no request failures.
+
+| Metric | Bun + Effect | Go |
+| --- | ---: | ---: |
+| Idle cgroup memory | 42.8 MiB | 6.8 MiB |
+| Loaded cgroup memory | 63.1 MiB | 11.1 MiB |
+| Peak cgroup memory | 65.1 MiB | 11.4 MiB |
+| CPU time per request | 7.24 ms | 0.85 ms |
+| Startup time | 965 ms | 292 ms |
+| Executable size | 111 MiB | 21 MiB |
+
+The live Bun service used 52.7 MiB with a 58.0 MiB peak on a 961.5 MiB VPS, so
+its absolute memory use was acceptable. Go was nevertheless selected because
+the existing implementation already provides the OpenAPI-described JSON API,
+scoped bearer tokens for MCP and bot integrations, lower operational overhead,
+and substantially better CPU and memory efficiency. The benchmark is preserved
+in [GitHub Actions run 30722086074](https://github.com/naufalfajr/latasya-erp/actions/runs/30722086074).
+
+### Resuming the migration
+
+1. Rebase or merge the latest `main` into `rewrite/bun-effect`.
+2. Refresh this document's authoritative baseline and migration count.
+3. Run the complete Go and Bun suites and route/OpenAPI parity checks.
+4. Repeat the copied-production-database and Linux/systemd smoke tests.
+5. Review features added to Go since this archive and port any parity gaps.
+6. Benchmark authenticated, database-heavy workloads on the target VPS.
+7. Use a protected deployment with an automatic Go rollback for another trial.
 
 ## Authoritative baseline
 
@@ -266,7 +307,8 @@ Every migrated feature must pass all applicable gates:
 ## Confirmed decisions
 
 1. Keep the server-rendered HTMX browser interface and existing templates.
-2. Keep Go as a tested rollback reference through production confirmation.
+2. Keep Go as the production implementation and retain the Effect branch as a
+   tested future-migration reference.
 3. Preserve in-place compatibility with the existing SQLite database,
    credentials, sessions, and migration ledger.
 4. Preserve the standalone systemd and Cloudflare deployment model.
@@ -281,7 +323,7 @@ Every migrated feature must pass all applicable gates:
 - The Bun suite covers domain services, all JSON APIs, all HTML workflows,
   public pages, PDFs, authentication, authorization, and route registration.
 - The complete Go suite remains green as the rollback reference.
-- The existing 21-entry SQLite migration ledger applies unchanged.
+- The existing 23-entry SQLite migration ledger applies unchanged.
 - A copy of the local existing database passes `integrity_check`,
   `foreign_key_check`, balanced-journal validation, and representative Effect
   reads without applying a new migration.
