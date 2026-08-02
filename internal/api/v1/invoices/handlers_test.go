@@ -12,6 +12,7 @@ import (
 
 	v1 "github.com/naufal/latasya-erp/internal/api/v1"
 	v1invoices "github.com/naufal/latasya-erp/internal/api/v1/invoices"
+	invoiceModule "github.com/naufal/latasya-erp/internal/invoice"
 	"github.com/naufal/latasya-erp/internal/model"
 	"github.com/naufal/latasya-erp/internal/testutil"
 )
@@ -21,7 +22,7 @@ func setupServer(t *testing.T) (*httptest.Server, *sql.DB) {
 	db := testutil.SetupTestDB(t)
 
 	apiMux := http.NewServeMux()
-	h := &v1invoices.Handler{DB: db}
+	h := &v1invoices.Handler{DB: db, Invoices: invoiceModule.New(db)}
 	idem := v1.Idempotency(db)
 	apiMux.HandleFunc("GET /api/v1/invoices", h.List)
 	apiMux.HandleFunc("GET /api/v1/invoices/{id}", h.Get)
@@ -133,6 +134,21 @@ func doRequest(t *testing.T, ts *httptest.Server, method, path, token string, bo
 	resp, err := ts.Client().Do(req)
 	if err != nil {
 		t.Fatalf("do: %v", err)
+	}
+	return resp
+}
+
+func doRawJSONRequest(t *testing.T, ts *httptest.Server, method, path, token, body string) *http.Response {
+	t.Helper()
+	req, err := http.NewRequest(method, ts.URL+path, bytes.NewBufferString(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := ts.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
 	}
 	return resp
 }
@@ -312,6 +328,35 @@ func TestCreateInvoice_Idempotency(t *testing.T) {
 	db.QueryRow("SELECT COUNT(*) FROM invoices").Scan(&count)
 	if count != 1 {
 		t.Errorf("invoices count: got %d, want 1", count)
+	}
+}
+
+func TestUpdateInvoiceChecksTargetBeforeDecodingBody(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+	cid := seedContact(t, db)
+	rev := accountID(t, db, "4-1001")
+	id, _ := createInvoice(t, ts, token, defaultInvoiceBody(cid, rev))
+	if _, err := db.Exec("UPDATE invoices SET status=? WHERE id=?", model.StatusSent, id); err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name string
+		path string
+		want int
+	}{
+		{name: "missing", path: "/api/v1/invoices/999999", want: http.StatusNotFound},
+		{name: "non_draft", path: fmt.Sprintf("/api/v1/invoices/%d", id), want: http.StatusConflict},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp := doRawJSONRequest(t, ts, http.MethodPut, tt.path, token, "{")
+			defer resp.Body.Close()
+			if resp.StatusCode != tt.want {
+				t.Fatalf("status=%d want %d", resp.StatusCode, tt.want)
+			}
+		})
 	}
 }
 

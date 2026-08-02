@@ -10,6 +10,7 @@ import (
 
 	"github.com/naufal/latasya-erp/internal/auth"
 	"github.com/naufal/latasya-erp/internal/googlecalendar"
+	"github.com/naufal/latasya-erp/internal/invoice"
 	"github.com/naufal/latasya-erp/internal/model"
 )
 
@@ -26,6 +27,7 @@ type Handler struct {
 	BasePath string
 
 	GoogleCalendarConfig googlecalendar.Config
+	Invoices             *invoice.Module
 
 	mu    sync.RWMutex
 	cache map[string]*template.Template

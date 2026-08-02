@@ -14,12 +14,14 @@ import (
 	v1 "github.com/naufal/latasya-erp/internal/api/v1"
 	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/auth"
+	invoiceModule "github.com/naufal/latasya-erp/internal/invoice"
 	"github.com/naufal/latasya-erp/internal/model"
 	"github.com/naufal/latasya-erp/internal/pdf"
 )
 
 type Handler struct {
-	DB *sql.DB
+	DB       *sql.DB
+	Invoices *invoiceModule.Module
 }
 
 type lineInput struct {
@@ -89,47 +91,25 @@ func parseQuantity(s string) (int, error) {
 	return whole*100 + frac, nil
 }
 
-func validateInvoiceInput(inp *invoiceInput) (map[string]string, []model.InvoiceLine, int) {
+func parseInvoiceInput(inp *invoiceInput) (map[string]string, invoiceModule.Draft) {
 	fields := map[string]string{}
-	if inp.ContactID <= 0 {
-		fields["contact_id"] = "required"
-	}
-	if strings.TrimSpace(inp.InvoiceDate) == "" {
-		fields["invoice_date"] = "required"
-	}
-	if strings.TrimSpace(inp.DueDate) == "" {
-		fields["due_date"] = "required"
-	}
-	if len(inp.Lines) == 0 {
-		fields["lines"] = "at least one line required"
-	}
-
 	tax, err := parseIDR(inp.TaxAmount)
 	if err != nil {
 		fields["tax_amount"] = "invalid amount"
 	}
 
-	lines := make([]model.InvoiceLine, 0, len(inp.Lines))
+	lines := make([]invoiceModule.DraftLine, 0, len(inp.Lines))
 	for i, l := range inp.Lines {
 		idx := strconv.Itoa(i)
-		if strings.TrimSpace(l.Description) == "" {
-			fields["lines["+idx+"].description"] = "required"
-		}
 		qty, err := parseQuantity(l.Quantity)
 		if err != nil || qty <= 0 {
 			fields["lines["+idx+"].quantity"] = "must be positive"
-			continue
 		}
 		price, err := parseIDR(l.UnitPrice)
-		if err != nil || price <= 0 {
+		if err != nil {
 			fields["lines["+idx+"].unit_price"] = "must be positive"
-			continue
 		}
-		if l.AccountID <= 0 {
-			fields["lines["+idx+"].account_id"] = "required"
-			continue
-		}
-		lines = append(lines, model.InvoiceLine{
+		lines = append(lines, invoiceModule.DraftLine{
 			Description: l.Description,
 			Quantity:    qty,
 			UnitPrice:   price,
@@ -137,10 +117,37 @@ func validateInvoiceInput(inp *invoiceInput) (map[string]string, []model.Invoice
 		})
 	}
 
-	if len(fields) > 0 {
-		return fields, nil, 0
+	draft := invoiceModule.Draft{
+		ContactID: inp.ContactID, InvoiceDate: inp.InvoiceDate, DueDate: inp.DueDate,
+		TaxAmount: tax, Notes: inp.Notes, Lines: lines,
 	}
-	return nil, lines, tax
+	var validation *invoiceModule.ValidationError
+	if errors.As(invoiceModule.ValidateDraft(draft), &validation) {
+		for name, message := range validation.Fields {
+			if fields[name] == "" {
+				fields[name] = apiInvoiceValidationMessage(name, message)
+			}
+		}
+	}
+	if len(fields) == 0 {
+		fields = nil
+	}
+	return fields, draft
+}
+
+func apiInvoiceValidationMessage(name, fallback string) string {
+	switch {
+	case name == "contact_id" || name == "invoice_date" || name == "due_date":
+		return "required"
+	case name == "lines":
+		return "at least one line required"
+	case strings.HasSuffix(name, ".description") || strings.HasSuffix(name, ".account_id"):
+		return "required"
+	case strings.HasSuffix(name, ".quantity") || strings.HasSuffix(name, ".unit_price"):
+		return "must be positive"
+	default:
+		return fallback
+	}
 }
 
 // invoiceResponse wraps the model invoice with credit-note summary used
@@ -216,48 +223,19 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fields, lines, tax := validateInvoiceInput(&inp)
+	fields, draft := parseInvoiceInput(&inp)
 	if fields != nil {
 		v1.WriteError(w, r, http.StatusUnprocessableEntity, v1.CodeValidationFailed, "validation failed", fields)
 		return
 	}
 
-	inv := &model.Invoice{
-		ContactID:   inp.ContactID,
-		InvoiceDate: inp.InvoiceDate,
-		DueDate:     inp.DueDate,
-		TaxAmount:   tax,
-		Notes:       inp.Notes,
-		CreatedBy:   user.ID,
-	}
-
-	id, err := model.CreateInvoice(h.DB, inv, lines)
+	created, err := h.Invoices.Create(r.Context(), invoiceModule.Actor{
+		UserID: user.ID, CanManage: v1.HasEffectiveCapability(r.Context(), model.CapInvoicesManage),
+	}, draft)
 	if err != nil {
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to create invoice", nil)
+		writeModuleError(w, r, err, "failed to create invoice")
 		return
 	}
-
-	created, err := model.GetInvoice(h.DB, id)
-	if err != nil {
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to retrieve created invoice", nil)
-		return
-	}
-
-	audit.Log(r.Context(), h.DB, audit.Event{
-		Action:      "invoice.create",
-		TargetType:  "invoice",
-		TargetID:    int64(id),
-		TargetLabel: created.InvoiceNumber,
-		Metadata: map[string]any{
-			"after": map[string]any{
-				"contact_id":   created.ContactID,
-				"invoice_date": created.InvoiceDate,
-				"due_date":     created.DueDate,
-				"total":        created.Total,
-				"line_count":   len(created.Lines),
-			},
-		},
-	})
 
 	v1.WriteJSON(w, http.StatusCreated, map[string]any{"data": created})
 }
@@ -268,21 +246,17 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		v1.WriteError(w, r, http.StatusForbidden, v1.CodeForbidden, "invoices.manage capability required", nil)
 		return
 	}
-
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "invoice not found", nil)
 		return
 	}
-
-	existing, err := model.GetInvoice(h.DB, id)
-	if err != nil {
-		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "invoice not found", nil)
-		return
+	user := auth.UserFromContext(r.Context())
+	actor := invoiceModule.Actor{
+		UserID: user.ID, CanManage: v1.HasEffectiveCapability(r.Context(), model.CapInvoicesManage),
 	}
-	if existing.Status != model.StatusDraft {
-		v1.WriteError(w, r, http.StatusConflict, v1.CodeConflict,
-			"can only edit draft invoices (current: "+existing.Status+")", nil)
+	if err := h.Invoices.CheckEditable(r.Context(), actor, id); err != nil {
+		writeModuleError(w, r, err, "failed to update invoice")
 		return
 	}
 
@@ -292,48 +266,36 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fields, lines, tax := validateInvoiceInput(&inp)
+	fields, draft := parseInvoiceInput(&inp)
 	if fields != nil {
 		v1.WriteError(w, r, http.StatusUnprocessableEntity, v1.CodeValidationFailed, "validation failed", fields)
 		return
 	}
 
-	inv := &model.Invoice{
-		ID:          id,
-		ContactID:   inp.ContactID,
-		InvoiceDate: inp.InvoiceDate,
-		DueDate:     inp.DueDate,
-		TaxAmount:   tax,
-		Notes:       inp.Notes,
-	}
-
-	if err := model.UpdateInvoice(h.DB, inv, lines); err != nil {
-		if strings.Contains(err.Error(), "can only edit") {
-			v1.WriteError(w, r, http.StatusConflict, v1.CodeConflict, err.Error(), nil)
-			return
-		}
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to update invoice", nil)
-		return
-	}
-
-	updated, err := model.GetInvoice(h.DB, id)
+	updated, err := h.Invoices.Update(r.Context(), actor, id, draft)
 	if err != nil {
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to retrieve updated invoice", nil)
+		writeModuleError(w, r, err, "failed to update invoice")
 		return
 	}
-
-	audit.Log(r.Context(), h.DB, audit.Event{
-		Action:      "invoice.update",
-		TargetType:  "invoice",
-		TargetID:    int64(id),
-		TargetLabel: updated.InvoiceNumber,
-		Metadata: map[string]any{
-			"before": map[string]any{"total": existing.Total},
-			"after":  map[string]any{"total": updated.Total},
-		},
-	})
 
 	v1.WriteJSON(w, http.StatusOK, map[string]any{"data": updated})
+}
+
+func writeModuleError(w http.ResponseWriter, r *http.Request, err error, fallback string) {
+	var validation *invoiceModule.ValidationError
+	var conflict *invoiceModule.ConflictError
+	switch {
+	case errors.Is(err, invoiceModule.ErrForbidden):
+		v1.WriteError(w, r, http.StatusForbidden, v1.CodeForbidden, err.Error(), nil)
+	case errors.Is(err, invoiceModule.ErrNotFound):
+		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, err.Error(), nil)
+	case errors.As(err, &validation):
+		v1.WriteError(w, r, http.StatusUnprocessableEntity, v1.CodeValidationFailed, validation.Error(), validation.Fields)
+	case errors.As(err, &conflict):
+		v1.WriteError(w, r, http.StatusConflict, v1.CodeConflict, conflict.Error(), nil)
+	default:
+		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, fallback, nil)
+	}
 }
 
 // Delete handles DELETE /api/v1/invoices/{id}. Only draft invoices may be deleted.

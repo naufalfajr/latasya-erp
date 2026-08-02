@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 // ErrNoDefaultRevenueAccount is returned by GenerateRecurringInvoices when
@@ -133,14 +134,6 @@ func GenerateInvoiceNumber(db *sql.DB) (string, error) {
 }
 
 func CreateInvoice(db *sql.DB, inv *Invoice, lines []InvoiceLine) (int, error) {
-	if inv.InvoiceNumber == "" {
-		num, err := GenerateInvoiceNumber(db)
-		if err != nil {
-			return 0, err
-		}
-		inv.InvoiceNumber = num
-	}
-
 	// Calculate totals
 	var subtotal int
 	for i := range lines {
@@ -156,18 +149,36 @@ func CreateInvoice(db *sql.DB, inv *Invoice, lines []InvoiceLine) (int, error) {
 	}
 	defer tx.Rollback()
 
-	result, err := tx.Exec(
-		`INSERT INTO invoices (invoice_number, contact_id, invoice_date, due_date, status, subtotal, tax_amount, total, amount_paid, notes, created_by)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
-		inv.InvoiceNumber, inv.ContactID, inv.InvoiceDate, inv.DueDate, StatusDraft,
-		inv.Subtotal, inv.TaxAmount, inv.Total, inv.Notes, inv.CreatedBy,
-	)
+	var result sql.Result
+	if inv.InvoiceNumber == "" {
+		prefix := fmt.Sprintf("INV-%s", time.Now().Format("200601"))
+		result, err = tx.Exec(
+			`INSERT INTO invoices (invoice_number, contact_id, invoice_date, due_date, status, subtotal, tax_amount, total, amount_paid, notes, created_by)
+			 SELECT printf('%s-%04d', ?, COALESCE(MAX(CAST(SUBSTR(invoice_number, ?) AS INTEGER)), 0) + 1),
+			        ?, ?, ?, ?, ?, ?, ?, 0, ?, ?
+			 FROM invoices WHERE invoice_number LIKE ?`,
+			prefix, len(prefix)+2, inv.ContactID, inv.InvoiceDate, inv.DueDate, StatusDraft,
+			inv.Subtotal, inv.TaxAmount, inv.Total, inv.Notes, inv.CreatedBy, prefix+"-%",
+		)
+	} else {
+		result, err = tx.Exec(
+			`INSERT INTO invoices (invoice_number, contact_id, invoice_date, due_date, status, subtotal, tax_amount, total, amount_paid, notes, created_by)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+			inv.InvoiceNumber, inv.ContactID, inv.InvoiceDate, inv.DueDate, StatusDraft,
+			inv.Subtotal, inv.TaxAmount, inv.Total, inv.Notes, inv.CreatedBy,
+		)
+	}
 	if err != nil {
 		return 0, fmt.Errorf("insert invoice: %w", err)
 	}
 
 	invID64, _ := result.LastInsertId()
 	invID := int(invID64)
+	if inv.InvoiceNumber == "" {
+		if err := tx.QueryRow("SELECT invoice_number FROM invoices WHERE id=?", invID).Scan(&inv.InvoiceNumber); err != nil {
+			return 0, fmt.Errorf("load invoice number: %w", err)
+		}
+	}
 
 	for _, l := range lines {
 		_, err := tx.Exec(

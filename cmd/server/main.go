@@ -34,6 +34,7 @@ import (
 	"github.com/naufal/latasya-erp/internal/database"
 	"github.com/naufal/latasya-erp/internal/googlecalendar"
 	"github.com/naufal/latasya-erp/internal/handler"
+	"github.com/naufal/latasya-erp/internal/invoice"
 	"github.com/naufal/latasya-erp/internal/model"
 	"github.com/naufal/latasya-erp/internal/tmpl"
 )
@@ -70,12 +71,14 @@ func main() {
 		}
 	}()
 
+	invoiceModule := invoice.New(db)
 	h := &handler.Handler{
 		DB:         db,
 		TemplateFS: latasyaerp.TemplateFS,
 		FuncMap:    tmpl.FuncMap(),
 		DevMode:    devMode,
 		BasePath:   "/dashboard",
+		Invoices:   invoiceModule,
 		GoogleCalendarConfig: googlecalendar.Config{
 			ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
 			ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
@@ -158,7 +161,7 @@ func main() {
 	apiMux.Handle("PUT /api/v1/journals/{id}", idem(http.HandlerFunc(journalsAPI.Update)))
 	apiMux.HandleFunc("DELETE /api/v1/journals/{id}", journalsAPI.Delete)
 
-	invoicesAPI := &v1invoices.Handler{DB: db}
+	invoicesAPI := &v1invoices.Handler{DB: db, Invoices: invoiceModule}
 	apiMux.HandleFunc("GET /api/v1/invoices", invoicesAPI.List)
 	apiMux.HandleFunc("GET /api/v1/invoices/{id}", invoicesAPI.Get)
 	apiMux.HandleFunc("GET /api/v1/invoices/{id}/pdf", invoicesAPI.PDF)

@@ -8,6 +8,7 @@ import (
 	"github.com/naufal/latasya-erp/internal/auth"
 	"github.com/naufal/latasya-erp/internal/database"
 	"github.com/naufal/latasya-erp/internal/handler"
+	"github.com/naufal/latasya-erp/internal/invoice"
 	"github.com/naufal/latasya-erp/internal/tmpl"
 
 	latasyaerp "github.com/naufal/latasya-erp"
@@ -42,6 +43,7 @@ func SetupTestHandler(t *testing.T, db *sql.DB) *handler.Handler {
 		TemplateFS: latasyaerp.TemplateFS,
 		FuncMap:    tmpl.FuncMap(),
 		DevMode:    true,
+		Invoices:   invoice.New(db),
 	}
 }
 
