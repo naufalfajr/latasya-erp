@@ -59,16 +59,24 @@ jobs:
           VPS_USER: ${{ secrets.VPS_USER }}
         run: |
           scp -o BatchMode=yes -o ConnectTimeout=15 \
-            -i ~/.ssh/deploy_key latasya-erp "$VPS_USER@$VPS_HOST:/tmp/latasya-erp"
+            -i ~/.ssh/deploy_key \
+            latasya-erp deploy/latasya-erp.service \
+            "$VPS_USER@$VPS_HOST:/tmp/"
 
-      - name: Install and restart
+      - name: Backup, install and restart
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
         run: |
           ssh -o BatchMode=yes -o ConnectTimeout=15 \
             -i ~/.ssh/deploy_key "$VPS_USER@$VPS_HOST" \
-            'sudo install -m 755 /tmp/latasya-erp /usr/local/bin/latasya-erp && sudo systemctl restart latasya-erp'
+            'sudo systemctl start latasya-backup.service &&
+             sudo install -m 755 /usr/local/bin/latasya-erp /usr/local/bin/latasya-erp.rollback &&
+             sudo install -m 644 /etc/systemd/system/latasya-erp.service /etc/systemd/system/latasya-erp.service.rollback &&
+             sudo install -m 755 /tmp/latasya-erp /usr/local/bin/latasya-erp &&
+             sudo install -m 644 /tmp/latasya-erp.service /etc/systemd/system/latasya-erp.service &&
+             sudo systemctl daemon-reload &&
+             sudo systemctl restart latasya-erp'
 
       - name: Verify service is healthy
         env:
@@ -81,24 +89,33 @@ jobs:
             "EXPECTED_SHA=$EXPECTED_SHA bash -s" <<'EOF'
           set -euo pipefail
 
-          # Wait for systemd to settle after restart.
-          for i in {1..10}; do
-            if systemctl is-active --quiet latasya-erp; then break; fi
+          body=""
+          for i in {1..15}; do
+            if body=$(curl -sSf http://127.0.0.1:8080/healthz 2>/dev/null); then break; fi
             sleep 1
           done
 
-          # Unit must be running — catches startup panics cleanly before curl.
-          sudo systemctl is-active --quiet latasya-erp
-
-          # Ask the app itself: are you the right build?
-          body=$(curl -sSf http://127.0.0.1:8080/healthz)
-          echo "healthz: $body"
-
-          if ! echo "$body" | grep -q "version=$EXPECTED_SHA"; then
-            echo "FAIL: serving binary does not match $EXPECTED_SHA"
+          if [[ "$body" != *"version=$EXPECTED_SHA"* ]]; then
+            echo "FAIL: Go build did not become healthy; restoring previous production build"
             sudo journalctl -u latasya-erp -n 50 --no-pager
+            sudo test -x /usr/local/bin/latasya-erp.rollback
+            sudo install -m 755 /usr/local/bin/latasya-erp.rollback /usr/local/bin/latasya-erp
+            if sudo test -f /etc/systemd/system/latasya-erp.service.rollback; then
+              sudo install -m 644 /etc/systemd/system/latasya-erp.service.rollback /etc/systemd/system/latasya-erp.service
+            fi
+            sudo systemctl daemon-reload
+            sudo systemctl restart latasya-erp
+
+            rollback_body=""
+            for i in {1..15}; do
+              if rollback_body=$(curl -sSf http://127.0.0.1:8080/healthz 2>/dev/null); then break; fi
+              sleep 1
+            done
+            test -n "$rollback_body"
+            echo "rollback healthz: $rollback_body"
             exit 1
           fi
 
+          echo "healthz: $body"
           echo "deploy verified: correct build ($EXPECTED_SHA) is live"
           EOF
