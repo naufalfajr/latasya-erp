@@ -4,7 +4,3 @@ CREATE TABLE document_sequences (
     last_number INTEGER NOT NULL,
     PRIMARY KEY (document_type, period)
 );
-
-CREATE UNIQUE INDEX idx_journal_entries_reference_unique
-    ON journal_entries(reference)
-    WHERE reference IS NOT NULL AND reference <> '';

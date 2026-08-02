@@ -2,6 +2,8 @@ package reporting
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/naufal/latasya-erp/internal/model"
@@ -26,9 +28,15 @@ type TrialBalanceRow struct {
 	Balance       int    `json:"balance"` // Positive = debit balance, Negative = credit balance (for display, use absolute value + side)
 }
 
+type TrialBalanceReport struct {
+	Rows        []TrialBalanceRow `json:"rows"`
+	TotalDebit  int               `json:"total_debit"`
+	TotalCredit int               `json:"total_credit"`
+}
+
 // TrialBalance returns the trial balance for a date range.
 // If dateFrom is empty, includes all entries up to dateTo.
-func (m *Module) TrialBalance(ctx context.Context, dateFrom, dateTo string) ([]TrialBalanceRow, error) {
+func (m *Module) TrialBalance(ctx context.Context, dateFrom, dateTo string) (*TrialBalanceReport, error) {
 	query := `
 		SELECT a.id, a.code, a.name, a.account_type, a.normal_balance,
 			COALESCE(SUM(jl.debit), 0) AS total_debit,
@@ -62,7 +70,7 @@ func (m *Module) TrialBalance(ctx context.Context, dateFrom, dateTo string) ([]T
 	}
 	defer rows.Close()
 
-	var result []TrialBalanceRow
+	report := &TrialBalanceReport{}
 	for rows.Next() {
 		var r TrialBalanceRow
 		if err := rows.Scan(&r.AccountID, &r.AccountCode, &r.AccountName, &r.AccountType, &r.NormalBalance,
@@ -70,12 +78,14 @@ func (m *Module) TrialBalance(ctx context.Context, dateFrom, dateTo string) ([]T
 			return nil, fmt.Errorf("scan trial balance: %w", err)
 		}
 		r.Balance = r.TotalDebit - r.TotalCredit
-		result = append(result, r)
+		report.Rows = append(report.Rows, r)
+		report.TotalDebit += r.TotalDebit
+		report.TotalCredit += r.TotalCredit
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate trial balance: %w", err)
 	}
-	return result, nil
+	return report, nil
 }
 
 // ProfitLossRow represents a revenue or expense account in the P&L.
@@ -249,8 +259,26 @@ type GeneralLedgerEntry struct {
 	Balance     int    `json:"balance"`
 }
 
+type GeneralLedgerReport struct {
+	AccountID     int                  `json:"account_id"`
+	Code          string               `json:"account_code"`
+	Name          string               `json:"account_name"`
+	AccountType   string               `json:"account_type"`
+	NormalBalance string               `json:"normal_balance"`
+	Entries       []GeneralLedgerEntry `json:"entries"`
+	TotalDebit    int                  `json:"total_debit"`
+	TotalCredit   int                  `json:"total_credit"`
+	Net           int                  `json:"net"`
+}
+
 // GeneralLedger returns all transactions for a specific account within a date range.
-func (m *Module) GeneralLedger(ctx context.Context, accountID int, dateFrom, dateTo string) ([]GeneralLedgerEntry, error) {
+func (m *Module) GeneralLedger(ctx context.Context, accountID int, dateFrom, dateTo string) (*GeneralLedgerReport, error) {
+	report := &GeneralLedgerReport{AccountID: accountID}
+	if err := m.db.QueryRowContext(ctx, "SELECT code,name,account_type,normal_balance FROM accounts WHERE id=?", accountID).Scan(&report.Code, &report.Name, &report.AccountType, &report.NormalBalance); errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	} else if err != nil {
+		return nil, fmt.Errorf("general ledger account: %w", err)
+	}
 	query := `
 		SELECT je.entry_date, COALESCE(je.reference,''), je.description, COALESCE(je.source_type,''), jl.debit, jl.credit
 		FROM journal_lines jl
@@ -274,7 +302,6 @@ func (m *Module) GeneralLedger(ctx context.Context, accountID int, dateFrom, dat
 	}
 	defer rows.Close()
 
-	var entries []GeneralLedgerEntry
 	var runningBalance int
 	for rows.Next() {
 		var e GeneralLedgerEntry
@@ -283,12 +310,18 @@ func (m *Module) GeneralLedger(ctx context.Context, accountID int, dateFrom, dat
 		}
 		runningBalance += e.Debit - e.Credit
 		e.Balance = runningBalance
-		entries = append(entries, e)
+		report.Entries = append(report.Entries, e)
+		report.TotalDebit += e.Debit
+		report.TotalCredit += e.Credit
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate general ledger: %w", err)
 	}
-	return entries, nil
+	report.Net = report.TotalDebit - report.TotalCredit
+	if report.NormalBalance == "credit" {
+		report.Net = report.TotalCredit - report.TotalDebit
+	}
+	return report, nil
 }
 
 // CashFlowRow represents one line in the cash flow report.

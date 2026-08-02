@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/naufal/latasya-erp/internal/account"
 	v1 "github.com/naufal/latasya-erp/internal/api/v1"
 	"github.com/naufal/latasya-erp/internal/api/v1/reports"
 	"github.com/naufal/latasya-erp/internal/model"
@@ -20,7 +19,7 @@ import (
 
 func newTestServer(t *testing.T, db *sql.DB) *httptest.Server {
 	t.Helper()
-	h := &reports.Handler{Reporting: reporting.New(db), Accounts: account.New(db)}
+	h := &reports.Handler{Reporting: reporting.New(db)}
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)
 	ts := httptest.NewServer(v1.BearerOrCookie(db)(mux))

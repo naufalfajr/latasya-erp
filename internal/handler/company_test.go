@@ -23,14 +23,11 @@ func testServerWithCompany(t *testing.T) (*httptest.Server, *sql.DB) {
 	h := testutil.SetupTestHandler(t, db)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /login", h.LoginPage)
-	mux.HandleFunc("POST /login", h.Login)
+	h.RegisterAuthRoutes(mux, func(next http.Handler) http.Handler { return next })
 
 	protected := http.NewServeMux()
-	protected.HandleFunc("GET /settings/company", auth.AdminOnly(h.CompanyProfilePage))
-	protected.HandleFunc("POST /settings/company", auth.AdminOnly(h.UpdateCompanyProfile))
-	protected.HandleFunc("GET /password/change", h.PasswordChangePage)
-	protected.HandleFunc("POST /password/change", h.PasswordChange)
+	h.RegisterAccessRoutes(protected)
+	h.RegisterSettingsRoutes(protected)
 
 	mux.Handle("/", auth.RequireAuth(db, access.New(db, nil), auth.CSRFProtect(h.EnforcePasswordChange(protected))))
 

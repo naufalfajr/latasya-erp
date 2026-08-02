@@ -40,7 +40,12 @@ func (h *Handler) ListJournals(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	pg := newPagination(page, result.Total)
-	h.render(w, r, "templates/journals/index.html", "Journal Entries", journalPageData{Entries: result.Entries, Filter: filter, Pagination: pg})
+	data := journalPageData{Entries: result.Entries, Filter: filter, Pagination: pg}
+	if r.Header.Get("HX-Request") == "true" {
+		h.renderFragment(w, r, "templates/journals/index.html", "journal-table", data)
+		return
+	}
+	h.render(w, r, "templates/journals/index.html", "Journal Entries", data)
 }
 
 func (h *Handler) renderJournalForm(w http.ResponseWriter, r *http.Request, title string, data journalFormData) {

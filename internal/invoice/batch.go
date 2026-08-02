@@ -179,7 +179,7 @@ func (m *Module) GenerateRecurring(ctx context.Context, actor Actor, invoiceDate
 	for _, customer := range customers.Contacts {
 		item := GeneratedInvoice{ContactID: customer.ID, ContactName: customer.Name}
 		created, err := m.create(ctx, actor, Draft{ContactID: customer.ID, InvoiceDate: invoiceDate, DueDate: dueDate,
-			Lines: []DraftLine{{Description: description, Quantity: 100, UnitPrice: schoolcalendar.ApplyMultiplier(customer.Price(), multiplier), AccountID: profile.DefaultRevenueAccountID}}}, false, invoiceDate[:7])
+			Lines: []DraftLine{{Description: description, Quantity: 100, UnitPrice: schoolcalendar.ApplyMultiplier(contact.Price(customer), multiplier), AccountID: profile.DefaultRevenueAccountID}}}, false, invoiceDate[:7])
 		if errors.Is(err, errRecurringAlreadyExists) {
 			item.Result = GeneratedSkipped
 			result.Skipped++

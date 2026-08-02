@@ -166,31 +166,5 @@ func requireManage(w http.ResponseWriter, r *http.Request) bool {
 }
 
 func writeModuleError(w http.ResponseWriter, r *http.Request, err error) bool {
-	if err == nil {
-		return true
-	}
-	var validation *journal.ValidationError
-	var conflict *journal.ConflictError
-	switch {
-	case errors.Is(err, journal.ErrForbidden):
-		v1.WriteError(w, r, http.StatusForbidden, v1.CodeForbidden, "journals.manage capability required", nil)
-	case errors.Is(err, journal.ErrNotFound):
-		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "journal entry not found", nil)
-	case errors.As(err, &validation):
-		fields := validation.Fields
-		if balance, ok := fields["balance"]; ok {
-			fields = make(map[string]string, len(validation.Fields))
-			for key, value := range validation.Fields {
-				fields[key] = value
-			}
-			delete(fields, "balance")
-			fields["lines"] = balance
-		}
-		v1.WriteError(w, r, http.StatusUnprocessableEntity, v1.CodeValidationFailed, validation.Error(), fields)
-	case errors.As(err, &conflict):
-		v1.WriteError(w, r, http.StatusConflict, v1.CodeConflict, conflict.Error(), nil)
-	default:
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "journal operation failed", nil)
-	}
-	return false
+	return v1.WriteJournalError(w, r, err, v1.JournalErrorLabels{Capability: "journals.manage", NotFound: "journal entry", Operation: "journal operation", BalanceKey: "lines"})
 }

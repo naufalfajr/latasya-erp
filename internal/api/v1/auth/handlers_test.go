@@ -25,13 +25,10 @@ func newTestServer(t *testing.T) (*httptest.Server, *sql.DB, *v1auth.Handler) {
 
 	mux := http.NewServeMux()
 	apiMux := http.NewServeMux()
-	apiMux.HandleFunc("POST /api/v1/auth/logout", h.Logout)
-	apiMux.HandleFunc("GET /api/v1/auth/me", h.Me)
-	apiMux.HandleFunc("GET /api/v1/auth/csrf", h.CSRF)
-	apiMux.HandleFunc("POST /api/v1/auth/password/change", h.PasswordChange)
+	h.RegisterRoutes(apiMux)
 
 	mux.Handle("/api/v1/", v1.BearerOrCookie(db)(apiMux))
-	mux.Handle("POST /api/v1/auth/login", http.HandlerFunc(h.Login))
+	h.RegisterLoginRoute(mux, func(next http.Handler) http.Handler { return next })
 
 	srv := httptest.NewServer(audit.RequestContext(mux))
 	t.Cleanup(srv.Close)

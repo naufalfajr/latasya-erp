@@ -28,6 +28,20 @@ func New(db *sql.DB, devMode bool) *Handler {
 	return &Handler{DB: db, DevMode: devMode, Access: access.New(db, auth.HashPassword)}
 }
 
+// RegisterRoutes installs authenticated auth endpoints. Login is intentionally
+// registered on the outer mux because it must bypass authentication middleware.
+func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("POST /api/v1/auth/logout", h.Logout)
+	mux.HandleFunc("GET /api/v1/auth/me", h.Me)
+	mux.HandleFunc("GET /api/v1/auth/csrf", h.CSRF)
+	mux.HandleFunc("POST /api/v1/auth/password/change", h.PasswordChange)
+}
+
+// RegisterLoginRoute installs the unauthenticated login endpoint.
+func (h *Handler) RegisterLoginRoute(mux *http.ServeMux, middleware func(http.Handler) http.Handler) {
+	mux.Handle("POST /api/v1/auth/login", middleware(http.HandlerFunc(h.Login)))
+}
+
 const sessionCookieMaxAgeSeconds = 48 * 60 * 60
 
 // userPayload is the public-facing snapshot of model.User returned in JSON

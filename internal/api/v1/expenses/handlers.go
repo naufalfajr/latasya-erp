@@ -2,7 +2,6 @@
 package expenses
 
 import (
-	"errors"
 	"net/http"
 	"strconv"
 
@@ -192,22 +191,5 @@ func (h *Handler) get(w http.ResponseWriter, r *http.Request) (*model.JournalEnt
 }
 
 func writeModuleError(w http.ResponseWriter, r *http.Request, err error) bool {
-	if err == nil {
-		return true
-	}
-	var validation *journal.ValidationError
-	var conflict *journal.ConflictError
-	switch {
-	case errors.Is(err, journal.ErrForbidden):
-		v1.WriteError(w, r, http.StatusForbidden, v1.CodeForbidden, "expenses.manage capability required", nil)
-	case errors.Is(err, journal.ErrNotFound):
-		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "expense entry not found", nil)
-	case errors.As(err, &validation):
-		v1.WriteError(w, r, http.StatusUnprocessableEntity, v1.CodeValidationFailed, validation.Error(), validation.Fields)
-	case errors.As(err, &conflict):
-		v1.WriteError(w, r, http.StatusConflict, v1.CodeConflict, conflict.Error(), nil)
-	default:
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "expense operation failed", nil)
-	}
-	return false
+	return v1.WriteJournalError(w, r, err, v1.JournalErrorLabels{Capability: "expenses.manage", NotFound: "expense entry", Operation: "expense operation"})
 }

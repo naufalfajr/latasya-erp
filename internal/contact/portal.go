@@ -42,7 +42,17 @@ func portalCodePrefix(name string) string {
 	return b.String()
 }
 
-func (m *Module) GetOrCreatePortalCode(ctx context.Context, contactID int) (string, error) {
+// EnsurePortalCode returns the existing portal code or creates one for an
+// authorized back-office workflow.
+type PortalIssuer struct {
+	UserID   int
+	CanIssue bool
+}
+
+func (m *Module) EnsurePortalCode(ctx context.Context, issuer PortalIssuer, contactID int) (string, error) {
+	if issuer.UserID <= 0 || !issuer.CanIssue {
+		return "", ErrForbidden
+	}
 	var code string
 	err := m.db.QueryRowContext(ctx, "SELECT COALESCE(portal_code,'') FROM contacts WHERE id=?", contactID).Scan(&code)
 	if errors.Is(err, sql.ErrNoRows) {

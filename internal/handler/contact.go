@@ -31,7 +31,12 @@ func (h *Handler) ListContacts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	capacity, _ := h.Contacts.ListRouteCapacity(r.Context())
-	h.render(w, r, "templates/contacts/index.html", "Contacts", contactPageData{Contacts: result.Contacts, RouteCapacity: capacity, Filter: f.Type, Search: f.Search, Sort: f.Sort, Order: f.Order, SortURLs: h.contactSortURLs(r, f.Sort, f.Order)})
+	data := contactPageData{Contacts: result.Contacts, RouteCapacity: capacity, Filter: f.Type, Search: f.Search, Sort: f.Sort, Order: f.Order, SortURLs: h.contactSortURLs(r, f.Sort, f.Order)}
+	if r.Header.Get("HX-Request") == "true" {
+		h.renderFragment(w, r, "templates/contacts/index.html", "contact-table", data)
+		return
+	}
+	h.render(w, r, "templates/contacts/index.html", "Contacts", data)
 }
 
 func (h *Handler) contactSortURLs(r *http.Request, sort, order string) map[string]string {

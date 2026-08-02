@@ -44,7 +44,6 @@ import (
 	"github.com/naufal/latasya-erp/internal/idempotency"
 	"github.com/naufal/latasya-erp/internal/invoice"
 	"github.com/naufal/latasya-erp/internal/journal"
-	"github.com/naufal/latasya-erp/internal/model"
 	"github.com/naufal/latasya-erp/internal/reporting"
 	"github.com/naufal/latasya-erp/internal/schoolcalendar"
 	"github.com/naufal/latasya-erp/internal/tmpl"
@@ -153,10 +152,7 @@ func main() {
 	// it bypasses BearerOrCookie; the rest are wired through apiMux so they
 	// inherit the standard auth + audit pipeline.
 	authAPI := v1auth.New(db, devMode)
-	apiMux.HandleFunc("POST /api/v1/auth/logout", authAPI.Logout)
-	apiMux.HandleFunc("GET /api/v1/auth/me", authAPI.Me)
-	apiMux.HandleFunc("GET /api/v1/auth/csrf", authAPI.CSRF)
-	apiMux.HandleFunc("POST /api/v1/auth/password/change", authAPI.PasswordChange)
+	authAPI.RegisterRoutes(apiMux)
 
 	accts := &v1accounts.Handler{Accounts: accountModule}
 	accts.RegisterRoutes(apiMux)
@@ -187,7 +183,7 @@ func main() {
 	creditNotes := &v1creditnotes.Handler{CreditNotes: creditNoteModule}
 	creditNotes.RegisterRoutes(apiMux, idem)
 
-	reportsAPI := &v1reports.Handler{Reporting: reportingModule, Accounts: accountModule}
+	reportsAPI := &v1reports.Handler{Reporting: reportingModule}
 	reportsAPI.RegisterRoutes(apiMux)
 
 	usersAPI := &v1users.Handler{Access: accessModule}
@@ -206,7 +202,7 @@ func main() {
 	schoolCalendarAPI.RegisterRoutes(apiMux)
 
 	mux.Handle("/api/v1/", v1.BearerOrCookie(db)(apiMux))
-	mux.Handle("POST /api/v1/auth/login", v1.LoginRateLimiter()(http.HandlerFunc(authAPI.Login)))
+	authAPI.RegisterLoginRoute(mux, v1.LoginRateLimiter())
 
 	// Public site: company profile at the bare domain, plus the parent
 	// invoice portal. No auth required.
@@ -216,9 +212,7 @@ func main() {
 	h.RegisterPublicRoutes(mux, portalLimiter)
 
 	// Auth routes (no auth required)
-	mux.HandleFunc("GET /dashboard/login", h.LoginPage)
-	mux.Handle("POST /dashboard/login", v1.LoginRateLimiter()(http.HandlerFunc(h.Login)))
-	mux.HandleFunc("POST /dashboard/logout", h.Logout)
+	h.RegisterAuthRoutes(mux, v1.LoginRateLimiter())
 
 	// Protected routes (any authenticated user), mounted under BasePath.
 	// StripPrefix removes it before dispatch, so every pattern below and
@@ -226,70 +220,7 @@ func main() {
 	// untouched — only outbound redirects and rendered links need it,
 	// via h.BasePath.
 	protected := http.NewServeMux()
-	h.RegisterReportingRoutes(protected)
-
-	h.RegisterAccountRoutes(protected)
-
-	h.RegisterContactRoutes(protected)
-
-	h.RegisterAccountingRoutes(protected)
-	h.RegisterReceivablesPayablesRoutes(protected)
-
-	// Invoices
-	h.RegisterInvoiceRoutes(protected)
-
-	// User Management (requires users.manage capability — admin by default)
-	userMux := http.NewServeMux()
-	userMux.HandleFunc("GET /users", h.ListUsers)
-	userMux.HandleFunc("GET /users/new", h.NewUser)
-	userMux.HandleFunc("POST /users", h.CreateUser)
-	userMux.HandleFunc("GET /users/{id}/edit", h.EditUser)
-	userMux.HandleFunc("POST /users/{id}", h.UpdateUser)
-	userMux.HandleFunc("DELETE /users/{id}", h.DeleteUser)
-	protected.Handle("/users", auth.RequireCapability(model.CapUsersManage)(userMux))
-	protected.Handle("/users/", auth.RequireCapability(model.CapUsersManage)(userMux))
-
-	// Role Management (requires roles.manage capability — admin by default)
-	roleMux := http.NewServeMux()
-	roleMux.HandleFunc("GET /roles", h.ListRoles)
-	roleMux.HandleFunc("GET /roles/new", h.NewRole)
-	roleMux.HandleFunc("POST /roles", h.CreateRole)
-	roleMux.HandleFunc("GET /roles/{name}/edit", h.EditRole)
-	roleMux.HandleFunc("POST /roles/{name}", h.UpdateRole)
-	roleMux.HandleFunc("DELETE /roles/{name}", h.DeleteRole)
-	protected.Handle("/roles", auth.RequireCapability(model.CapRolesManage)(roleMux))
-	protected.Handle("/roles/", auth.RequireCapability(model.CapRolesManage)(roleMux))
-
-	// HTMX partials
-	protected.HandleFunc("GET /htmx/bill-line", h.BillLinePartial)
-	protected.HandleFunc("GET /htmx/credit-note-line", h.CreditNoteLinePartial)
-
-	// Password change (self-service + forced on first login)
-	protected.HandleFunc("GET /password/change", h.PasswordChangePage)
-	protected.HandleFunc("POST /password/change", h.PasswordChange)
-
-	// API Tokens management UI
-	protected.HandleFunc("GET /settings/api-tokens", auth.AdminOnly(h.ListAPITokens))
-	protected.HandleFunc("GET /settings/api-tokens/new", auth.AdminOnly(h.NewAPIToken))
-	protected.HandleFunc("GET /settings/api-tokens/created", auth.AdminOnly(h.CreatedAPIToken))
-	protected.HandleFunc("POST /settings/api-tokens", auth.AdminOnly(h.CreateAPIToken))
-	protected.HandleFunc("POST /settings/api-tokens/{id}/revoke", auth.AdminOnly(h.RevokeAPIToken))
-
-	// Company Profile (admin-only settings shown on invoices)
-	h.RegisterCompanyRoutes(protected)
-
-	// School Calendar (admin-only closures and Google Calendar integration)
-	protected.HandleFunc("GET /settings/school-calendar", auth.AdminOnly(h.SchoolCalendarPage))
-	protected.HandleFunc("POST /settings/school-calendar/closures", auth.AdminOnly(h.CreateSchoolClosure))
-	protected.HandleFunc("POST /settings/school-calendar/closures/{id}/delete", auth.AdminOnly(h.DeleteSchoolClosure))
-	protected.HandleFunc("POST /settings/school-calendar/google-calendar-id", auth.AdminOnly(h.SaveGoogleCalendarID))
-	protected.HandleFunc("POST /integrations/google-calendar/connect", auth.AdminOnly(h.ConnectGoogleCalendar))
-	protected.HandleFunc("GET /integrations/google-calendar/callback", auth.AdminOnly(h.GoogleCalendarCallback))
-	protected.HandleFunc("POST /integrations/google-calendar/sync", auth.AdminOnly(h.SyncGoogleCalendar))
-	protected.HandleFunc("POST /integrations/google-calendar/disconnect", auth.AdminOnly(h.DisconnectGoogleCalendar))
-
-	// Audit log (admin-only via audit.view capability)
-	protected.HandleFunc("GET /audit", auth.CapabilityOnly(model.CapAuditView, h.AuditList))
+	h.RegisterProtectedRoutes(protected)
 
 	mux.Handle(h.BasePath+"/", http.StripPrefix(h.BasePath, auth.RequireAuth(db, accessModule, auth.CSRFProtect(h.EnforcePasswordChange(protected)))))
 

@@ -140,6 +140,19 @@ func (h *Handler) render(w http.ResponseWriter, r *http.Request, page string, ti
 	}
 }
 
+func (h *Handler) renderFragment(w http.ResponseWriter, r *http.Request, page, name string, data any) {
+	t, err := h.getTemplate(page)
+	if err != nil {
+		slog.Error("parse fragment template", "page", page, "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	pd := PageData{User: auth.UserFromContext(r.Context()), Path: r.URL.Path, CSRFToken: auth.CSRFFromContext(r.Context()), BasePath: h.BasePath, Data: data}
+	if err := t.ExecuteTemplate(w, name, pd); err != nil {
+		slog.Error("render fragment", "page", page, "fragment", name, "error", err)
+	}
+}
+
 func (h *Handler) setFlash(w http.ResponseWriter, msg string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     "flash",

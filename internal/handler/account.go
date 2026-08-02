@@ -29,7 +29,12 @@ func (h *Handler) ListAccounts(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
-	h.render(w, r, "templates/accounts/index.html", "Chart of Accounts", accountPageData{Accounts: result.Accounts, Filter: r.URL.Query().Get("type"), Search: r.URL.Query().Get("search"), TypeCounts: counts})
+	data := accountPageData{Accounts: result.Accounts, Filter: r.URL.Query().Get("type"), Search: r.URL.Query().Get("search"), TypeCounts: counts}
+	if r.Header.Get("HX-Request") == "true" {
+		h.renderFragment(w, r, "templates/accounts/index.html", "account-table", data)
+		return
+	}
+	h.render(w, r, "templates/accounts/index.html", "Chart of Accounts", data)
 }
 
 type accountFormData struct {

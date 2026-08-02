@@ -1,19 +1,18 @@
 package reports
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
 	"time"
 
-	"github.com/naufal/latasya-erp/internal/account"
 	v1 "github.com/naufal/latasya-erp/internal/api/v1"
 	"github.com/naufal/latasya-erp/internal/reporting"
 )
 
 type Handler struct {
 	Reporting *reporting.Module
-	Accounts  *account.Module
 }
 
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
@@ -66,17 +65,14 @@ type trialBalanceResp struct {
 func (h *Handler) TrialBalance(w http.ResponseWriter, r *http.Request) {
 	from, to := getDateRange(r)
 
-	rows, err := h.Reporting.TrialBalance(r.Context(), from, to)
+	report, err := h.Reporting.TrialBalance(r.Context(), from, to)
 	if err != nil {
 		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to generate trial balance", nil)
 		return
 	}
 
-	var totalDebit, totalCredit int
-	resp := trialBalanceResp{From: from, To: to, Rows: make([]trialBalanceRowResp, 0, len(rows))}
-	for _, row := range rows {
-		totalDebit += row.TotalDebit
-		totalCredit += row.TotalCredit
+	resp := trialBalanceResp{From: from, To: to, Rows: make([]trialBalanceRowResp, 0, len(report.Rows))}
+	for _, row := range report.Rows {
 		resp.Rows = append(resp.Rows, trialBalanceRowResp{
 			AccountID:     row.AccountID,
 			AccountCode:   row.AccountCode,
@@ -88,8 +84,8 @@ func (h *Handler) TrialBalance(w http.ResponseWriter, r *http.Request) {
 			Balance:       idr(row.Balance),
 		})
 	}
-	resp.TotalDebit = idr(totalDebit)
-	resp.TotalCredit = idr(totalCredit)
+	resp.TotalDebit = idr(report.TotalDebit)
+	resp.TotalCredit = idr(report.TotalCredit)
 
 	v1.WriteJSON(w, http.StatusOK, map[string]any{"data": resp})
 }
@@ -285,13 +281,11 @@ func (h *Handler) GeneralLedger(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	selected, err := h.Accounts.Get(r.Context(), accountID)
-	if err != nil {
+	report, err := h.Reporting.GeneralLedger(r.Context(), accountID, from, to)
+	if errors.Is(err, reporting.ErrNotFound) {
 		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "account not found", nil)
 		return
 	}
-
-	entries, err := h.Reporting.GeneralLedger(r.Context(), accountID, from, to)
 	if err != nil {
 		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to generate general ledger", nil)
 		return
@@ -299,13 +293,13 @@ func (h *Handler) GeneralLedger(w http.ResponseWriter, r *http.Request) {
 
 	resp := generalLedgerResp{
 		AccountID:   accountID,
-		AccountCode: selected.Code,
-		AccountName: selected.Name,
+		AccountCode: report.Code,
+		AccountName: report.Name,
 		From:        from,
 		To:          to,
-		Entries:     make([]generalLedgerEntryResp, 0, len(entries)),
+		Entries:     make([]generalLedgerEntryResp, 0, len(report.Entries)),
 	}
-	for _, e := range entries {
+	for _, e := range report.Entries {
 		resp.Entries = append(resp.Entries, generalLedgerEntryResp{
 			EntryDate:   e.EntryDate,
 			Reference:   e.Reference,

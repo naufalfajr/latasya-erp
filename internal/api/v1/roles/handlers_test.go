@@ -23,12 +23,7 @@ func newTestServer(t *testing.T, db *sql.DB) *httptest.Server {
 	t.Helper()
 	h := &roles.Handler{Access: access.New(db, auth.HashPassword)}
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/v1/roles", h.List)
-	mux.HandleFunc("GET /api/v1/roles/capabilities", h.Capabilities)
-	mux.HandleFunc("GET /api/v1/roles/{name}", h.Get)
-	mux.HandleFunc("POST /api/v1/roles", h.Create)
-	mux.HandleFunc("PUT /api/v1/roles/{name}", h.Update)
-	mux.HandleFunc("DELETE /api/v1/roles/{name}", h.Delete)
+	h.RegisterRoutes(mux)
 	ts := httptest.NewServer(v1.BearerOrCookie(db)(mux))
 	t.Cleanup(ts.Close)
 	return ts

@@ -23,17 +23,11 @@ func testServerWithAPITokens(t *testing.T) (*httptest.Server, *sql.DB) {
 	h := testutil.SetupTestHandler(t, db)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /login", h.LoginPage)
-	mux.HandleFunc("POST /login", h.Login)
+	h.RegisterAuthRoutes(mux, func(next http.Handler) http.Handler { return next })
 
 	protected := http.NewServeMux()
-	protected.HandleFunc("GET /settings/api-tokens", auth.AdminOnly(h.ListAPITokens))
-	protected.HandleFunc("GET /settings/api-tokens/new", auth.AdminOnly(h.NewAPIToken))
-	protected.HandleFunc("GET /settings/api-tokens/created", auth.AdminOnly(h.CreatedAPIToken))
-	protected.HandleFunc("POST /settings/api-tokens", auth.AdminOnly(h.CreateAPIToken))
-	protected.HandleFunc("POST /settings/api-tokens/{id}/revoke", auth.AdminOnly(h.RevokeAPIToken))
-	protected.HandleFunc("GET /password/change", h.PasswordChangePage)
-	protected.HandleFunc("POST /password/change", h.PasswordChange)
+	h.RegisterAccessRoutes(protected)
+	h.RegisterSettingsRoutes(protected)
 
 	mux.Handle("/", auth.RequireAuth(db, access.New(db, nil), auth.CSRFProtect(h.EnforcePasswordChange(protected))))
 

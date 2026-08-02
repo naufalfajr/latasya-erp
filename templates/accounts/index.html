@@ -38,13 +38,17 @@
         hx-get="{{$.BasePath}}/accounts{{if $data.Filter}}?type={{$data.Filter}}{{end}}"
         hx-trigger="keyup changed delay:300ms"
         hx-target="#account-table"
-        hx-select="#account-table"
+		hx-swap="outerHTML"
         hx-push-url="false"
         name="search"
         value="{{$data.Search}}">
 </div>
 
 <!-- Account table -->
+{{template "account-table" .}}
+{{end}}
+{{define "account-table"}}
+{{$data := .Data}}
 <div id="account-table" class="overflow-x-auto">
     <table class="table table-sm">
         <thead>

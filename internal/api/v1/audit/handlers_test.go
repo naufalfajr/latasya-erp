@@ -22,7 +22,7 @@ func newTestServer(t *testing.T, db *sql.DB) *httptest.Server {
 	t.Helper()
 	h := &auditapi.Handler{Audit: audit.New(db)}
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/v1/audit", h.List)
+	h.RegisterRoutes(mux)
 	ts := httptest.NewServer(v1.BearerOrCookie(db)(mux))
 	t.Cleanup(ts.Close)
 	return ts

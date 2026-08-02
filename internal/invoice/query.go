@@ -229,7 +229,7 @@ func (m *Module) PrepareShare(ctx context.Context, actor Actor, id int) (*ShareI
 	if invoiceContact.Phone == "" {
 		return info, nil
 	}
-	info.PortalCode, err = m.contacts.GetOrCreatePortalCode(ctx, invoiceContact.ID)
+	info.PortalCode, err = m.contacts.EnsurePortalCode(ctx, contact.PortalIssuer{UserID: actor.UserID, CanIssue: actor.CanManage}, invoiceContact.ID)
 	if err != nil {
 		return nil, fmt.Errorf("load portal code: %w", err)
 	}

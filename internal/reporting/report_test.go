@@ -34,22 +34,16 @@ func TestTrialBalance_Balanced(t *testing.T) {
 		{AccountID: cashID, Debit: 0, Credit: 3000000},
 	})
 
-	rows, err := reporting.New(db).TrialBalance(context.Background(), "2026-04-01", "2026-04-30")
+	report, err := reporting.New(db).TrialBalance(context.Background(), "2026-04-01", "2026-04-30")
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	var totalDebit, totalCredit int
-	for _, r := range rows {
-		totalDebit += r.TotalDebit
-		totalCredit += r.TotalCredit
+	if report.TotalDebit != report.TotalCredit {
+		t.Errorf("trial balance not balanced: debit=%d credit=%d", report.TotalDebit, report.TotalCredit)
 	}
-
-	if totalDebit != totalCredit {
-		t.Errorf("trial balance not balanced: debit=%d credit=%d", totalDebit, totalCredit)
-	}
-	if totalDebit != 13000000 {
-		t.Errorf("expected total debit 13000000, got %d", totalDebit)
+	if report.TotalDebit != 13000000 {
+		t.Errorf("expected total debit 13000000, got %d", report.TotalDebit)
 	}
 }
 
@@ -57,12 +51,12 @@ func TestTrialBalance_Empty(t *testing.T) {
 	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
-	rows, err := reporting.New(db).TrialBalance(context.Background(), "2026-04-01", "2026-04-30")
+	report, err := reporting.New(db).TrialBalance(context.Background(), "2026-04-01", "2026-04-30")
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	if len(rows) != 0 {
-		t.Errorf("expected 0 rows for empty period, got %d", len(rows))
+	if len(report.Rows) != 0 {
+		t.Errorf("expected 0 rows for empty period, got %d", len(report.Rows))
 	}
 }
 
@@ -177,21 +171,21 @@ func TestGeneralLedger(t *testing.T) {
 		{AccountID: revenueID, Debit: 0, Credit: 3000000},
 	})
 
-	entries, err := reporting.New(db).GeneralLedger(context.Background(), cashID, "2026-04-01", "2026-04-30")
+	report, err := reporting.New(db).GeneralLedger(context.Background(), cashID, "2026-04-01", "2026-04-30")
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	if len(entries) != 2 {
-		t.Fatalf("expected 2 entries, got %d", len(entries))
+	if len(report.Entries) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(report.Entries))
 	}
 
 	// Running balance: 5M, then 8M
-	if entries[0].Balance != 5000000 {
-		t.Errorf("expected first balance 5000000, got %d", entries[0].Balance)
+	if report.Entries[0].Balance != 5000000 {
+		t.Errorf("expected first balance 5000000, got %d", report.Entries[0].Balance)
 	}
-	if entries[1].Balance != 8000000 {
-		t.Errorf("expected second balance 8000000, got %d", entries[1].Balance)
+	if report.Entries[1].Balance != 8000000 {
+		t.Errorf("expected second balance 8000000, got %d", report.Entries[1].Balance)
 	}
 }
 

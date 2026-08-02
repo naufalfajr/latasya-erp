@@ -1,14 +1,34 @@
-package model_test
+package contact_test
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"sync"
 	"testing"
 
+	"github.com/naufal/latasya-erp/internal/contact"
 	"github.com/naufal/latasya-erp/internal/model"
 	"github.com/naufal/latasya-erp/internal/testutil"
 )
+
+var (
+	portalIssuer  = contact.PortalIssuer{UserID: 1, CanIssue: true}
+	portalManager = contact.Actor{UserID: 1, CanManagePortal: true}
+)
+
+func TestEnsurePortalCodeRequiresAuthorizedActor(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	m := contact.New(db)
+	created, err := m.Create(context.Background(), contact.Actor{UserID: 1, CanManage: true}, contact.Draft{Name: "Portal Auth", ContactType: "customer", IsActive: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = m.EnsurePortalCode(context.Background(), contact.PortalIssuer{}, created.ID)
+	if !errors.Is(err, contact.ErrForbidden) {
+		t.Fatalf("EnsurePortalCode error = %v, want ErrForbidden", err)
+	}
+}
 
 func TestContactsByPortalCode_GroupsSiblingsBySharedPhone(t *testing.T) {
 	t.Parallel()
@@ -23,12 +43,12 @@ func TestContactsByPortalCode_GroupsSiblingsBySharedPhone(t *testing.T) {
 		t.Fatalf("expected 2 contacts, got %d", len(contacts))
 	}
 
-	code, err := testutil.GetOrCreatePortalCode(db, contacts[0].ID)
+	code, err := contact.New(db).EnsurePortalCode(context.Background(), portalIssuer, contacts[0].ID)
 	if err != nil {
 		t.Fatalf("get code: %v", err)
 	}
 
-	fam, err := testutil.ContactsByPortalCode(db, code)
+	fam, err := contact.New(db).FamilyByPortalCode(context.Background(), code)
 	if err != nil {
 		t.Fatalf("lookup: %v", err)
 	}
@@ -52,12 +72,12 @@ func TestContactsByPortalCode_GroupsSiblingsByDifferentlyFormattedPhone(t *testi
 		t.Fatalf("expected 2 contacts, got %d", len(contacts))
 	}
 
-	code, err := testutil.GetOrCreatePortalCode(db, contacts[0].ID)
+	code, err := contact.New(db).EnsurePortalCode(context.Background(), portalIssuer, contacts[0].ID)
 	if err != nil {
 		t.Fatalf("get code: %v", err)
 	}
 
-	fam, err := testutil.ContactsByPortalCode(db, code)
+	fam, err := contact.New(db).FamilyByPortalCode(context.Background(), code)
 	if err != nil {
 		t.Fatalf("lookup: %v", err)
 	}
@@ -78,12 +98,12 @@ func TestContactsByPortalCode_BlankPhoneDoesNotGroup(t *testing.T) {
 		t.Fatalf("expected 2 contacts, got %d", len(contacts))
 	}
 
-	code, err := testutil.GetOrCreatePortalCode(db, contacts[0].ID)
+	code, err := contact.New(db).EnsurePortalCode(context.Background(), portalIssuer, contacts[0].ID)
 	if err != nil {
 		t.Fatalf("get code: %v", err)
 	}
 
-	fam, err := testutil.ContactsByPortalCode(db, code)
+	fam, err := contact.New(db).FamilyByPortalCode(context.Background(), code)
 	if err != nil {
 		t.Fatalf("lookup: %v", err)
 	}
@@ -95,7 +115,7 @@ func TestContactsByPortalCode_BlankPhoneDoesNotGroup(t *testing.T) {
 func TestContactsByPortalCode_UnknownCodeReturnsNil(t *testing.T) {
 	t.Parallel()
 	db := testutil.SetupTestDB(t)
-	fam, err := testutil.ContactsByPortalCode(db, "does-not-exist")
+	fam, err := contact.New(db).FamilyByPortalCode(context.Background(), "does-not-exist")
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -130,7 +150,7 @@ func TestPortalCode_FormatAndPrefix(t *testing.T) {
 			t.Fatalf("read back contact %q: %v", tt.name, err)
 		}
 
-		code, err := testutil.GetOrCreatePortalCode(db, id)
+		code, err := contact.New(db).EnsurePortalCode(context.Background(), portalIssuer, id)
 		if err != nil {
 			t.Fatalf("generate code for %q: %v", tt.name, err)
 		}
@@ -160,14 +180,14 @@ func TestGetOrCreatePortalCode_StableAcrossCalls(t *testing.T) {
 	contacts, _ := testutil.ListContacts(db, testutil.ContactFilter{Search: "Andi"})
 	id := contacts[0].ID
 
-	code1, err := testutil.GetOrCreatePortalCode(db, id)
+	code1, err := contact.New(db).EnsurePortalCode(context.Background(), portalIssuer, id)
 	if err != nil {
 		t.Fatalf("get code: %v", err)
 	}
 	if code1 == "" {
 		t.Fatal("expected non-empty code")
 	}
-	code2, err := testutil.GetOrCreatePortalCode(db, id)
+	code2, err := contact.New(db).EnsurePortalCode(context.Background(), portalIssuer, id)
 	if err != nil {
 		t.Fatalf("get code again: %v", err)
 	}
@@ -178,11 +198,11 @@ func TestGetOrCreatePortalCode_StableAcrossCalls(t *testing.T) {
 
 func TestGetOrCreatePortalCode_ConcurrentCallsReturnPersistedWinner(t *testing.T) {
 	db := testutil.SetupTestDB(t)
-	contact := &model.Contact{Name: "Concurrent Portal", ContactType: "customer", IsActive: true}
-	if err := testutil.CreateContact(db, contact); err != nil {
+	fixture := &model.Contact{Name: "Concurrent Portal", ContactType: "customer", IsActive: true}
+	if err := testutil.CreateContact(db, fixture); err != nil {
 		t.Fatal(err)
 	}
-	contacts, err := testutil.ListContacts(db, testutil.ContactFilter{Search: contact.Name})
+	contacts, err := testutil.ListContacts(db, testutil.ContactFilter{Search: fixture.Name})
 	if err != nil || len(contacts) != 1 {
 		t.Fatalf("contact lookup: %v %#v", err, contacts)
 	}
@@ -195,7 +215,7 @@ func TestGetOrCreatePortalCode_ConcurrentCallsReturnPersistedWinner(t *testing.T
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			code, err := testutil.GetOrCreatePortalCode(db, contacts[0].ID)
+			code, err := contact.New(db).EnsurePortalCode(context.Background(), portalIssuer, contacts[0].ID)
 			if err != nil {
 				errs <- err
 				return
@@ -228,8 +248,8 @@ func TestRegeneratePortalCode_InvalidatesOldCode(t *testing.T) {
 	contacts, _ := testutil.ListContacts(db, testutil.ContactFilter{Search: "Budi"})
 	id := contacts[0].ID
 
-	oldCode, _ := testutil.GetOrCreatePortalCode(db, id)
-	newCode, err := testutil.RegeneratePortalCode(db, id)
+	oldCode, _ := contact.New(db).EnsurePortalCode(context.Background(), portalIssuer, id)
+	newCode, err := contact.New(db).SetPortalCode(context.Background(), portalManager, id, "")
 	if err != nil {
 		t.Fatalf("regenerate: %v", err)
 	}
@@ -237,7 +257,7 @@ func TestRegeneratePortalCode_InvalidatesOldCode(t *testing.T) {
 		t.Fatal("expected a different code after regenerate")
 	}
 
-	fam, err := testutil.ContactsByPortalCode(db, oldCode)
+	fam, err := contact.New(db).FamilyByPortalCode(context.Background(), oldCode)
 	if err != nil {
 		t.Fatalf("lookup old code: %v", err)
 	}
@@ -256,10 +276,10 @@ func TestContactsByPortalCode_ResolvesHandTypedCode(t *testing.T) {
 	testutil.CreateContact(db, &model.Contact{Name: "Bayu", ContactType: "customer", Phone: shared, IsActive: true})
 	contacts, _ := testutil.ListContacts(db, testutil.ContactFilter{Search: "Andi"})
 
-	code, _ := testutil.GetOrCreatePortalCode(db, contacts[0].ID)
+	code, _ := contact.New(db).EnsurePortalCode(context.Background(), portalIssuer, contacts[0].ID)
 
 	for _, typed := range []string{code, strings.ToLower(code), strings.ReplaceAll(code, "-", ""), strings.ReplaceAll(code, "-", " ")} {
-		fam, err := testutil.ContactsByPortalCode(db, typed)
+		fam, err := contact.New(db).FamilyByPortalCode(context.Background(), typed)
 		if err != nil {
 			t.Fatalf("lookup by %q: %v", typed, err)
 		}
@@ -280,7 +300,7 @@ func TestContactsByPortalCode_BlankCodeDoesNotMatchAll(t *testing.T) {
 	testutil.CreateContact(db, &model.Contact{Name: "No Code", ContactType: "customer", Phone: "084444444444", IsActive: true})
 
 	for _, key := range []string{"", "-", "   ", "--"} {
-		fam, err := testutil.ContactsByPortalCode(db, key)
+		fam, err := contact.New(db).FamilyByPortalCode(context.Background(), key)
 		if err != nil {
 			t.Fatalf("lookup %q: %v", key, err)
 		}
@@ -301,7 +321,7 @@ func TestNormalizePortalCode(t *testing.T) {
 		{"-", ""},
 	}
 	for _, tt := range tests {
-		if got := testutil.NormalizePortalCode(tt.in); got != tt.want {
+		if got := contact.NormalizePortalCode(tt.in); got != tt.want {
 			t.Errorf("NormalizePortalCode(%q) = %q, want %q", tt.in, got, tt.want)
 		}
 	}
@@ -314,7 +334,7 @@ func TestSetPortalCode_StoresAndResolves(t *testing.T) {
 	contacts, _ := testutil.ListContacts(db, testutil.ContactFilter{Search: "Andi"})
 	id := contacts[0].ID
 
-	got, err := testutil.SetPortalCode(db, id, "  Andi-Kelas1A  ")
+	got, err := contact.New(db).SetPortalCode(context.Background(), portalManager, id, "  Andi-Kelas1A  ")
 	if err != nil {
 		t.Fatalf("set code: %v", err)
 	}
@@ -322,7 +342,7 @@ func TestSetPortalCode_StoresAndResolves(t *testing.T) {
 		t.Errorf("code = %q, want it trimmed and lowercased", got)
 	}
 
-	fam, err := testutil.ContactsByPortalCode(db, "ANDIKELAS1A")
+	fam, err := contact.New(db).FamilyByPortalCode(context.Background(), "ANDIKELAS1A")
 	if err != nil || fam == nil {
 		t.Fatalf("hand-typed code should resolve, got %+v err=%v", fam, err)
 	}
@@ -337,11 +357,11 @@ func TestSetPortalCode_RejectsDashOnlyDifference(t *testing.T) {
 	testutil.CreateContact(db, &model.Contact{Name: "Two", ContactType: "customer", Phone: "082222222222", IsActive: true})
 	contacts, _ := testutil.ListContacts(db, testutil.ContactFilter{})
 
-	if _, err := testutil.SetPortalCode(db, contacts[0].ID, "andi-829"); err != nil {
+	if _, err := contact.New(db).SetPortalCode(context.Background(), portalManager, contacts[0].ID, "andi-829"); err != nil {
 		t.Fatalf("first code: %v", err)
 	}
 	for _, clash := range []string{"an-di829", "ANDI-829", "andi829", "a-n-d-i-8-2-9"} {
-		if _, err := testutil.SetPortalCode(db, contacts[1].ID, clash); !errors.Is(err, testutil.ErrPortalCodeTaken) {
+		if _, err := contact.New(db).SetPortalCode(context.Background(), portalManager, contacts[1].ID, clash); !errors.Is(err, contact.ErrPortalCodeTaken) {
 			t.Errorf("%q normalizes onto an existing code, want ErrPortalCodeTaken, got %v", clash, err)
 		}
 	}
@@ -354,8 +374,8 @@ func TestSetPortalCode_KeepingOwnCodeIsNotACollision(t *testing.T) {
 	contacts, _ := testutil.ListContacts(db, testutil.ContactFilter{Search: "Andi"})
 	id := contacts[0].ID
 
-	testutil.SetPortalCode(db, id, "andi-829")
-	if _, err := testutil.SetPortalCode(db, id, "andi-829"); err != nil {
+	contact.New(db).SetPortalCode(context.Background(), portalManager, id, "andi-829")
+	if _, err := contact.New(db).SetPortalCode(context.Background(), portalManager, id, "andi-829"); err != nil {
 		t.Errorf("re-saving a contact's own code should be allowed, got %v", err)
 	}
 }
@@ -368,12 +388,12 @@ func TestSetPortalCode_Validation(t *testing.T) {
 	id := contacts[0].ID
 
 	for _, bad := range []string{"and", "a-b", "andi 829", "andi/829", "andi?829", "andi#829", strings.Repeat("a", 33)} {
-		if _, err := testutil.SetPortalCode(db, id, bad); err == nil {
+		if _, err := contact.New(db).SetPortalCode(context.Background(), portalManager, id, bad); err == nil {
 			t.Errorf("%q should be rejected", bad)
 		}
 	}
 	// Blank falls back to a generated code rather than erroring.
-	got, err := testutil.SetPortalCode(db, id, "   ")
+	got, err := contact.New(db).SetPortalCode(context.Background(), portalManager, id, "   ")
 	if err != nil || !strings.HasPrefix(got, "andi-") {
 		t.Errorf("blank should generate, got %q err=%v", got, err)
 	}

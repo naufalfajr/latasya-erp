@@ -37,13 +37,17 @@
         hx-get="{{$.BasePath}}/contacts{{if $data.Filter}}?type={{$data.Filter}}{{end}}"
         hx-trigger="keyup changed delay:300ms"
         hx-target="#contact-table"
-        hx-select="#contact-table"
+		hx-swap="outerHTML"
         hx-push-url="false"
         name="search"
         value="{{$data.Search}}">
 </div>
 
 <!-- Contact table -->
+{{template "contact-table" .}}
+{{end}}
+{{define "contact-table"}}
+{{$data := .Data}}
 <div id="contact-table" class="overflow-x-auto">
     <table class="table table-sm">
         <thead>

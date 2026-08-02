@@ -25,11 +25,7 @@ func setupServer(t *testing.T, config googlecalendar.Config) (*httptest.Server, 
 	h := &v1schoolcalendar.Handler{Calendar: schoolcalendar.New(db), GoogleCalendarConfig: config}
 
 	apiMux := http.NewServeMux()
-	apiMux.HandleFunc("GET /api/v1/school-calendar/closures", h.ListClosures)
-	apiMux.HandleFunc("POST /api/v1/school-calendar/closures", h.CreateClosure)
-	apiMux.HandleFunc("DELETE /api/v1/school-calendar/closures/{id}", h.DeleteClosure)
-	apiMux.HandleFunc("GET /api/v1/school-calendar/effective-days", h.EffectiveDays)
-	apiMux.HandleFunc("POST /api/v1/integrations/google-calendar/sync", h.SyncGoogleCalendar)
+	h.RegisterRoutes(apiMux)
 
 	mux := http.NewServeMux()
 	mux.Handle("/api/v1/", v1.BearerOrCookie(db)(apiMux))

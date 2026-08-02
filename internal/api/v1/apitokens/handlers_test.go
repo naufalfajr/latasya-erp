@@ -22,9 +22,7 @@ func newTestServer(t *testing.T, db *sql.DB) *httptest.Server {
 	t.Helper()
 	h := &apitokens.Handler{Tokens: apitoken.New(db)}
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /api/v1/api-tokens", h.Create)
-	mux.HandleFunc("GET /api/v1/api-tokens", h.List)
-	mux.HandleFunc("DELETE /api/v1/api-tokens/{id}", h.Revoke)
+	h.RegisterRoutes(mux, func(next http.Handler) http.Handler { return next })
 	ts := httptest.NewServer(v1.BearerOrCookie(db)(mux))
 	t.Cleanup(ts.Close)
 	return ts

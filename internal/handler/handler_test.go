@@ -34,41 +34,10 @@ func testServer(t *testing.T, basePath ...string) (*httptest.Server, *sql.DB) {
 
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("GET "+bp+"/login", h.LoginPage)
-	mux.HandleFunc("POST "+bp+"/login", h.Login)
-	mux.HandleFunc("POST "+bp+"/logout", h.Logout)
+	h.RegisterAuthRoutes(mux, func(next http.Handler) http.Handler { return next })
 
 	protected := http.NewServeMux()
-	h.RegisterReportingRoutes(protected)
-	h.RegisterAccountRoutes(protected)
-	h.RegisterContactRoutes(protected)
-	h.RegisterAccountingRoutes(protected)
-	h.RegisterInvoiceRoutes(protected)
-	h.RegisterReceivablesPayablesRoutes(protected)
-	adminMux := http.NewServeMux()
-	adminMux.HandleFunc("GET /users", h.ListUsers)
-	adminMux.HandleFunc("GET /users/new", h.NewUser)
-	adminMux.HandleFunc("POST /users", h.CreateUser)
-	adminMux.HandleFunc("GET /users/{id}/edit", h.EditUser)
-	adminMux.HandleFunc("POST /users/{id}", h.UpdateUser)
-	adminMux.HandleFunc("DELETE /users/{id}", h.DeleteUser)
-	protected.Handle("/users", auth.RequireCapability("users.manage")(adminMux))
-	protected.Handle("/users/", auth.RequireCapability("users.manage")(adminMux))
-
-	roleMux := http.NewServeMux()
-	roleMux.HandleFunc("GET /roles", h.ListRoles)
-	roleMux.HandleFunc("GET /roles/new", h.NewRole)
-	roleMux.HandleFunc("POST /roles", h.CreateRole)
-	roleMux.HandleFunc("GET /roles/{name}/edit", h.EditRole)
-	roleMux.HandleFunc("POST /roles/{name}", h.UpdateRole)
-	roleMux.HandleFunc("DELETE /roles/{name}", h.DeleteRole)
-	protected.Handle("/roles", auth.RequireCapability("roles.manage")(roleMux))
-	protected.Handle("/roles/", auth.RequireCapability("roles.manage")(roleMux))
-
-	protected.HandleFunc("GET /password/change", h.PasswordChangePage)
-	protected.HandleFunc("POST /password/change", h.PasswordChange)
-
-	protected.HandleFunc("GET /audit", auth.CapabilityOnly("audit.view", h.AuditList))
+	h.RegisterProtectedRoutes(protected)
 
 	authChain := auth.RequireAuth(db, access.New(db, nil), auth.CSRFProtect(h.EnforcePasswordChange(protected)))
 	if bp == "" {

@@ -16,25 +16,29 @@
         hx-get="{{$.BasePath}}/journals"
         hx-trigger="change"
         hx-target="#journal-table"
-        hx-select="#journal-table"
+		hx-swap="outerHTML"
         hx-include="[name='to'],[name='search']" hx-push-url="true">
     <input type="date" name="to" value="{{$data.Filter.DateTo}}" placeholder="To"
         class="input input-sm"
         hx-get="{{$.BasePath}}/journals"
         hx-trigger="change"
         hx-target="#journal-table"
-        hx-select="#journal-table"
+		hx-swap="outerHTML"
         hx-include="[name='from'],[name='search']" hx-push-url="true">
     <input type="text" name="search" value="{{$data.Filter.Search}}" placeholder="Search..."
         class="input input-sm w-full max-w-xs"
         hx-get="{{$.BasePath}}/journals"
         hx-trigger="keyup changed delay:300ms"
         hx-target="#journal-table"
-        hx-select="#journal-table"
+		hx-swap="outerHTML"
         hx-include="[name='from'],[name='to']" hx-push-url="true">
 </div>
 
 <!-- Journal entries table -->
+{{template "journal-table" .}}
+{{end}}
+{{define "journal-table"}}
+{{$data := .Data}}
 <div id="journal-table" class="overflow-x-auto">
     <table class="table table-sm">
         <thead>
@@ -82,7 +86,7 @@
         <div class="join">
             {{if $pg.HasPrev}}
             <button class="join-item btn btn-sm"
-                hx-get="{{$.BasePath}}/journals" hx-target="#journal-table" hx-select="#journal-table"
+				hx-get="{{$.BasePath}}/journals" hx-target="#journal-table" hx-swap="outerHTML"
                 hx-include="[name='from'],[name='to'],[name='search']"
                 hx-vals='{"page": "{{$pg.PrevPage}}"}' hx-push-url="true">‹ Prev</button>
             {{else}}
@@ -90,7 +94,7 @@
             {{end}}
             {{if $pg.HasNext}}
             <button class="join-item btn btn-sm"
-                hx-get="{{$.BasePath}}/journals" hx-target="#journal-table" hx-select="#journal-table"
+				hx-get="{{$.BasePath}}/journals" hx-target="#journal-table" hx-swap="outerHTML"
                 hx-include="[name='from'],[name='to'],[name='search']"
                 hx-vals='{"page": "{{$pg.NextPage}}"}' hx-push-url="true">Next ›</button>
             {{else}}

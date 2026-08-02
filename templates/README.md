@@ -11,3 +11,9 @@ Full-page responses execute `templates/base.html` with shared navigation, flash,
 Handlers should return the requested fragment directly when `HX-Request` is true. Avoid rendering a complete document only for the browser to discard most of it through `hx-select`.
 
 Each fragment must have a stable target ID, document its swap behavior, and remain valid when rendered independently. Mutation fragments must preserve CSRF and authorization behavior.
+# Template contracts
+
+List-page HTMX requests return independently renderable fragments with stable
+outer IDs: `account-table`, `contact-table`, and `journal-table`. Their controls
+replace the matching outer element directly; they do not extract content from a
+full-page response.

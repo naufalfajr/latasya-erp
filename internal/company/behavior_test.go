@@ -1,8 +1,10 @@
-package model_test
+package company_test
 
 import (
+	"context"
 	"testing"
 
+	"github.com/naufal/latasya-erp/internal/company"
 	"github.com/naufal/latasya-erp/internal/model"
 	"github.com/naufal/latasya-erp/internal/testutil"
 )
@@ -11,7 +13,7 @@ func TestGetCompanyProfile_SeededDefaults(t *testing.T) {
 	t.Parallel()
 	db := testutil.SetupTestDB(t)
 
-	co, err := testutil.GetCompanyProfile(db)
+	co, err := company.New(db).Get(context.Background())
 	if err != nil {
 		t.Fatalf("GetCompanyProfile: %v", err)
 	}
@@ -39,11 +41,12 @@ func TestUpdateCompanyProfile_RoundTrip(t *testing.T) {
 		BankAccountHolder: "PT Latasya Jaya",
 		InvoiceFooter:     "Terima kasih.",
 	}
-	if err := testutil.UpdateCompanyProfile(db, want); err != nil {
+	m := company.New(db)
+	if _, err := m.Update(context.Background(), company.Actor{UserID: 1, CanManage: true}, *want); err != nil {
 		t.Fatalf("UpdateCompanyProfile: %v", err)
 	}
 
-	got, err := testutil.GetCompanyProfile(db)
+	got, err := m.Get(context.Background())
 	if err != nil {
 		t.Fatalf("GetCompanyProfile: %v", err)
 	}

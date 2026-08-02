@@ -1,12 +1,12 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/naufal/latasya-erp/internal/account"
-	"github.com/naufal/latasya-erp/internal/model"
 	"github.com/naufal/latasya-erp/internal/reporting"
 )
 
@@ -29,22 +29,16 @@ func getDateRange(r *http.Request) (string, string) {
 func (h *Handler) TrialBalance(w http.ResponseWriter, r *http.Request) {
 	from, to := getDateRange(r)
 
-	rows, err := h.Reporting.TrialBalance(r.Context(), from, to)
+	report, err := h.Reporting.TrialBalance(r.Context(), from, to)
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
-	var totalDebit, totalCredit int
-	for _, row := range rows {
-		totalDebit += row.TotalDebit
-		totalCredit += row.TotalCredit
-	}
-
 	h.render(w, r, "templates/reports/trial_balance.html", "Trial Balance", map[string]any{
-		"Rows":        rows,
-		"TotalDebit":  totalDebit,
-		"TotalCredit": totalCredit,
+		"Rows":        report.Rows,
+		"TotalDebit":  report.TotalDebit,
+		"TotalCredit": report.TotalCredit,
 		"From":        from,
 		"To":          to,
 	})
@@ -108,38 +102,25 @@ func (h *Handler) GeneralLedger(w http.ResponseWriter, r *http.Request) {
 	active := true
 	accountResult, _ := h.Accounts.List(r.Context(), account.Filter{IsActive: &active})
 
-	var entries []reporting.GeneralLedgerEntry
-	var selectedAccount *model.Account
-	var totalDebit, totalCredit int
+	var report *reporting.GeneralLedgerReport
 	if accountID > 0 {
 		var err error
-		entries, err = h.Reporting.GeneralLedger(r.Context(), accountID, from, to)
-		if err != nil {
+		report, err = h.Reporting.GeneralLedger(r.Context(), accountID, from, to)
+		if err != nil && !errors.Is(err, reporting.ErrNotFound) {
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 			return
 		}
-		selectedAccount, _ = h.Accounts.Get(r.Context(), accountID)
-		for _, e := range entries {
-			totalDebit += e.Debit
-			totalCredit += e.Credit
-		}
 	}
-
-	// Present the net in the account's natural sign so it matches how the P&L
-	// and balance sheet show the same account: debit-normal accounts net as
-	// debit-credit, credit-normal accounts (revenue/liability/equity) net as
-	// credit-debit. Without this, a revenue account's footer would be negative
-	// while its P&L line is positive, breaking the reconciliation this footer
-	// exists for.
-	net := totalDebit - totalCredit
-	if selectedAccount != nil && selectedAccount.NormalBalance == "credit" {
-		net = totalCredit - totalDebit
+	var entries []reporting.GeneralLedgerEntry
+	var totalDebit, totalCredit, net int
+	if report != nil {
+		entries, totalDebit, totalCredit, net = report.Entries, report.TotalDebit, report.TotalCredit, report.Net
 	}
 
 	h.render(w, r, "templates/reports/general_ledger.html", "General Ledger", map[string]any{
 		"Accounts":        accountResult.Accounts,
 		"Entries":         entries,
-		"SelectedAccount": selectedAccount,
+		"SelectedAccount": report,
 		"AccountID":       accountID,
 		"From":            from,
 		"To":              to,
