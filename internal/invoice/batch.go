@@ -168,8 +168,6 @@ func (m *Module) GenerateRecurring(ctx context.Context, actor Actor, invoiceDate
 	}
 	description := strings.NewReplacer("{month}", model.MonthNameID(month), "{year}", strconv.Itoa(year)).Replace(template)
 
-	m.recurringMu.Lock()
-	defer m.recurringMu.Unlock()
 	active := true
 	customers, err := model.ListContactsContext(ctx, m.db, model.ContactFilter{Type: "customer", IsActive: &active})
 	if err != nil {
@@ -178,21 +176,14 @@ func (m *Module) GenerateRecurring(ctx context.Context, actor Actor, invoiceDate
 	result := &RecurringResult{EffectiveDays: effectiveDays, MultiplierPercent: multiplier, Items: []GeneratedInvoice{}}
 	for _, contact := range customers {
 		item := GeneratedInvoice{ContactID: contact.ID, ContactName: contact.Name}
-		var count int
-		if err := m.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM invoices WHERE contact_id=? AND substr(invoice_date,1,7)=?", contact.ID, invoiceDate[:7]).Scan(&count); err != nil {
-			item.Result, item.Error = GeneratedFailed, err.Error()
-			result.Failed++
-			result.Items = append(result.Items, item)
-			continue
-		}
-		if count > 0 {
+		created, err := m.create(ctx, actor, Draft{ContactID: contact.ID, InvoiceDate: invoiceDate, DueDate: dueDate,
+			Lines: []DraftLine{{Description: description, Quantity: 100, UnitPrice: model.ApplyMonthlyPriceMultiplier(contact.Price(), multiplier), AccountID: profile.DefaultRevenueAccountID}}}, false, invoiceDate[:7])
+		if errors.Is(err, errRecurringAlreadyExists) {
 			item.Result = GeneratedSkipped
 			result.Skipped++
 			result.Items = append(result.Items, item)
 			continue
 		}
-		created, err := m.create(ctx, actor, Draft{ContactID: contact.ID, InvoiceDate: invoiceDate, DueDate: dueDate,
-			Lines: []DraftLine{{Description: description, Quantity: 100, UnitPrice: model.ApplyMonthlyPriceMultiplier(contact.Price(), multiplier), AccountID: profile.DefaultRevenueAccountID}}}, false)
 		if err != nil {
 			item.Result, item.Error = GeneratedFailed, err.Error()
 			result.Failed++

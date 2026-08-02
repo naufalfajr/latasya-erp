@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/naufal/latasya-erp/internal/model"
+	"github.com/naufal/latasya-erp/internal/testutil"
 )
 
 // Happy-path Update/Delete tests for the financial-mutation handlers.
@@ -690,12 +691,12 @@ func TestIssueCreditNote_HTTP(t *testing.T) {
 	db.QueryRow("SELECT id FROM contacts WHERE name = 'CN Issue'").Scan(&contactID)
 	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
 
-	invID, _ := model.CreateInvoice(db, &model.Invoice{
+	invID, _ := testutil.CreateInvoice(db, &model.Invoice{
 		ContactID: contactID, InvoiceDate: "2026-04-04", DueDate: "2026-04-30", CreatedBy: 1,
 	}, []model.InvoiceLine{
 		{Description: "Service", Quantity: 100, UnitPrice: 1000000, AccountID: revenueID},
 	})
-	model.SendInvoice(db, invID, 1)
+	testutil.SendInvoice(db, invID, 1)
 
 	cnID, _ := model.CreateCreditNote(db, &model.CreditNote{
 		ContactID: contactID, InvoiceID: &invID, CNDate: "2026-04-10",
@@ -732,12 +733,12 @@ func TestVoidCreditNote_HTTP(t *testing.T) {
 	db.QueryRow("SELECT id FROM contacts WHERE name = 'CN Void'").Scan(&contactID)
 	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
 
-	invID, _ := model.CreateInvoice(db, &model.Invoice{
+	invID, _ := testutil.CreateInvoice(db, &model.Invoice{
 		ContactID: contactID, InvoiceDate: "2026-04-04", DueDate: "2026-04-30", CreatedBy: 1,
 	}, []model.InvoiceLine{
 		{Description: "Service", Quantity: 100, UnitPrice: 1000000, AccountID: revenueID},
 	})
-	model.SendInvoice(db, invID, 1)
+	testutil.SendInvoice(db, invID, 1)
 
 	cnID, _ := model.CreateCreditNote(db, &model.CreditNote{
 		ContactID: contactID, InvoiceID: &invID, CNDate: "2026-04-10",

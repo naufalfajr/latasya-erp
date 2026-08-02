@@ -64,12 +64,12 @@ func TestIssueCreditNote_FullCancellation(t *testing.T) {
 	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
 
 	// Create + send a 5_000_000 invoice
-	invID, _ := model.CreateInvoice(db, &model.Invoice{
+	invID, _ := testutil.CreateInvoice(db, &model.Invoice{
 		ContactID: contactID, InvoiceDate: "2026-04-04", DueDate: "2026-04-30", CreatedBy: 1,
 	}, []model.InvoiceLine{
 		{Description: "Service", Quantity: 100, UnitPrice: 5000000, AccountID: revenueID},
 	})
-	model.SendInvoice(db, invID, 1)
+	testutil.SendInvoice(db, invID, 1)
 
 	// Issue a credit note for the full amount
 	cn := &model.CreditNote{
@@ -105,7 +105,7 @@ func TestIssueCreditNote_FullCancellation(t *testing.T) {
 	}
 
 	// Invoice should now be cancelled (fully credited, never paid)
-	inv, _ := model.GetInvoice(db, invID)
+	inv, _ := testutil.GetInvoice(db, invID)
 	if inv.Status != "cancelled" {
 		t.Errorf("expected invoice cancelled, got %q", inv.Status)
 	}
@@ -127,15 +127,15 @@ func TestIssueCreditNote_AfterPartialPayment(t *testing.T) {
 	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
 	db.QueryRow("SELECT id FROM accounts WHERE code = '1-1001'").Scan(&cashID)
 
-	invID, _ := model.CreateInvoice(db, &model.Invoice{
+	invID, _ := testutil.CreateInvoice(db, &model.Invoice{
 		ContactID: contactID, InvoiceDate: "2026-04-04", DueDate: "2026-04-30", CreatedBy: 1,
 	}, []model.InvoiceLine{
 		{Description: "Service", Quantity: 100, UnitPrice: 5000000, AccountID: revenueID},
 	})
-	model.SendInvoice(db, invID, 1)
+	testutil.SendInvoice(db, invID, 1)
 
 	// Customer pays 2M, then we credit the remaining 3M
-	if err := model.RecordInvoicePayment(db, invID, 2000000, "2026-04-10", cashID, 1); err != nil {
+	if err := testutil.RecordInvoicePayment(db, invID, 2000000, "2026-04-10", cashID, 1); err != nil {
 		t.Fatalf("payment: %v", err)
 	}
 
@@ -150,7 +150,7 @@ func TestIssueCreditNote_AfterPartialPayment(t *testing.T) {
 		t.Fatalf("issue: %v", err)
 	}
 
-	inv, _ := model.GetInvoice(db, invID)
+	inv, _ := testutil.GetInvoice(db, invID)
 	if inv.Status != "paid" {
 		t.Errorf("expected paid (paid+credited covers total), got %q", inv.Status)
 	}
@@ -169,13 +169,13 @@ func TestIssueCreditNote_OverCreditRejected(t *testing.T) {
 	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
 	db.QueryRow("SELECT id FROM accounts WHERE code = '1-1001'").Scan(&cashID)
 
-	invID, _ := model.CreateInvoice(db, &model.Invoice{
+	invID, _ := testutil.CreateInvoice(db, &model.Invoice{
 		ContactID: contactID, InvoiceDate: "2026-04-04", DueDate: "2026-04-30", CreatedBy: 1,
 	}, []model.InvoiceLine{
 		{Description: "Service", Quantity: 100, UnitPrice: 1000000, AccountID: revenueID},
 	})
-	model.SendInvoice(db, invID, 1)
-	model.RecordInvoicePayment(db, invID, 600000, "2026-04-10", cashID, 1)
+	testutil.SendInvoice(db, invID, 1)
+	testutil.RecordInvoicePayment(db, invID, 600000, "2026-04-10", cashID, 1)
 
 	// Try to credit more than what's outstanding (1M - 600k = 400k remaining)
 	cn := &model.CreditNote{
@@ -200,12 +200,12 @@ func TestVoidCreditNote(t *testing.T) {
 	db.QueryRow("SELECT id FROM contacts WHERE name = 'Cust'").Scan(&contactID)
 	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
 
-	invID, _ := model.CreateInvoice(db, &model.Invoice{
+	invID, _ := testutil.CreateInvoice(db, &model.Invoice{
 		ContactID: contactID, InvoiceDate: "2026-04-04", DueDate: "2026-04-30", CreatedBy: 1,
 	}, []model.InvoiceLine{
 		{Description: "Service", Quantity: 100, UnitPrice: 1000000, AccountID: revenueID},
 	})
-	model.SendInvoice(db, invID, 1)
+	testutil.SendInvoice(db, invID, 1)
 
 	cn := &model.CreditNote{
 		ContactID: contactID, InvoiceID: &invID, CNDate: "2026-04-12",
@@ -226,7 +226,7 @@ func TestVoidCreditNote(t *testing.T) {
 		t.Errorf("expected status void, got %q", voided.Status)
 	}
 
-	inv, _ := model.GetInvoice(db, invID)
+	inv, _ := testutil.GetInvoice(db, invID)
 	if inv.Status != "sent" {
 		t.Errorf("expected invoice back to sent, got %q", inv.Status)
 	}
@@ -244,12 +244,12 @@ func TestDeleteCreditNote_OnlyDraft(t *testing.T) {
 	db.QueryRow("SELECT id FROM contacts WHERE name = 'Cust'").Scan(&contactID)
 	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
 
-	invID, _ := model.CreateInvoice(db, &model.Invoice{
+	invID, _ := testutil.CreateInvoice(db, &model.Invoice{
 		ContactID: contactID, InvoiceDate: "2026-04-04", DueDate: "2026-04-30", CreatedBy: 1,
 	}, []model.InvoiceLine{
 		{Description: "Service", Quantity: 100, UnitPrice: 1000000, AccountID: revenueID},
 	})
-	model.SendInvoice(db, invID, 1)
+	testutil.SendInvoice(db, invID, 1)
 
 	cn := &model.CreditNote{
 		ContactID: contactID, InvoiceID: &invID, CNDate: "2026-04-12",
@@ -287,12 +287,12 @@ func TestListCreditNotesForInvoice(t *testing.T) {
 	db.QueryRow("SELECT id FROM contacts WHERE name = 'Cust'").Scan(&contactID)
 	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
 
-	invID, _ := model.CreateInvoice(db, &model.Invoice{
+	invID, _ := testutil.CreateInvoice(db, &model.Invoice{
 		ContactID: contactID, InvoiceDate: "2026-04-04", DueDate: "2026-04-30", CreatedBy: 1,
 	}, []model.InvoiceLine{
 		{Description: "Service", Quantity: 100, UnitPrice: 5000000, AccountID: revenueID},
 	})
-	model.SendInvoice(db, invID, 1)
+	testutil.SendInvoice(db, invID, 1)
 
 	for i := 0; i < 2; i++ {
 		model.CreateCreditNote(db, &model.CreditNote{
@@ -357,12 +357,12 @@ func TestUpdateCreditNote_RejectsNonDraft(t *testing.T) {
 	db.QueryRow("SELECT id FROM contacts WHERE name = 'Cust'").Scan(&contactID)
 	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
 
-	invID, _ := model.CreateInvoice(db, &model.Invoice{
+	invID, _ := testutil.CreateInvoice(db, &model.Invoice{
 		ContactID: contactID, InvoiceDate: "2026-04-04", DueDate: "2026-04-30", CreatedBy: 1,
 	}, []model.InvoiceLine{
 		{Description: "Service", Quantity: 100, UnitPrice: 1000000, AccountID: revenueID},
 	})
-	model.SendInvoice(db, invID, 1)
+	testutil.SendInvoice(db, invID, 1)
 
 	cnID, _ := model.CreateCreditNote(db, &model.CreditNote{
 		ContactID: contactID, InvoiceID: &invID, CNDate: "2026-04-12",
@@ -391,7 +391,7 @@ func TestIssueCreditNote_RejectsDraftInvoice(t *testing.T) {
 	db.QueryRow("SELECT id FROM contacts WHERE name = 'Cust'").Scan(&contactID)
 	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
 
-	invID, _ := model.CreateInvoice(db, &model.Invoice{
+	invID, _ := testutil.CreateInvoice(db, &model.Invoice{
 		ContactID: contactID, InvoiceDate: "2026-04-04", DueDate: "2026-04-30", CreatedBy: 1,
 	}, []model.InvoiceLine{
 		{Description: "Service", Quantity: 100, UnitPrice: 1000000, AccountID: revenueID},
@@ -421,12 +421,12 @@ func TestIssueCreditNote_RejectsCancelledInvoice(t *testing.T) {
 	db.QueryRow("SELECT id FROM contacts WHERE name = 'Cust'").Scan(&contactID)
 	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
 
-	invID, _ := model.CreateInvoice(db, &model.Invoice{
+	invID, _ := testutil.CreateInvoice(db, &model.Invoice{
 		ContactID: contactID, InvoiceDate: "2026-04-04", DueDate: "2026-04-30", CreatedBy: 1,
 	}, []model.InvoiceLine{
 		{Description: "Service", Quantity: 100, UnitPrice: 1000000, AccountID: revenueID},
 	})
-	model.SendInvoice(db, invID, 1)
+	testutil.SendInvoice(db, invID, 1)
 
 	cn1ID, _ := model.CreateCreditNote(db, &model.CreditNote{
 		ContactID: contactID, InvoiceID: &invID, CNDate: "2026-04-12",
@@ -463,13 +463,13 @@ func TestIssueCreditNote_RejectsPaidInvoice(t *testing.T) {
 	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
 	db.QueryRow("SELECT id FROM accounts WHERE code = '1-1001'").Scan(&cashID)
 
-	invID, _ := model.CreateInvoice(db, &model.Invoice{
+	invID, _ := testutil.CreateInvoice(db, &model.Invoice{
 		ContactID: contactID, InvoiceDate: "2026-04-04", DueDate: "2026-04-30", CreatedBy: 1,
 	}, []model.InvoiceLine{
 		{Description: "Service", Quantity: 100, UnitPrice: 1000000, AccountID: revenueID},
 	})
-	model.SendInvoice(db, invID, 1)
-	model.RecordInvoicePayment(db, invID, 1000000, "2026-04-10", cashID, 1)
+	testutil.SendInvoice(db, invID, 1)
+	testutil.RecordInvoicePayment(db, invID, 1000000, "2026-04-10", cashID, 1)
 
 	cnID, _ := model.CreateCreditNote(db, &model.CreditNote{
 		ContactID: contactID, InvoiceID: &invID, CNDate: "2026-04-12",
@@ -492,13 +492,13 @@ func TestIssueCreditNote_WithTax(t *testing.T) {
 	db.QueryRow("SELECT id FROM contacts WHERE name = 'Cust'").Scan(&contactID)
 	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
 
-	invID, _ := model.CreateInvoice(db, &model.Invoice{
+	invID, _ := testutil.CreateInvoice(db, &model.Invoice{
 		ContactID: contactID, InvoiceDate: "2026-04-04", DueDate: "2026-04-30",
 		TaxAmount: 500000, CreatedBy: 1,
 	}, []model.InvoiceLine{
 		{Description: "Service", Quantity: 100, UnitPrice: 5000000, AccountID: revenueID},
 	})
-	model.SendInvoice(db, invID, 1)
+	testutil.SendInvoice(db, invID, 1)
 
 	cnID, _ := model.CreateCreditNote(db, &model.CreditNote{
 		ContactID: contactID, InvoiceID: &invID, CNDate: "2026-04-12",
@@ -532,13 +532,13 @@ func TestIssueCreditNote_TaxExceedsInvoiceTax(t *testing.T) {
 	db.QueryRow("SELECT id FROM contacts WHERE name = 'Cust'").Scan(&contactID)
 	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
 
-	invID, _ := model.CreateInvoice(db, &model.Invoice{
+	invID, _ := testutil.CreateInvoice(db, &model.Invoice{
 		ContactID: contactID, InvoiceDate: "2026-04-04", DueDate: "2026-04-30",
 		TaxAmount: 100000, CreatedBy: 1,
 	}, []model.InvoiceLine{
 		{Description: "Service", Quantity: 100, UnitPrice: 1000000, AccountID: revenueID},
 	})
-	model.SendInvoice(db, invID, 1)
+	testutil.SendInvoice(db, invID, 1)
 
 	cnID, _ := model.CreateCreditNote(db, &model.CreditNote{
 		ContactID: contactID, InvoiceID: &invID, CNDate: "2026-04-12",
@@ -564,12 +564,12 @@ func TestIssueCreditNote_MultiplePartialCNs(t *testing.T) {
 	db.QueryRow("SELECT id FROM contacts WHERE name = 'Cust'").Scan(&contactID)
 	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
 
-	invID, _ := model.CreateInvoice(db, &model.Invoice{
+	invID, _ := testutil.CreateInvoice(db, &model.Invoice{
 		ContactID: contactID, InvoiceDate: "2026-04-04", DueDate: "2026-04-30", CreatedBy: 1,
 	}, []model.InvoiceLine{
 		{Description: "Service", Quantity: 100, UnitPrice: 3000000, AccountID: revenueID},
 	})
-	model.SendInvoice(db, invID, 1)
+	testutil.SendInvoice(db, invID, 1)
 
 	for i := 0; i < 2; i++ {
 		cnID, _ := model.CreateCreditNote(db, &model.CreditNote{
@@ -583,7 +583,7 @@ func TestIssueCreditNote_MultiplePartialCNs(t *testing.T) {
 		}
 	}
 
-	inv, _ := model.GetInvoice(db, invID)
+	inv, _ := testutil.GetInvoice(db, invID)
 	if inv.AmountCredited != 2000000 {
 		t.Errorf("expected amount_credited 2M, got %d", inv.AmountCredited)
 	}
@@ -601,7 +601,7 @@ func TestIssueCreditNote_MultiplePartialCNs(t *testing.T) {
 		t.Fatalf("issue final: %v", err)
 	}
 
-	inv2, _ := model.GetInvoice(db, invID)
+	inv2, _ := testutil.GetInvoice(db, invID)
 	if inv2.Status != "cancelled" {
 		t.Errorf("expected invoice cancelled after full credit, got %q", inv2.Status)
 	}
@@ -621,12 +621,12 @@ func TestIssueCreditNote_ContactMismatch(t *testing.T) {
 	db.QueryRow("SELECT id FROM contacts WHERE name = 'Cust B'").Scan(&custB)
 	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
 
-	invID, _ := model.CreateInvoice(db, &model.Invoice{
+	invID, _ := testutil.CreateInvoice(db, &model.Invoice{
 		ContactID: custA, InvoiceDate: "2026-04-04", DueDate: "2026-04-30", CreatedBy: 1,
 	}, []model.InvoiceLine{
 		{Description: "Service", Quantity: 100, UnitPrice: 1000000, AccountID: revenueID},
 	})
-	model.SendInvoice(db, invID, 1)
+	testutil.SendInvoice(db, invID, 1)
 
 	cnID, _ := model.CreateCreditNote(db, &model.CreditNote{
 		ContactID: custB, InvoiceID: &invID, CNDate: "2026-04-12",
@@ -652,12 +652,12 @@ func TestListCreditNotes_FilterByStatus(t *testing.T) {
 	db.QueryRow("SELECT id FROM contacts WHERE name = 'Cust'").Scan(&contactID)
 	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
 
-	invID, _ := model.CreateInvoice(db, &model.Invoice{
+	invID, _ := testutil.CreateInvoice(db, &model.Invoice{
 		ContactID: contactID, InvoiceDate: "2026-04-04", DueDate: "2026-04-30", CreatedBy: 1,
 	}, []model.InvoiceLine{
 		{Description: "Service", Quantity: 100, UnitPrice: 5000000, AccountID: revenueID},
 	})
-	model.SendInvoice(db, invID, 1)
+	testutil.SendInvoice(db, invID, 1)
 
 	for i := 0; i < 2; i++ {
 		model.CreateCreditNote(db, &model.CreditNote{

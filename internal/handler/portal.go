@@ -69,7 +69,7 @@ func (h *Handler) PortalIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	invoices, err := model.ListPortalInvoices(h.DB, family.ContactIDs())
+	invoices, err := h.Invoices.PortalInvoices(r.Context(), family.ContactIDs())
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
@@ -154,7 +154,7 @@ func (h *Handler) PortalInvoicePDF(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	inv, err := model.GetInvoice(h.DB, id)
+	inv, err := h.Invoices.Get(r.Context(), id)
 	if err != nil || inv.Status == model.StatusDraft || !family.Has(inv.ContactID) {
 		http.NotFound(w, r)
 		return

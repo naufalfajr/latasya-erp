@@ -89,7 +89,7 @@ func TestPortalIndex_ValidCode_ShowsIssuedInvoiceOnly(t *testing.T) {
 
 	draftID := mustInvoice(t, db, contactID)
 	sentID := mustInvoice(t, db, contactID)
-	if err := model.SendInvoice(db, sentID, 1); err != nil {
+	if err := testutil.SendInvoice(db, sentID, 1); err != nil {
 		t.Fatalf("send invoice: %v", err)
 	}
 
@@ -106,12 +106,12 @@ func TestPortalIndex_ValidCode_ShowsIssuedInvoiceOnly(t *testing.T) {
 	body, _ := io.ReadAll(resp.Body)
 	text := string(body)
 
-	sentInv, _ := model.GetInvoice(db, sentID)
+	sentInv, _ := testutil.GetInvoice(db, sentID)
 	if !strings.Contains(text, sentInv.InvoiceNumber) {
 		t.Error("expected the sent invoice number in the portal page")
 	}
 
-	draftInv, _ := model.GetInvoice(db, draftID)
+	draftInv, _ := testutil.GetInvoice(db, draftID)
 	if strings.Contains(text, draftInv.InvoiceNumber) {
 		t.Error("draft invoice should not appear on the parent portal")
 	}
@@ -124,7 +124,7 @@ func TestPortalIndex_ConfirmPaymentButton_HiddenWithoutCompanyPhone(t *testing.T
 
 	contactID := mustContact(t, db, "No Company Phone", "081111111111")
 	invID := mustInvoice(t, db, contactID)
-	if err := model.SendInvoice(db, invID, 1); err != nil {
+	if err := testutil.SendInvoice(db, invID, 1); err != nil {
 		t.Fatalf("send invoice: %v", err)
 	}
 
@@ -152,7 +152,7 @@ func TestPortalInvoicePDF_WrongFamily_NotFound(t *testing.T) {
 	contactB := mustContact(t, db, "Family B", "082222222222")
 
 	invB := mustInvoice(t, db, contactB)
-	if err := model.SendInvoice(db, invB, 1); err != nil {
+	if err := testutil.SendInvoice(db, invB, 1); err != nil {
 		t.Fatalf("send invoice: %v", err)
 	}
 
@@ -189,7 +189,7 @@ func TestPortalInvoicePDF_UnknownCode_NotFound(t *testing.T) {
 	ts, db := publicTestServer(t)
 	contactID := mustContact(t, db, "Unknown Code Family", "081111111111")
 	invID := mustInvoice(t, db, contactID)
-	if err := model.SendInvoice(db, invID, 1); err != nil {
+	if err := testutil.SendInvoice(db, invID, 1); err != nil {
 		t.Fatalf("send invoice: %v", err)
 	}
 
@@ -208,7 +208,7 @@ func TestPortalInvoicePDF_OwnInvoice_Succeeds(t *testing.T) {
 	ts, db := publicTestServer(t)
 	contactID := mustContact(t, db, "Portal PDF", "083333333333")
 	invID := mustInvoice(t, db, contactID)
-	if err := model.SendInvoice(db, invID, 1); err != nil {
+	if err := testutil.SendInvoice(db, invID, 1); err != nil {
 		t.Fatalf("send invoice: %v", err)
 	}
 
@@ -235,7 +235,7 @@ func TestPortalPages_NoStore(t *testing.T) {
 	ts, db := publicTestServer(t)
 	contactID := mustContact(t, db, "No Store", "085555555555")
 	invID := mustInvoice(t, db, contactID)
-	if err := model.SendInvoice(db, invID, 1); err != nil {
+	if err := testutil.SendInvoice(db, invID, 1); err != nil {
 		t.Fatalf("send invoice: %v", err)
 	}
 	code, _ := model.GetOrCreatePortalCode(db, contactID)
@@ -285,7 +285,7 @@ func TestInvoiceWhatsApp_NoPhone_RedirectsBackWithoutSending(t *testing.T) {
 	cookies := loginAsAdmin(t, ts)
 	contactID := mustContact(t, db, "WA NoPhone", "")
 	invID := mustInvoice(t, db, contactID)
-	if err := model.SendInvoice(db, invID, 1); err != nil {
+	if err := testutil.SendInvoice(db, invID, 1); err != nil {
 		t.Fatalf("send invoice: %v", err)
 	}
 
@@ -308,7 +308,7 @@ func TestInvoiceWhatsApp_Sent_RedirectsToWALink(t *testing.T) {
 	cookies := loginAsAdmin(t, ts)
 	contactID := mustContact(t, db, "WA Sent", "081234567890")
 	invID := mustInvoice(t, db, contactID)
-	if err := model.SendInvoice(db, invID, 1); err != nil {
+	if err := testutil.SendInvoice(db, invID, 1); err != nil {
 		t.Fatalf("send invoice: %v", err)
 	}
 
@@ -434,7 +434,7 @@ func TestPortalIndex_ValidCode_ShowsInvoicesAndPDFLinks(t *testing.T) {
 	ts, db := publicTestServer(t)
 	contactID := mustContact(t, db, "Short Code Kid", "086666666666")
 	invID := mustInvoice(t, db, contactID)
-	if err := model.SendInvoice(db, invID, 1); err != nil {
+	if err := testutil.SendInvoice(db, invID, 1); err != nil {
 		t.Fatalf("send invoice: %v", err)
 	}
 
@@ -454,7 +454,7 @@ func TestPortalIndex_ValidCode_ShowsInvoicesAndPDFLinks(t *testing.T) {
 	body, _ := io.ReadAll(resp.Body)
 	text := string(body)
 
-	inv, _ := model.GetInvoice(db, invID)
+	inv, _ := testutil.GetInvoice(db, invID)
 	if !strings.Contains(text, inv.InvoiceNumber) {
 		t.Error("expected the invoice number on the portal page")
 	}
@@ -516,7 +516,7 @@ func TestPortalIndex_PastDueInvoice_ShowsDueDateNotOverdueBadge(t *testing.T) {
 	ts, db := publicTestServer(t)
 	contactID := mustContact(t, db, "Past Due Kid", "081414141414")
 	invID := mustInvoice(t, db, contactID)
-	if err := model.SendInvoice(db, invID, 1); err != nil {
+	if err := testutil.SendInvoice(db, invID, 1); err != nil {
 		t.Fatalf("send invoice: %v", err)
 	}
 	if _, err := db.Exec("UPDATE invoices SET due_date = '2020-01-15' WHERE id = ?", invID); err != nil {

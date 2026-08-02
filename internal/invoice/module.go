@@ -7,10 +7,9 @@ import (
 )
 
 type Module struct {
-	db          *sql.DB
-	now         func() time.Time
-	recurringMu sync.Mutex
-	bulkSendMu  sync.Mutex
+	db         *sql.DB
+	now        func() time.Time
+	bulkSendMu sync.Mutex
 }
 
 func New(db *sql.DB) *Module {

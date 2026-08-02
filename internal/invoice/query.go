@@ -3,6 +3,7 @@ package invoice
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/naufal/latasya-erp/internal/model"
 )
@@ -168,6 +169,42 @@ func (m *Module) Document(ctx context.Context, id int) (*Document, error) {
 func (m *Module) RevenueAccounts(ctx context.Context) ([]model.Account, error) {
 	active := true
 	return model.ListAccountsContext(ctx, m.db, model.AccountFilter{Type: "revenue", IsActive: &active})
+}
+
+// PortalInvoices returns finalized invoices visible to a portal family.
+func (m *Module) PortalInvoices(ctx context.Context, contactIDs []int) ([]model.Invoice, error) {
+	if len(contactIDs) == 0 {
+		return []model.Invoice{}, nil
+	}
+	placeholders := make([]string, len(contactIDs))
+	args := make([]any, len(contactIDs))
+	for i, id := range contactIDs {
+		placeholders[i], args[i] = "?", id
+	}
+	rows, err := m.db.QueryContext(ctx, `
+		SELECT id, invoice_number, contact_id, invoice_date, due_date, status,
+			subtotal, tax_amount, total, amount_paid, amount_credited, COALESCE(notes,''),
+			COALESCE((SELECT MAX(payment_date) FROM payments WHERE payment_type='invoice' AND reference_id=invoices.id), updated_at)
+		FROM invoices
+		WHERE contact_id IN (`+strings.Join(placeholders, ",")+`) AND status != ?
+		ORDER BY invoice_date DESC, id DESC`, append(args, model.StatusDraft)...)
+	if err != nil {
+		return nil, fmt.Errorf("list portal invoices: %w", err)
+	}
+	defer rows.Close()
+	invoices := []model.Invoice{}
+	for rows.Next() {
+		var inv model.Invoice
+		if err := rows.Scan(&inv.ID, &inv.InvoiceNumber, &inv.ContactID, &inv.InvoiceDate, &inv.DueDate, &inv.Status,
+			&inv.Subtotal, &inv.TaxAmount, &inv.Total, &inv.AmountPaid, &inv.AmountCredited, &inv.Notes, &inv.PaidDate); err != nil {
+			return nil, fmt.Errorf("scan portal invoice: %w", err)
+		}
+		invoices = append(invoices, inv)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate portal invoices: %w", err)
+	}
+	return invoices, nil
 }
 
 func (m *Module) PrepareShare(ctx context.Context, actor Actor, id int) (*ShareInfo, error) {

@@ -70,7 +70,7 @@ func (h *Handler) NewCreditNote(w http.ResponseWriter, r *http.Request) {
 	// Credit Note" button on the invoice view page.
 	if invIDStr := r.URL.Query().Get("invoice_id"); invIDStr != "" {
 		if invID, err := strconv.Atoi(invIDStr); err == nil {
-			if inv, err := model.GetInvoice(h.DB, invID); err == nil {
+			if inv, err := h.Invoices.Get(r.Context(), invID); err == nil {
 				fd.SourceInvoice = inv
 				fd.CreditNote.ContactID = inv.ContactID
 				fd.CreditNote.InvoiceID = &inv.ID

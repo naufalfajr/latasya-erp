@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/naufal/latasya-erp/internal/model"
+	"github.com/naufal/latasya-erp/internal/testutil"
 )
 
 // seedCustomer inserts an active customer contact and returns its ID.
@@ -25,9 +26,8 @@ func seedCustomer(t *testing.T, db *sql.DB, name string) int {
 	return id
 }
 
-// mustCreateDraftInvoice creates a draft invoice directly via the model layer
-// (bypassing HTTP/handler validation) so bulk-action tests can set up fixture
-// invoices without going through the full form-submission flow.
+// mustCreateDraftInvoice creates a fixture through the invoice module so
+// bulk-action tests do not depend on form parsing.
 func mustCreateDraftInvoice(t *testing.T, db *sql.DB, contactID, accountID, unitPrice int) int {
 	t.Helper()
 	var adminID int
@@ -41,7 +41,7 @@ func mustCreateDraftInvoice(t *testing.T, db *sql.DB, contactID, accountID, unit
 		CreatedBy:   adminID,
 	}
 	lines := []model.InvoiceLine{{Description: "Bus fee", Quantity: 100, UnitPrice: unitPrice, AccountID: accountID}}
-	id, err := model.CreateInvoice(db, inv, lines)
+	id, err := testutil.CreateInvoice(db, inv, lines)
 	if err != nil {
 		t.Fatalf("create draft invoice: %v", err)
 	}
@@ -193,7 +193,7 @@ func TestBulkDeleteInvoices_DeletesDraftsSkipsRest(t *testing.T) {
 	sentInv := mustCreateDraftInvoice(t, db, contactID, revenueID, 100000)
 	var adminID int
 	db.QueryRow("SELECT id FROM users WHERE username = 'admin'").Scan(&adminID)
-	if err := model.SendInvoice(db, sentInv, adminID); err != nil {
+	if err := testutil.SendInvoice(db, sentInv, adminID); err != nil {
 		t.Fatalf("send invoice: %v", err)
 	}
 
@@ -261,15 +261,17 @@ func TestBulkSendInvoices_SendsSkipsAndReportsFailures(t *testing.T) {
 	revenueID := accountID(t, db, "4-1001")
 
 	okDraft := mustCreateDraftInvoice(t, db, contactID, revenueID, 100000)
-	// A zero-price line makes the invoice total 0, which makes SendInvoice's
-	// underlying journal entry fail balance validation ("must have at least
-	// one debit and credit line") — a realistic per-invoice send failure.
-	zeroTotalDraft := mustCreateDraftInvoice(t, db, contactID, revenueID, 0)
+	// Corrupt one otherwise-valid fixture after creation so its debit no longer
+	// balances the revenue line, exercising per-invoice send failure handling.
+	zeroTotalDraft := mustCreateDraftInvoice(t, db, contactID, revenueID, 100000)
+	if _, err := db.Exec("UPDATE invoices SET subtotal=0, total=0 WHERE id=?", zeroTotalDraft); err != nil {
+		t.Fatal(err)
+	}
 
 	var adminID int
 	db.QueryRow("SELECT id FROM users WHERE username = 'admin'").Scan(&adminID)
 	alreadySent := mustCreateDraftInvoice(t, db, contactID, revenueID, 100000)
-	if err := model.SendInvoice(db, alreadySent, adminID); err != nil {
+	if err := testutil.SendInvoice(db, alreadySent, adminID); err != nil {
 		t.Fatalf("send invoice: %v", err)
 	}
 
@@ -448,7 +450,7 @@ func TestEditInvoice_NonDraftRedirects(t *testing.T) {
 
 	var adminID int
 	db.QueryRow("SELECT id FROM users WHERE username = 'admin'").Scan(&adminID)
-	if err := model.SendInvoice(db, invID, adminID); err != nil {
+	if err := testutil.SendInvoice(db, invID, adminID); err != nil {
 		t.Fatalf("send invoice: %v", err)
 	}
 
@@ -534,7 +536,7 @@ func TestUpdateInvoice_ModelErrorOnNonDraft(t *testing.T) {
 
 	var adminID int
 	db.QueryRow("SELECT id FROM users WHERE username = 'admin'").Scan(&adminID)
-	if err := model.SendInvoice(db, invID, adminID); err != nil {
+	if err := testutil.SendInvoice(db, invID, adminID); err != nil {
 		t.Fatalf("send invoice: %v", err)
 	}
 

@@ -5,16 +5,19 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/model"
 )
 
 func (m *Module) Create(ctx context.Context, actor Actor, draft Draft) (*model.Invoice, error) {
-	return m.create(ctx, actor, draft, true)
+	return m.create(ctx, actor, draft, true, "")
 }
 
-func (m *Module) create(ctx context.Context, actor Actor, draft Draft, logAudit bool) (*model.Invoice, error) {
+var errRecurringAlreadyExists = errors.New("customer already invoiced for month")
+
+func (m *Module) create(ctx context.Context, actor Actor, draft Draft, logAudit bool, recurringMonth string) (*model.Invoice, error) {
 	if err := requireManager(actor); err != nil {
 		return nil, err
 	}
@@ -29,6 +32,26 @@ func (m *Module) create(ctx context.Context, actor Actor, draft Draft, logAudit 
 		return nil, fmt.Errorf("begin invoice create: %w", err)
 	}
 	defer tx.Rollback()
+	if recurringMonth != "" {
+		claim, err := tx.ExecContext(ctx, `
+			INSERT INTO invoice_recurring_claims (contact_id, invoice_month)
+			SELECT ?, ?
+			WHERE NOT EXISTS (
+				SELECT 1 FROM invoices WHERE contact_id=? AND substr(invoice_date, 1, 7)=?
+			)
+			ON CONFLICT(contact_id, invoice_month) DO NOTHING`,
+			draft.ContactID, recurringMonth, draft.ContactID, recurringMonth)
+		if err != nil {
+			return nil, fmt.Errorf("claim recurring invoice: %w", err)
+		}
+		claimed, err := claim.RowsAffected()
+		if err != nil {
+			return nil, fmt.Errorf("recurring claim rows: %w", err)
+		}
+		if claimed == 0 {
+			return nil, errRecurringAlreadyExists
+		}
+	}
 
 	prefix := fmt.Sprintf("INV-%s", m.now().Format("200601"))
 	result, err := tx.ExecContext(ctx, `
@@ -51,6 +74,13 @@ func (m *Module) create(ctx context.Context, actor Actor, draft Draft, logAudit 
 		return nil, fmt.Errorf("invoice id: %w", err)
 	}
 	id := int(id64)
+	if recurringMonth != "" {
+		if _, err := tx.ExecContext(ctx, `
+			UPDATE invoice_recurring_claims SET invoice_id=?
+			WHERE contact_id=? AND invoice_month=?`, id, draft.ContactID, recurringMonth); err != nil {
+			return nil, fmt.Errorf("link recurring invoice claim: %w", err)
+		}
+	}
 
 	if err := insertLines(ctx, tx, id, lines); err != nil {
 		return nil, err
@@ -114,6 +144,28 @@ func (m *Module) Update(ctx context.Context, actor Actor, id int, draft Draft) (
 	existing, err := getWith(ctx, tx, id)
 	if err != nil {
 		return nil, fmt.Errorf("load invoice before update: %w", err)
+	}
+	var claimContactID int
+	var claimMonth string
+	claimErr := tx.QueryRowContext(ctx, `
+		SELECT contact_id, invoice_month FROM invoice_recurring_claims WHERE invoice_id=?`, id,
+	).Scan(&claimContactID, &claimMonth)
+	if claimErr != nil && !errors.Is(claimErr, sql.ErrNoRows) {
+		return nil, fmt.Errorf("load recurring invoice claim: %w", claimErr)
+	}
+	newMonth := draft.InvoiceDate
+	if len(newMonth) >= 7 {
+		newMonth = newMonth[:7]
+	}
+	if claimErr == nil && (claimContactID != draft.ContactID || claimMonth != newMonth) {
+		if _, err := tx.ExecContext(ctx, `
+			UPDATE invoice_recurring_claims SET contact_id=?, invoice_month=?
+			WHERE invoice_id=?`, draft.ContactID, newMonth, id); err != nil {
+			if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+				return nil, &ConflictError{Message: "customer already has a recurring invoice for that month"}
+			}
+			return nil, fmt.Errorf("move recurring invoice claim: %w", err)
+		}
 	}
 
 	result, err := tx.ExecContext(ctx, `

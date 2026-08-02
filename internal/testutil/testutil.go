@@ -1,6 +1,7 @@
 package testutil
 
 import (
+	"context"
 	"database/sql"
 	"sync"
 	"testing"
@@ -9,10 +10,56 @@ import (
 	"github.com/naufal/latasya-erp/internal/database"
 	"github.com/naufal/latasya-erp/internal/handler"
 	"github.com/naufal/latasya-erp/internal/invoice"
+	"github.com/naufal/latasya-erp/internal/model"
 	"github.com/naufal/latasya-erp/internal/tmpl"
 
 	latasyaerp "github.com/naufal/latasya-erp"
 )
+
+// CreateInvoice creates an invoice through the business module for test setup.
+func CreateInvoice(db *sql.DB, inv *model.Invoice, lines []model.InvoiceLine) (int, error) {
+	draftLines := make([]invoice.DraftLine, len(lines))
+	for i, line := range lines {
+		draftLines[i] = invoice.DraftLine{
+			Description: line.Description,
+			Quantity:    line.Quantity,
+			UnitPrice:   line.UnitPrice,
+			AccountID:   line.AccountID,
+		}
+	}
+	userID := inv.CreatedBy
+	if userID == 0 {
+		userID = 1
+	}
+	created, err := invoice.New(db).Create(context.Background(), invoice.Actor{UserID: userID, CanManage: true}, invoice.Draft{
+		ContactID: inv.ContactID, InvoiceDate: inv.InvoiceDate, DueDate: inv.DueDate,
+		TaxAmount: inv.TaxAmount, Notes: inv.Notes, Lines: draftLines,
+	})
+	if err != nil {
+		return 0, err
+	}
+	inv.ID, inv.InvoiceNumber = created.ID, created.InvoiceNumber
+	return created.ID, nil
+}
+
+// SendInvoice advances a fixture through the real invoice lifecycle.
+func SendInvoice(db *sql.DB, id, userID int) error {
+	_, err := invoice.New(db).Send(context.Background(), invoice.Actor{UserID: userID, CanManage: true}, id)
+	return err
+}
+
+// RecordInvoicePayment records a fixture payment through the business module.
+func RecordInvoicePayment(db *sql.DB, id, amount int, paymentDate string, accountID, userID int) error {
+	_, err := invoice.New(db).RecordPayment(context.Background(), invoice.Actor{UserID: userID, CanManage: true}, id, invoice.Payment{
+		Amount: amount, Date: paymentDate, AccountID: accountID,
+	})
+	return err
+}
+
+// GetInvoice loads a fixture through the business module.
+func GetInvoice(db *sql.DB, id int) (*model.Invoice, error) {
+	return invoice.New(db).Get(context.Background(), id)
+}
 
 // Parallel tests all register the same FS; once is enough and keeps the
 // global write out of the race detector's way.

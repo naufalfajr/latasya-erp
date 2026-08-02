@@ -5,17 +5,57 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 
+	"github.com/getkin/kin-openapi/openapi3"
 	v1 "github.com/naufal/latasya-erp/internal/api/v1"
 	v1invoices "github.com/naufal/latasya-erp/internal/api/v1/invoices"
 	invoiceModule "github.com/naufal/latasya-erp/internal/invoice"
 	"github.com/naufal/latasya-erp/internal/model"
 	"github.com/naufal/latasya-erp/internal/testutil"
 )
+
+func validateOpenAPIJSON(t *testing.T, doc *openapi3.T, method, path string, status int, body []byte) {
+	t.Helper()
+	item := doc.Paths.Find(path)
+	if item == nil {
+		t.Fatalf("OpenAPI path %s not found", path)
+	}
+	var operation *openapi3.Operation
+	switch method {
+	case http.MethodGet:
+		operation = item.Get
+	case http.MethodPost:
+		operation = item.Post
+	case http.MethodPut:
+		operation = item.Put
+	case http.MethodDelete:
+		operation = item.Delete
+	}
+	if operation == nil {
+		t.Fatalf("OpenAPI operation %s %s not found", method, path)
+	}
+	response := operation.Responses.Value(strconv.Itoa(status))
+	if response == nil || response.Value == nil {
+		t.Fatalf("OpenAPI response %s %s status %d not found", method, path, status)
+	}
+	media := response.Value.Content.Get("application/json")
+	if media == nil || media.Schema == nil || media.Schema.Value == nil {
+		t.Fatalf("OpenAPI JSON schema %s %s status %d not found", method, path, status)
+	}
+	var value any
+	if err := json.Unmarshal(body, &value); err != nil {
+		t.Fatalf("decode response JSON: %v\n%s", err, body)
+	}
+	if err := media.Schema.Value.VisitJSON(value); err != nil {
+		t.Fatalf("response violates OpenAPI schema for %s %s status %d: %v\n%s", method, path, status, err, body)
+	}
+}
 
 func setupServer(t *testing.T) (*httptest.Server, *sql.DB) {
 	t.Helper()
@@ -160,6 +200,49 @@ func createInvoice(t *testing.T, ts *httptest.Server, token string, body any) (i
 		t.Fatalf("decode: %v", err)
 	}
 	return env.Data.ID, env.Data.InvoiceNumber
+}
+
+func TestInvoiceResponsesMatchOpenAPI(t *testing.T) {
+	doc, err := openapi3.NewLoader().LoadFromFile("../../../../api/openapi.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+	contactID := seedContact(t, db)
+	revenueID := accountID(t, db, "4-1001")
+
+	check := func(method, requestPath, specPath string, status int, body any) []byte {
+		t.Helper()
+		resp := doRequest(t, ts, method, requestPath, token, body, nil)
+		defer resp.Body.Close()
+		payload, err := io.ReadAll(resp.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resp.StatusCode != status {
+			t.Fatalf("%s %s status=%d want %d: %s", method, requestPath, resp.StatusCode, status, payload)
+		}
+		validateOpenAPIJSON(t, doc, method, specPath, status, payload)
+		return payload
+	}
+
+	createdBody := check(http.MethodPost, "/api/v1/invoices", "/invoices", http.StatusCreated, defaultInvoiceBody(contactID, revenueID))
+	var created struct {
+		Data struct {
+			ID int `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(createdBody, &created); err != nil {
+		t.Fatal(err)
+	}
+	idPath := fmt.Sprintf("/api/v1/invoices/%d", created.Data.ID)
+	check(http.MethodGet, "/api/v1/invoices", "/invoices", http.StatusOK, nil)
+	check(http.MethodGet, idPath, "/invoices/{id}", http.StatusOK, nil)
+	check(http.MethodPost, idPath+"/send", "/invoices/{id}/send", http.StatusOK, nil)
+	check(http.MethodPost, idPath+"/payment", "/invoices/{id}/payment", http.StatusOK, map[string]any{
+		"amount": "500000", "payment_date": "2026-05-20", "payment_account": accountID(t, db, "1-1001"),
+	})
 }
 
 func TestListInvoices(t *testing.T) {

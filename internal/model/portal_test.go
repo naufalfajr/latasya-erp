@@ -104,47 +104,6 @@ func TestContactsByPortalCode_UnknownCodeReturnsNil(t *testing.T) {
 	}
 }
 
-func TestListPortalInvoices_ExcludesDrafts(t *testing.T) {
-	t.Parallel()
-	db := testutil.SetupTestDB(t)
-	c := &model.Contact{Name: "Citra", ContactType: "customer", Phone: "084444444444", IsActive: true}
-	model.CreateContact(db, c)
-	contacts, _ := model.ListContacts(db, model.ContactFilter{Search: "Citra"})
-	contactID := contacts[0].ID
-
-	var revenueAccountID int
-	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueAccountID)
-
-	draft := &model.Invoice{ContactID: contactID, InvoiceDate: "2026-07-01", DueDate: "2026-07-11", CreatedBy: 1}
-	if _, err := model.CreateInvoice(db, draft, []model.InvoiceLine{
-		{Description: "Antar jemput", Quantity: 100, UnitPrice: 400000, AccountID: revenueAccountID},
-	}); err != nil {
-		t.Fatalf("create draft invoice: %v", err)
-	}
-
-	sent := &model.Invoice{ContactID: contactID, InvoiceDate: "2026-06-01", DueDate: "2026-06-11", CreatedBy: 1}
-	sentID, err := model.CreateInvoice(db, sent, []model.InvoiceLine{
-		{Description: "Antar jemput", Quantity: 100, UnitPrice: 400000, AccountID: revenueAccountID},
-	})
-	if err != nil {
-		t.Fatalf("create sent invoice: %v", err)
-	}
-	if err := model.SendInvoice(db, sentID, 1); err != nil {
-		t.Fatalf("send invoice: %v", err)
-	}
-
-	invoices, err := model.ListPortalInvoices(db, []int{contactID})
-	if err != nil {
-		t.Fatalf("list portal invoices: %v", err)
-	}
-	if len(invoices) != 1 {
-		t.Fatalf("expected 1 non-draft invoice, got %d", len(invoices))
-	}
-	if invoices[0].ID != sentID {
-		t.Errorf("expected sent invoice %d, got %d", sentID, invoices[0].ID)
-	}
-}
-
 func TestPortalCode_FormatAndPrefix(t *testing.T) {
 	t.Parallel()
 	db := testutil.SetupTestDB(t)
