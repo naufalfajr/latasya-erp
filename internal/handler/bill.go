@@ -75,7 +75,7 @@ func (h *Handler) CreateBill(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.setFlash(w, "Bill created successfully")
-	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/bills/%d", created.ID), 303)
+	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/bills/%d", created.ID), http.StatusSeeOther)
 }
 func (h *Handler) ViewBill(w http.ResponseWriter, r *http.Request) {
 	id, err := pathID(r)
@@ -108,7 +108,7 @@ func (h *Handler) EditBill(w http.ResponseWriter, r *http.Request) {
 	}
 	if b.Status != model.StatusDraft {
 		h.setFlash(w, "Can only edit draft bills")
-		http.Redirect(w, r, h.BasePath+fmt.Sprintf("/bills/%d", id), 303)
+		http.Redirect(w, r, h.BasePath+fmt.Sprintf("/bills/%d", id), http.StatusSeeOther)
 		return
 	}
 	fd, err := h.newBillFormData(r)
@@ -137,7 +137,7 @@ func (h *Handler) UpdateBill(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.setFlash(w, "Bill updated successfully")
-	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/bills/%d", id), 303)
+	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/bills/%d", id), http.StatusSeeOther)
 }
 func (h *Handler) ReceiveBill(w http.ResponseWriter, r *http.Request) {
 	id, err := pathID(r)
@@ -150,7 +150,7 @@ func (h *Handler) ReceiveBill(w http.ResponseWriter, r *http.Request) {
 	} else {
 		h.setFlash(w, "Bill received — journal entry created")
 	}
-	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/bills/%d", id), 303)
+	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/bills/%d", id), http.StatusSeeOther)
 }
 func (h *Handler) BillPayment(w http.ResponseWriter, r *http.Request) {
 	id, err := pathID(r)
@@ -166,7 +166,7 @@ func (h *Handler) BillPayment(w http.ResponseWriter, r *http.Request) {
 	} else {
 		h.setFlash(w, "Payment recorded successfully")
 	}
-	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/bills/%d", id), 303)
+	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/bills/%d", id), http.StatusSeeOther)
 }
 func (h *Handler) DeleteBill(w http.ResponseWriter, r *http.Request) {
 	id, err := pathID(r)
@@ -176,7 +176,7 @@ func (h *Handler) DeleteBill(w http.ResponseWriter, r *http.Request) {
 	}
 	if _, err = h.Bills.Delete(r.Context(), h.billActor(r), id); err != nil {
 		h.setFlash(w, "Error: "+err.Error())
-		http.Redirect(w, r, h.BasePath+fmt.Sprintf("/bills/%d", id), 303)
+		http.Redirect(w, r, h.BasePath+fmt.Sprintf("/bills/%d", id), http.StatusSeeOther)
 		return
 	}
 	if r.Header.Get("HX-Request") == "true" {
@@ -184,7 +184,7 @@ func (h *Handler) DeleteBill(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.setFlash(w, "Bill deleted")
-	http.Redirect(w, r, h.BasePath+"/bills", 303)
+	http.Redirect(w, r, h.BasePath+"/bills", http.StatusSeeOther)
 }
 func (h *Handler) BillLinePartial(w http.ResponseWriter, r *http.Request) {
 	options, err := h.Bills.Options(r.Context())

@@ -351,13 +351,6 @@ func lockSource(ctx context.Context, tx *sql.Tx, id int, source string) error {
 	return &ConflictError{Message: "cannot mutate journal entry from source " + actual}
 }
 
-func normalizedSource(source string) string {
-	if source == "" {
-		return model.SourceManual
-	}
-	return source
-}
-
 func insertLines(ctx context.Context, tx *sql.Tx, id int, lines []Line) error {
 	for _, line := range lines {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO journal_lines (entry_id, account_id, debit, credit, memo) VALUES (?, ?, ?, ?, ?)`,
