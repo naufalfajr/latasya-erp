@@ -13,7 +13,7 @@ The Invoice module is the business seam shared by the HTML/HTMX and JSON adapter
 
 ## Adapter responsibilities
 
-HTTP adapters decode forms or JSON, construct commands, invoke the module, and translate results. Redirects, flash messages, HTTP status codes, PDF output, WhatsApp links, and template selection remain adapter concerns.
+HTTP adapters decode forms or JSON, construct commands, invoke the module, and translate results. Redirects, flash messages, HTTP status codes, PDF output, WhatsApp links, and template selection remain adapter concerns. Each adapter owns one invoice route-registration function used by both production and tests so route methods and middleware cannot drift.
 
 ## Persistence
 
@@ -21,4 +21,4 @@ SQLite is the concrete implementation. SQL stays private to this module, but no 
 
 ## Migration sequence
 
-The pilot moves mutations first, then queries, then removes duplicated behavior from both HTTP adapters. Existing routes and the OpenAPI contract remain compatible throughout the migration.
+The pilot moved mutations first, then queries, then removed duplicated behavior from both HTTP adapters. Existing routes and the OpenAPI contract remain compatible.

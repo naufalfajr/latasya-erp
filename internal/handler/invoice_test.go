@@ -4,52 +4,13 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"strconv"
 	"strings"
 	"testing"
 
-	"github.com/naufal/latasya-erp/internal/auth"
 	"github.com/naufal/latasya-erp/internal/model"
-	"github.com/naufal/latasya-erp/internal/testutil"
 )
-
-// testServerForInvoiceBulkActions wires up only the bulk-action /
-// recurring-invoice routes that aren't part of the shared testServer's route
-// table (see handler_test.go), mirroring the pattern in
-// testServerWithSchoolCalendar (school_calendar_test.go). Kept separate so we
-// never touch handler_test.go, which other agents are editing concurrently.
-func testServerForInvoiceBulkActions(t *testing.T) (*httptest.Server, *sql.DB) {
-	t.Helper()
-	db := testutil.SetupTestDB(t)
-	h := testutil.SetupTestHandler(t, db)
-
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /login", h.LoginPage)
-	mux.HandleFunc("POST /login", h.Login)
-
-	protected := http.NewServeMux()
-	protected.HandleFunc("POST /invoices/generate-recurring", auth.CapabilityOnly(model.CapInvoicesManage, h.GenerateRecurringInvoices))
-	protected.HandleFunc("POST /invoices/bulk-delete", auth.CapabilityOnly(model.CapInvoicesManage, h.BulkDeleteInvoices))
-	protected.HandleFunc("POST /invoices/bulk-send", auth.CapabilityOnly(model.CapInvoicesManage, h.BulkSendInvoices))
-	protected.HandleFunc("GET /password/change", h.PasswordChangePage)
-	protected.HandleFunc("POST /password/change", h.PasswordChange)
-
-	mux.Handle("/", auth.RequireAuth(db, auth.CSRFProtect(h.EnforcePasswordChange(protected))))
-
-	hash, err := auth.HashPassword(adminTestPassword)
-	if err != nil {
-		t.Fatalf("hash admin password: %v", err)
-	}
-	if _, err := db.Exec("UPDATE users SET password=?, must_change_password=0 WHERE username='admin'", hash); err != nil {
-		t.Fatalf("update admin: %v", err)
-	}
-
-	ts := httptest.NewServer(mux)
-	t.Cleanup(ts.Close)
-	return ts, db
-}
 
 // seedCustomer inserts an active customer contact and returns its ID.
 func seedCustomer(t *testing.T, db *sql.DB, name string) int {
@@ -100,7 +61,7 @@ func accountID(t *testing.T, db *sql.DB, code string) int {
 
 func TestGenerateRecurringInvoices_CreatesDraftsForActiveCustomers(t *testing.T) {
 	t.Parallel()
-	ts, db := testServerForInvoiceBulkActions(t)
+	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 	seedCustomer(t, db, "Recurring Customer")
 
@@ -131,7 +92,7 @@ func TestGenerateRecurringInvoices_CreatesDraftsForActiveCustomers(t *testing.T)
 
 func TestGenerateRecurringInvoices_NoDefaultRevenueAccount(t *testing.T) {
 	t.Parallel()
-	ts, db := testServerForInvoiceBulkActions(t)
+	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 	seedCustomer(t, db, "No Default Account Customer")
 
@@ -162,7 +123,7 @@ func TestGenerateRecurringInvoices_NoDefaultRevenueAccount(t *testing.T) {
 
 func TestGenerateRecurringInvoices_PerCustomerFailureReported(t *testing.T) {
 	t.Parallel()
-	ts, db := testServerForInvoiceBulkActions(t)
+	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 	seedCustomer(t, db, "Dangling Account Customer")
 
@@ -201,7 +162,7 @@ func TestGenerateRecurringInvoices_PerCustomerFailureReported(t *testing.T) {
 
 func TestBulkDeleteInvoices_NoneSelected(t *testing.T) {
 	t.Parallel()
-	ts, db := testServerForInvoiceBulkActions(t)
+	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
 	req, _ := requestWithCookies(db, "POST", ts.URL+"/invoices/bulk-delete", cookies, "")
@@ -221,7 +182,7 @@ func TestBulkDeleteInvoices_NoneSelected(t *testing.T) {
 
 func TestBulkDeleteInvoices_DeletesDraftsSkipsRest(t *testing.T) {
 	t.Parallel()
-	ts, db := testServerForInvoiceBulkActions(t)
+	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
 	contactID := seedCustomer(t, db, "Bulk Delete Customer")
@@ -273,7 +234,7 @@ func TestBulkDeleteInvoices_DeletesDraftsSkipsRest(t *testing.T) {
 
 func TestBulkSendInvoices_NoneSelected(t *testing.T) {
 	t.Parallel()
-	ts, db := testServerForInvoiceBulkActions(t)
+	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
 	req, _ := requestWithCookies(db, "POST", ts.URL+"/invoices/bulk-send", cookies, "")
@@ -293,7 +254,7 @@ func TestBulkSendInvoices_NoneSelected(t *testing.T) {
 
 func TestBulkSendInvoices_SendsSkipsAndReportsFailures(t *testing.T) {
 	t.Parallel()
-	ts, db := testServerForInvoiceBulkActions(t)
+	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
 	contactID := seedCustomer(t, db, "Bulk Send Customer")

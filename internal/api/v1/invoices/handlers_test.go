@@ -24,17 +24,7 @@ func setupServer(t *testing.T) (*httptest.Server, *sql.DB) {
 	apiMux := http.NewServeMux()
 	h := &v1invoices.Handler{Invoices: invoiceModule.New(db)}
 	idem := v1.Idempotency(db)
-	apiMux.HandleFunc("GET /api/v1/invoices", h.List)
-	apiMux.HandleFunc("GET /api/v1/invoices/{id}", h.Get)
-	apiMux.HandleFunc("GET /api/v1/invoices/{id}/pdf", h.PDF)
-	apiMux.Handle("POST /api/v1/invoices", idem(http.HandlerFunc(h.Create)))
-	apiMux.Handle("PUT /api/v1/invoices/{id}", idem(http.HandlerFunc(h.Update)))
-	apiMux.HandleFunc("DELETE /api/v1/invoices/{id}", h.Delete)
-	apiMux.Handle("POST /api/v1/invoices/{id}/send", idem(http.HandlerFunc(h.Send)))
-	apiMux.Handle("POST /api/v1/invoices/{id}/payment", idem(http.HandlerFunc(h.Payment)))
-	apiMux.Handle("POST /api/v1/invoices/generate-recurring", idem(http.HandlerFunc(h.GenerateRecurring)))
-	apiMux.HandleFunc("POST /api/v1/invoices/bulk-delete", h.BulkDelete)
-	apiMux.HandleFunc("POST /api/v1/invoices/bulk-send", h.BulkSend)
+	h.RegisterRoutes(apiMux, idem)
 
 	mux := http.NewServeMux()
 	mux.Handle("/api/v1/", v1.BearerOrCookie(db)(apiMux))

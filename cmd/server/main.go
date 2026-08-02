@@ -162,17 +162,7 @@ func main() {
 	apiMux.HandleFunc("DELETE /api/v1/journals/{id}", journalsAPI.Delete)
 
 	invoicesAPI := &v1invoices.Handler{Invoices: invoiceModule}
-	apiMux.HandleFunc("GET /api/v1/invoices", invoicesAPI.List)
-	apiMux.HandleFunc("GET /api/v1/invoices/{id}", invoicesAPI.Get)
-	apiMux.HandleFunc("GET /api/v1/invoices/{id}/pdf", invoicesAPI.PDF)
-	apiMux.Handle("POST /api/v1/invoices", idem(http.HandlerFunc(invoicesAPI.Create)))
-	apiMux.Handle("PUT /api/v1/invoices/{id}", idem(http.HandlerFunc(invoicesAPI.Update)))
-	apiMux.HandleFunc("DELETE /api/v1/invoices/{id}", invoicesAPI.Delete)
-	apiMux.Handle("POST /api/v1/invoices/{id}/send", idem(http.HandlerFunc(invoicesAPI.Send)))
-	apiMux.Handle("POST /api/v1/invoices/{id}/payment", idem(http.HandlerFunc(invoicesAPI.Payment)))
-	apiMux.Handle("POST /api/v1/invoices/generate-recurring", idem(http.HandlerFunc(invoicesAPI.GenerateRecurring)))
-	apiMux.HandleFunc("POST /api/v1/invoices/bulk-delete", invoicesAPI.BulkDelete)
-	apiMux.HandleFunc("POST /api/v1/invoices/bulk-send", invoicesAPI.BulkSend)
+	invoicesAPI.RegisterRoutes(apiMux, idem)
 
 	apiTokensAPI := &v1apitokens.Handler{DB: db}
 	apiMux.HandleFunc("GET /api/v1/api-tokens", apiTokensAPI.List)
@@ -301,21 +291,7 @@ func main() {
 	protected.HandleFunc("DELETE /expenses/{id}", auth.CapabilityOnly(model.CapExpensesManage, h.DeleteExpense))
 
 	// Invoices
-	protected.HandleFunc("GET /invoices", h.ListInvoices)
-	protected.HandleFunc("GET /invoices/new", h.NewInvoice)
-	protected.HandleFunc("POST /invoices", auth.CapabilityOnly(model.CapInvoicesManage, h.CreateInvoice))
-	protected.HandleFunc("POST /invoices/generate-recurring", auth.CapabilityOnly(model.CapInvoicesManage, h.GenerateRecurringInvoices))
-	protected.HandleFunc("POST /invoices/bulk-delete", auth.CapabilityOnly(model.CapInvoicesManage, h.BulkDeleteInvoices))
-	protected.HandleFunc("POST /invoices/bulk-send", auth.CapabilityOnly(model.CapInvoicesManage, h.BulkSendInvoices))
-	protected.HandleFunc("GET /invoices/{id}", h.ViewInvoice)
-	protected.HandleFunc("GET /invoices/{id}/edit", h.EditInvoice)
-	protected.HandleFunc("POST /invoices/{id}", auth.CapabilityOnly(model.CapInvoicesManage, h.UpdateInvoice))
-	protected.HandleFunc("DELETE /invoices/{id}", auth.CapabilityOnly(model.CapInvoicesManage, h.DeleteInvoice))
-	protected.HandleFunc("POST /invoices/{id}/send", auth.CapabilityOnly(model.CapInvoicesManage, h.SendInvoice))
-	protected.HandleFunc("POST /invoices/{id}/payment", auth.CapabilityOnly(model.CapInvoicesManage, h.InvoicePayment))
-	protected.HandleFunc("GET /invoices/{id}/print", h.PrintInvoice)
-	protected.HandleFunc("GET /invoices/{id}/pdf", h.InvoicePDF)
-	protected.HandleFunc("GET /invoices/{id}/whatsapp", auth.CapabilityOnly(model.CapInvoicesManage, h.InvoiceWhatsApp))
+	h.RegisterInvoiceRoutes(protected)
 
 	// Credit Notes (piggyback on invoices.manage capability)
 	protected.HandleFunc("GET /credit-notes", h.ListCreditNotes)
@@ -370,7 +346,6 @@ func main() {
 
 	// HTMX partials
 	protected.HandleFunc("GET /htmx/journal-line", h.JournalLinePartial)
-	protected.HandleFunc("GET /htmx/invoice-line", h.InvoiceLinePartial)
 	protected.HandleFunc("GET /htmx/bill-line", h.BillLinePartial)
 	protected.HandleFunc("GET /htmx/credit-note-line", h.CreditNoteLinePartial)
 
