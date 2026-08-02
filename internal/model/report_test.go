@@ -17,7 +17,7 @@ func TestTrialBalance_Balanced(t *testing.T) {
 	db.QueryRow("SELECT id FROM accounts WHERE code = '5-1001'").Scan(&fuelID)
 
 	// Record income: debit cash 10M, credit revenue 10M
-	model.CreateJournalEntry(db, &model.JournalEntry{
+	testutil.CreateJournalEntry(db, &model.JournalEntry{
 		EntryDate: "2026-04-01", Description: "Income", SourceType: "income", IsPosted: true, CreatedBy: 1,
 	}, []model.JournalLine{
 		{AccountID: cashID, Debit: 10000000, Credit: 0},
@@ -25,7 +25,7 @@ func TestTrialBalance_Balanced(t *testing.T) {
 	})
 
 	// Record expense: debit fuel 3M, credit cash 3M
-	model.CreateJournalEntry(db, &model.JournalEntry{
+	testutil.CreateJournalEntry(db, &model.JournalEntry{
 		EntryDate: "2026-04-05", Description: "Fuel", SourceType: "expense", IsPosted: true, CreatedBy: 1,
 	}, []model.JournalLine{
 		{AccountID: fuelID, Debit: 3000000, Credit: 0},
@@ -74,7 +74,7 @@ func TestProfitLoss(t *testing.T) {
 	db.QueryRow("SELECT id FROM accounts WHERE code = '5-1001'").Scan(&fuelID)
 
 	// Income 10M
-	model.CreateJournalEntry(db, &model.JournalEntry{
+	testutil.CreateJournalEntry(db, &model.JournalEntry{
 		EntryDate: "2026-04-01", Description: "Income", SourceType: "income", IsPosted: true, CreatedBy: 1,
 	}, []model.JournalLine{
 		{AccountID: cashID, Debit: 10000000, Credit: 0},
@@ -82,7 +82,7 @@ func TestProfitLoss(t *testing.T) {
 	})
 
 	// Expense 3M
-	model.CreateJournalEntry(db, &model.JournalEntry{
+	testutil.CreateJournalEntry(db, &model.JournalEntry{
 		EntryDate: "2026-04-05", Description: "Fuel", SourceType: "expense", IsPosted: true, CreatedBy: 1,
 	}, []model.JournalLine{
 		{AccountID: fuelID, Debit: 3000000, Credit: 0},
@@ -115,7 +115,7 @@ func TestBalanceSheet_Equation(t *testing.T) {
 	db.QueryRow("SELECT id FROM accounts WHERE code = '5-1001'").Scan(&fuelID)
 
 	// Income 10M
-	model.CreateJournalEntry(db, &model.JournalEntry{
+	testutil.CreateJournalEntry(db, &model.JournalEntry{
 		EntryDate: "2026-04-01", Description: "Income", SourceType: "income", IsPosted: true, CreatedBy: 1,
 	}, []model.JournalLine{
 		{AccountID: cashID, Debit: 10000000, Credit: 0},
@@ -123,7 +123,7 @@ func TestBalanceSheet_Equation(t *testing.T) {
 	})
 
 	// Expense 3M
-	model.CreateJournalEntry(db, &model.JournalEntry{
+	testutil.CreateJournalEntry(db, &model.JournalEntry{
 		EntryDate: "2026-04-05", Description: "Fuel", SourceType: "expense", IsPosted: true, CreatedBy: 1,
 	}, []model.JournalLine{
 		{AccountID: fuelID, Debit: 3000000, Credit: 0},
@@ -161,14 +161,14 @@ func TestGeneralLedger(t *testing.T) {
 	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
 
 	// Two transactions touching cash
-	model.CreateJournalEntry(db, &model.JournalEntry{
+	testutil.CreateJournalEntry(db, &model.JournalEntry{
 		EntryDate: "2026-04-01", Description: "Income 1", SourceType: "income", IsPosted: true, CreatedBy: 1,
 	}, []model.JournalLine{
 		{AccountID: cashID, Debit: 5000000, Credit: 0},
 		{AccountID: revenueID, Debit: 0, Credit: 5000000},
 	})
 
-	model.CreateJournalEntry(db, &model.JournalEntry{
+	testutil.CreateJournalEntry(db, &model.JournalEntry{
 		EntryDate: "2026-04-10", Description: "Income 2", SourceType: "income", IsPosted: true, CreatedBy: 1,
 	}, []model.JournalLine{
 		{AccountID: cashID, Debit: 3000000, Credit: 0},
@@ -202,14 +202,14 @@ func TestCashFlow(t *testing.T) {
 	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
 	db.QueryRow("SELECT id FROM accounts WHERE code = '5-1001'").Scan(&fuelID)
 
-	model.CreateJournalEntry(db, &model.JournalEntry{
+	testutil.CreateJournalEntry(db, &model.JournalEntry{
 		EntryDate: "2026-04-01", Description: "Income", SourceType: "income", IsPosted: true, CreatedBy: 1,
 	}, []model.JournalLine{
 		{AccountID: cashID, Debit: 10000000, Credit: 0},
 		{AccountID: revenueID, Debit: 0, Credit: 10000000},
 	})
 
-	model.CreateJournalEntry(db, &model.JournalEntry{
+	testutil.CreateJournalEntry(db, &model.JournalEntry{
 		EntryDate: "2026-04-05", Description: "Fuel", SourceType: "expense", IsPosted: true, CreatedBy: 1,
 	}, []model.JournalLine{
 		{AccountID: fuelID, Debit: 3000000, Credit: 0},
@@ -240,7 +240,7 @@ func TestCashFlow_UsesClassification(t *testing.T) {
 	}
 	post := func(date string, lines ...model.JournalLine) {
 		t.Helper()
-		if _, err := model.CreateJournalEntry(db, &model.JournalEntry{
+		if _, err := testutil.CreateJournalEntry(db, &model.JournalEntry{
 			EntryDate: date, Description: "cash fixture", IsPosted: true, CreatedBy: 1,
 		}, lines); err != nil {
 			t.Fatal(err)

@@ -96,7 +96,7 @@ func TestIssueCreditNote_FullCancellation(t *testing.T) {
 	}
 
 	// Reversing journal should be balanced
-	je, err := model.GetJournalEntry(db, *issued.JournalID)
+	je, err := testutil.GetJournalEntry(db, *issued.JournalID)
 	if err != nil {
 		t.Fatalf("get journal: %v", err)
 	}
@@ -511,7 +511,7 @@ func TestIssueCreditNote_WithTax(t *testing.T) {
 	}
 
 	issued, _ := model.GetCreditNote(db, cnID)
-	je, err := model.GetJournalEntry(db, *issued.JournalID)
+	je, err := testutil.GetJournalEntry(db, *issued.JournalID)
 	if err != nil {
 		t.Fatalf("get journal: %v", err)
 	}

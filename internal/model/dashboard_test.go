@@ -28,7 +28,7 @@ func TestDashboardMonthlyTrends_AccrualAndCashIntegrity(t *testing.T) {
 
 	post := func(date string, posted bool, lines ...model.JournalLine) {
 		t.Helper()
-		if _, err := model.CreateJournalEntry(db, &model.JournalEntry{
+		if _, err := testutil.CreateJournalEntry(db, &model.JournalEntry{
 			EntryDate: date, Description: "trend fixture", IsPosted: posted, CreatedBy: 1,
 		}, lines); err != nil {
 			t.Fatal(err)
@@ -134,7 +134,7 @@ func TestDashboardQuarterlyTrends_AlignToCalendarQuarters(t *testing.T) {
 	expense := accountID("5-1001")
 	post := func(date string, debitAccount, creditAccount, amount int) {
 		t.Helper()
-		if _, err := model.CreateJournalEntry(db, &model.JournalEntry{
+		if _, err := testutil.CreateJournalEntry(db, &model.JournalEntry{
 			EntryDate: date, Description: "quarterly fixture", IsPosted: true, CreatedBy: 1,
 		}, []model.JournalLine{{AccountID: debitAccount, Debit: amount}, {AccountID: creditAccount, Credit: amount}}); err != nil {
 			t.Fatal(err)

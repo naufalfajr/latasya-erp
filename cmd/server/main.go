@@ -35,6 +35,7 @@ import (
 	"github.com/naufal/latasya-erp/internal/googlecalendar"
 	"github.com/naufal/latasya-erp/internal/handler"
 	"github.com/naufal/latasya-erp/internal/invoice"
+	"github.com/naufal/latasya-erp/internal/journal"
 	"github.com/naufal/latasya-erp/internal/model"
 	"github.com/naufal/latasya-erp/internal/tmpl"
 )
@@ -72,6 +73,7 @@ func main() {
 	}()
 
 	invoiceModule := invoice.New(db)
+	journalModule := journal.New(db)
 	h := &handler.Handler{
 		DB:         db,
 		TemplateFS: latasyaerp.TemplateFS,
@@ -79,6 +81,7 @@ func main() {
 		DevMode:    devMode,
 		BasePath:   "/dashboard",
 		Invoices:   invoiceModule,
+		Journals:   journalModule,
 		GoogleCalendarConfig: googlecalendar.Config{
 			ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
 			ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
@@ -140,26 +143,14 @@ func main() {
 
 	idem := v1.Idempotency(db)
 
-	incomeAPI := &v1income.Handler{DB: db}
-	apiMux.HandleFunc("GET /api/v1/income", incomeAPI.List)
-	apiMux.HandleFunc("GET /api/v1/income/{id}", incomeAPI.Get)
-	apiMux.Handle("POST /api/v1/income", idem(http.HandlerFunc(incomeAPI.Create)))
-	apiMux.Handle("PUT /api/v1/income/{id}", idem(http.HandlerFunc(incomeAPI.Update)))
-	apiMux.HandleFunc("DELETE /api/v1/income/{id}", incomeAPI.Delete)
+	incomeAPI := &v1income.Handler{Journals: journalModule}
+	incomeAPI.RegisterRoutes(apiMux, idem)
 
-	expensesAPI := &v1expenses.Handler{DB: db}
-	apiMux.HandleFunc("GET /api/v1/expenses", expensesAPI.List)
-	apiMux.HandleFunc("GET /api/v1/expenses/{id}", expensesAPI.Get)
-	apiMux.Handle("POST /api/v1/expenses", idem(http.HandlerFunc(expensesAPI.Create)))
-	apiMux.Handle("PUT /api/v1/expenses/{id}", idem(http.HandlerFunc(expensesAPI.Update)))
-	apiMux.HandleFunc("DELETE /api/v1/expenses/{id}", expensesAPI.Delete)
+	expensesAPI := &v1expenses.Handler{Journals: journalModule}
+	expensesAPI.RegisterRoutes(apiMux, idem)
 
-	journalsAPI := &v1journals.Handler{DB: db}
-	apiMux.HandleFunc("GET /api/v1/journals", journalsAPI.List)
-	apiMux.HandleFunc("GET /api/v1/journals/{id}", journalsAPI.Get)
-	apiMux.Handle("POST /api/v1/journals", idem(http.HandlerFunc(journalsAPI.Create)))
-	apiMux.Handle("PUT /api/v1/journals/{id}", idem(http.HandlerFunc(journalsAPI.Update)))
-	apiMux.HandleFunc("DELETE /api/v1/journals/{id}", journalsAPI.Delete)
+	journalsAPI := &v1journals.Handler{Journals: journalModule}
+	journalsAPI.RegisterRoutes(apiMux, idem)
 
 	invoicesAPI := &v1invoices.Handler{Invoices: invoiceModule}
 	invoicesAPI.RegisterRoutes(apiMux, idem)
@@ -265,30 +256,7 @@ func main() {
 	// Admin-only: choosing a weak code weakens an unauthenticated portal.
 	protected.HandleFunc("POST /contacts/{id}/portal-code", auth.AdminOnly(h.SaveContactPortalCode))
 
-	// Journal Entries
-	protected.HandleFunc("GET /journals", h.ListJournals)
-	protected.HandleFunc("GET /journals/new", h.NewJournal)
-	protected.HandleFunc("POST /journals", auth.CapabilityOnly(model.CapJournalsManage, h.CreateJournal))
-	protected.HandleFunc("GET /journals/{id}", h.ViewJournal)
-	protected.HandleFunc("GET /journals/{id}/edit", h.EditJournal)
-	protected.HandleFunc("POST /journals/{id}", auth.CapabilityOnly(model.CapJournalsManage, h.UpdateJournal))
-	protected.HandleFunc("DELETE /journals/{id}", auth.CapabilityOnly(model.CapJournalsManage, h.DeleteJournal))
-
-	// Income
-	protected.HandleFunc("GET /income", h.ListIncome)
-	protected.HandleFunc("GET /income/new", h.NewIncome)
-	protected.HandleFunc("POST /income", auth.CapabilityOnly(model.CapIncomeManage, h.CreateIncome))
-	protected.HandleFunc("GET /income/{id}/edit", h.EditIncome)
-	protected.HandleFunc("POST /income/{id}", auth.CapabilityOnly(model.CapIncomeManage, h.UpdateIncome))
-	protected.HandleFunc("DELETE /income/{id}", auth.CapabilityOnly(model.CapIncomeManage, h.DeleteIncome))
-
-	// Expenses
-	protected.HandleFunc("GET /expenses", h.ListExpenses)
-	protected.HandleFunc("GET /expenses/new", h.NewExpense)
-	protected.HandleFunc("POST /expenses", auth.CapabilityOnly(model.CapExpensesManage, h.CreateExpense))
-	protected.HandleFunc("GET /expenses/{id}/edit", h.EditExpense)
-	protected.HandleFunc("POST /expenses/{id}", auth.CapabilityOnly(model.CapExpensesManage, h.UpdateExpense))
-	protected.HandleFunc("DELETE /expenses/{id}", auth.CapabilityOnly(model.CapExpensesManage, h.DeleteExpense))
+	h.RegisterAccountingRoutes(protected)
 
 	// Invoices
 	h.RegisterInvoiceRoutes(protected)
@@ -345,7 +313,6 @@ func main() {
 	protected.Handle("/roles/", auth.RequireCapability(model.CapRolesManage)(roleMux))
 
 	// HTMX partials
-	protected.HandleFunc("GET /htmx/journal-line", h.JournalLinePartial)
 	protected.HandleFunc("GET /htmx/bill-line", h.BillLinePartial)
 	protected.HandleFunc("GET /htmx/credit-note-line", h.CreditNoteLinePartial)
 

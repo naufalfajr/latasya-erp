@@ -12,6 +12,7 @@ import (
 
 	v1 "github.com/naufal/latasya-erp/internal/api/v1"
 	v1expenses "github.com/naufal/latasya-erp/internal/api/v1/expenses"
+	"github.com/naufal/latasya-erp/internal/journal"
 	"github.com/naufal/latasya-erp/internal/model"
 	"github.com/naufal/latasya-erp/internal/testutil"
 )
@@ -20,15 +21,11 @@ func setupServer(t *testing.T) (*httptest.Server, *sql.DB) {
 	t.Helper()
 	db := testutil.SetupTestDB(t)
 
-	h := &v1expenses.Handler{DB: db}
+	h := &v1expenses.Handler{Journals: journal.New(db)}
 	idem := v1.Idempotency(db)
 
 	apiMux := http.NewServeMux()
-	apiMux.HandleFunc("GET /api/v1/expenses", h.List)
-	apiMux.HandleFunc("GET /api/v1/expenses/{id}", h.Get)
-	apiMux.Handle("POST /api/v1/expenses", idem(http.HandlerFunc(h.Create)))
-	apiMux.Handle("PUT /api/v1/expenses/{id}", idem(http.HandlerFunc(h.Update)))
-	apiMux.HandleFunc("DELETE /api/v1/expenses/{id}", h.Delete)
+	h.RegisterRoutes(apiMux, idem)
 
 	mux := http.NewServeMux()
 	mux.Handle("/api/v1/", v1.BearerOrCookie(db)(apiMux))
@@ -564,7 +561,7 @@ func TestUpdateExpense(t *testing.T) {
 			{AccountID: payID, Debit: 10000, Credit: 0},
 			{AccountID: revID, Debit: 0, Credit: 10000},
 		}
-		id, err := model.CreateJournalEntry(db, je, lines)
+		id, err := testutil.CreateJournalEntry(db, je, lines)
 		if err != nil {
 			t.Fatalf("create income entry: %v", err)
 		}

@@ -10,6 +10,7 @@ import (
 	"github.com/naufal/latasya-erp/internal/database"
 	"github.com/naufal/latasya-erp/internal/handler"
 	"github.com/naufal/latasya-erp/internal/invoice"
+	"github.com/naufal/latasya-erp/internal/journal"
 	"github.com/naufal/latasya-erp/internal/model"
 	"github.com/naufal/latasya-erp/internal/tmpl"
 
@@ -91,7 +92,60 @@ func SetupTestHandler(t *testing.T, db *sql.DB) *handler.Handler {
 		FuncMap:    tmpl.FuncMap(),
 		DevMode:    true,
 		Invoices:   invoice.New(db),
+		Journals:   journal.New(db),
 	}
+}
+
+// CreateJournalEntry creates accounting fixtures through the journal module.
+// It retains the old test signature while production code uses typed drafts.
+func CreateJournalEntry(db *sql.DB, entry *model.JournalEntry, lines []model.JournalLine) (int, error) {
+	actor := journal.Actor{UserID: entry.CreatedBy, CanManageJournals: true, CanManageIncome: true, CanManageExpenses: true}
+	module := journal.New(db)
+	toLines := make([]journal.Line, 0, len(lines))
+	for _, line := range lines {
+		toLines = append(toLines, journal.Line{AccountID: line.AccountID, Debit: line.Debit, Credit: line.Credit, Memo: line.Memo})
+	}
+	var created *model.JournalEntry
+	var err error
+	switch entry.SourceType {
+	case model.SourceIncome:
+		amount, deposit, revenue := journalShape(lines)
+		created, err = module.CreateIncome(context.Background(), actor, journal.IncomeDraft{EntryDate: entry.EntryDate,
+			Description: entry.Description, Amount: amount, RevenueAccount: revenue, DepositAccount: deposit})
+	case model.SourceExpense:
+		amount, expense, payment := journalShape(lines)
+		created, err = module.CreateExpense(context.Background(), actor, journal.ExpenseDraft{EntryDate: entry.EntryDate,
+			Description: entry.Description, Amount: amount, ExpenseAccount: expense, PaymentAccount: payment, VehicleID: entry.VehicleID})
+	default:
+		created, err = module.CreateManual(context.Background(), actor, journal.ManualDraft{EntryDate: entry.EntryDate,
+			Description: entry.Description, Lines: toLines})
+	}
+	if err != nil {
+		return 0, err
+	}
+	if !entry.IsPosted {
+		if _, err := db.Exec("UPDATE journal_entries SET is_posted=0 WHERE id=?", created.ID); err != nil {
+			return 0, err
+		}
+	}
+	entry.ID, entry.Reference = created.ID, created.Reference
+	return created.ID, nil
+}
+
+func GetJournalEntry(db *sql.DB, id int) (*model.JournalEntry, error) {
+	return journal.New(db).Get(context.Background(), id)
+}
+
+func journalShape(lines []model.JournalLine) (amount, debitAccount, creditAccount int) {
+	for _, line := range lines {
+		if line.Debit > 0 {
+			amount, debitAccount = line.Debit, line.AccountID
+		}
+		if line.Credit > 0 {
+			creditAccount = line.AccountID
+		}
+	}
+	return
 }
 
 // CreateTestUser creates a user in the test database and returns the user ID.

@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/auth"
+	"github.com/naufal/latasya-erp/internal/journal"
 	"github.com/naufal/latasya-erp/internal/model"
 )
 
@@ -22,146 +22,54 @@ type incomeFormData struct {
 }
 
 func (h *Handler) ListIncome(w http.ResponseWriter, r *http.Request) {
-	f := model.JournalFilter{
-		SourceType: model.SourceIncome,
-		DateFrom:   r.URL.Query().Get("from"),
-		DateTo:     r.URL.Query().Get("to"),
-		Search:     r.URL.Query().Get("search"),
-	}
-
-	total, err := model.CountJournalEntries(h.DB, f)
+	filter := journal.Filter{SourceType: model.SourceIncome, DateFrom: r.URL.Query().Get("from"),
+		DateTo: r.URL.Query().Get("to"), Search: r.URL.Query().Get("search")}
+	page := parsePage(r)
+	filter.Limit, filter.Offset = listPageSize, (page-1)*listPageSize
+	result, err := h.Journals.List(r.Context(), filter)
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
-	pg := newPagination(parsePage(r), total)
-	f.Limit, f.Offset = pg.PageSize, pg.Offset()
-
-	entries, err := model.ListJournalEntries(h.DB, f)
-	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-
+	pg := newPagination(page, result.Total)
 	h.render(w, r, "templates/income/index.html", "Income", map[string]any{
-		"Entries":    entries,
-		"Pagination": newPageNav(pg, map[string]string{"from": f.DateFrom, "to": f.DateTo, "search": f.Search}),
+		"Entries": result.Entries, "Pagination": newPageNav(pg, map[string]string{"from": filter.DateFrom, "to": filter.DateTo, "search": filter.Search}),
 	})
 }
 
 func (h *Handler) NewIncome(w http.ResponseWriter, r *http.Request) {
-	h.render(w, r, "templates/income/form.html", "Record Income", h.newIncomeFormData())
+	form, err := h.newIncomeFormData(r)
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	h.render(w, r, "templates/income/form.html", "Record Income", form)
 }
 
 func (h *Handler) CreateIncome(w http.ResponseWriter, r *http.Request) {
-	user := auth.UserFromContext(r.Context())
-
-	amount := parseIDR(r.FormValue("amount"))
-	revenueAccountID, _ := strconv.Atoi(r.FormValue("revenue_account"))
-	depositAccountID, _ := strconv.Atoi(r.FormValue("deposit_account"))
-
-	je := &model.JournalEntry{
-		EntryDate:   r.FormValue("entry_date"),
-		Description: r.FormValue("description"),
-		SourceType:  "income",
-		IsPosted:    true,
-		CreatedBy:   user.ID,
-	}
-
-	errors := make(map[string]string)
-	if je.EntryDate == "" {
-		errors["entry_date"] = "Date is required"
-	}
-	if je.Description == "" {
-		errors["description"] = "Description is required"
-	}
-	if amount <= 0 {
-		errors["amount"] = "Amount must be greater than 0"
-	}
-	if revenueAccountID == 0 {
-		errors["revenue_account"] = "Revenue account is required"
-	}
-	if depositAccountID == 0 {
-		errors["deposit_account"] = "Deposit account is required"
-	}
-
-	if len(errors) > 0 {
-		fd := h.newIncomeFormData()
-		fd.Entry = je
-		fd.Amount = amount
-		fd.RevenueAccount = revenueAccountID
-		fd.DepositAccount = depositAccountID
-		fd.Errors = errors
-		h.render(w, r, "templates/income/form.html", "Record Income", fd)
-		return
-	}
-
-	lines := []model.JournalLine{
-		{AccountID: depositAccountID, Debit: amount, Credit: 0},
-		{AccountID: revenueAccountID, Debit: 0, Credit: amount},
-	}
-
-	entryID, err := model.CreateJournalEntry(h.DB, je, lines)
+	draft := incomeDraftFromForm(r)
+	created, err := h.Journals.CreateIncome(r.Context(), incomeActor(r), draft)
 	if err != nil {
-		fd := h.newIncomeFormData()
-		fd.Entry = je
-		fd.Amount = amount
-		fd.RevenueAccount = revenueAccountID
-		fd.DepositAccount = depositAccountID
-		fd.Errors = map[string]string{"general": err.Error()}
-		h.render(w, r, "templates/income/form.html", "Record Income", fd)
+		h.renderIncomeError(w, r, "Record Income", draft, false, err)
 		return
 	}
-
-	audit.Log(r.Context(), h.DB, audit.Event{
-		Action:      "income.create",
-		TargetType:  "income",
-		TargetID:    int64(entryID),
-		TargetLabel: je.Description,
-		Metadata: map[string]any{
-			"after": map[string]any{
-				"entry_date":      je.EntryDate,
-				"description":     je.Description,
-				"amount":          amount,
-				"revenue_account": revenueAccountID,
-				"deposit_account": depositAccountID,
-			},
-		},
-	})
-
 	h.setFlash(w, "Income recorded successfully")
-	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/journals/%d", entryID), http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/journals/%d", created.ID), http.StatusSeeOther)
 }
 
 func (h *Handler) EditIncome(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.Atoi(r.PathValue("id"))
+	entry, ok := h.incomeEntry(w, r)
+	if !ok {
+		return
+	}
+	form, err := h.newIncomeFormData(r)
 	if err != nil {
-		http.NotFound(w, r)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
-
-	je, err := model.GetJournalEntry(h.DB, id)
-	if err != nil || je.SourceType != model.SourceIncome {
-		http.NotFound(w, r)
-		return
-	}
-
-	fd := h.newIncomeFormData()
-	fd.Entry = je
-	fd.IsEdit = true
-
-	// Extract amount and accounts from lines
-	for _, l := range je.Lines {
-		if l.Debit > 0 {
-			fd.DepositAccount = l.AccountID
-			fd.Amount = l.Debit
-		}
-		if l.Credit > 0 {
-			fd.RevenueAccount = l.AccountID
-		}
-	}
-
-	h.render(w, r, "templates/income/form.html", "Edit Income", fd)
+	form.Entry, form.IsEdit = entry, true
+	form.Amount, form.RevenueAccount, form.DepositAccount = extractIncomeShape(entry)
+	h.render(w, r, "templates/income/form.html", "Edit Income", form)
 }
 
 func (h *Handler) UpdateIncome(w http.ResponseWriter, r *http.Request) {
@@ -170,100 +78,15 @@ func (h *Handler) UpdateIncome(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-
-	oldJE, err := model.GetJournalEntry(h.DB, id)
-	if err != nil || oldJE.SourceType != model.SourceIncome {
+	if entry, err := h.Journals.Get(r.Context(), id); err != nil || entry.SourceType != model.SourceIncome {
 		http.NotFound(w, r)
 		return
 	}
-
-	user := auth.UserFromContext(r.Context())
-	amount := parseIDR(r.FormValue("amount"))
-	revenueAccountID, _ := strconv.Atoi(r.FormValue("revenue_account"))
-	depositAccountID, _ := strconv.Atoi(r.FormValue("deposit_account"))
-
-	je := &model.JournalEntry{
-		ID:          id,
-		EntryDate:   r.FormValue("entry_date"),
-		Description: r.FormValue("description"),
-		SourceType:  "income",
-		IsPosted:    true,
-		CreatedBy:   user.ID,
-	}
-
-	errors := make(map[string]string)
-	if je.EntryDate == "" {
-		errors["entry_date"] = "Date is required"
-	}
-	if je.Description == "" {
-		errors["description"] = "Description is required"
-	}
-	if amount <= 0 {
-		errors["amount"] = "Amount must be greater than 0"
-	}
-	if revenueAccountID == 0 {
-		errors["revenue_account"] = "Revenue account is required"
-	}
-	if depositAccountID == 0 {
-		errors["deposit_account"] = "Deposit account is required"
-	}
-
-	if len(errors) > 0 {
-		fd := h.newIncomeFormData()
-		fd.Entry = je
-		fd.Amount = amount
-		fd.RevenueAccount = revenueAccountID
-		fd.DepositAccount = depositAccountID
-		fd.Errors = errors
-		fd.IsEdit = true
-		h.render(w, r, "templates/income/form.html", "Edit Income", fd)
+	draft := incomeDraftFromForm(r)
+	if _, err := h.Journals.UpdateIncome(r.Context(), incomeActor(r), id, draft); err != nil {
+		h.renderIncomeError(w, r, "Edit Income", draft, true, err)
 		return
 	}
-
-	lines := []model.JournalLine{
-		{AccountID: depositAccountID, Debit: amount, Credit: 0},
-		{AccountID: revenueAccountID, Debit: 0, Credit: amount},
-	}
-
-	if err := model.UpdateJournalEntry(h.DB, je, lines); err != nil {
-		fd := h.newIncomeFormData()
-		fd.Entry = je
-		fd.Amount = amount
-		fd.RevenueAccount = revenueAccountID
-		fd.DepositAccount = depositAccountID
-		fd.Errors = map[string]string{"general": err.Error()}
-		fd.IsEdit = true
-		h.render(w, r, "templates/income/form.html", "Edit Income", fd)
-		return
-	}
-
-	oldAmount, oldRevenueAcct, oldDepositAcct := extractIncomeShape(oldJE)
-	oldFields := map[string]any{
-		"entry_date":      oldJE.EntryDate,
-		"description":     oldJE.Description,
-		"amount":          oldAmount,
-		"revenue_account": oldRevenueAcct,
-		"deposit_account": oldDepositAcct,
-	}
-	newFields := map[string]any{
-		"entry_date":      je.EntryDate,
-		"description":     je.Description,
-		"amount":          amount,
-		"revenue_account": revenueAccountID,
-		"deposit_account": depositAccountID,
-	}
-	metadata := audit.Diff(oldFields, newFields,
-		[]string{"entry_date", "description", "amount", "revenue_account", "deposit_account"})
-	if metadata != nil {
-		audit.Log(r.Context(), h.DB, audit.Event{
-			Action:      "income.update",
-			TargetType:  "income",
-			TargetID:    int64(id),
-			TargetLabel: je.Description,
-			Metadata:    metadata,
-		})
-	}
-
 	h.setFlash(w, "Income updated successfully")
 	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/journals/%d", id), http.StatusSeeOther)
 }
@@ -274,68 +97,88 @@ func (h *Handler) DeleteIncome(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-
-	existing, _ := model.GetJournalEntry(h.DB, id)
-
-	if err := model.DeleteJournalEntryBySource(h.DB, id, model.SourceIncome); err != nil {
+	if _, err := h.Journals.DeleteIncome(r.Context(), incomeActor(r), id); err != nil {
 		h.setFlash(w, "Error: "+err.Error())
 		http.Redirect(w, r, h.BasePath+"/income", http.StatusSeeOther)
 		return
 	}
-
-	if existing != nil {
-		amount, revenueAcct, depositAcct := extractIncomeShape(existing)
-		audit.Log(r.Context(), h.DB, audit.Event{
-			Action:      "income.delete",
-			TargetType:  "income",
-			TargetID:    int64(id),
-			TargetLabel: existing.Description,
-			Metadata: map[string]any{
-				"before": map[string]any{
-					"entry_date":      existing.EntryDate,
-					"description":     existing.Description,
-					"amount":          amount,
-					"revenue_account": revenueAcct,
-					"deposit_account": depositAcct,
-				},
-			},
-		})
-	}
-
 	if r.Header.Get("HX-Request") == "true" {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-
 	h.setFlash(w, "Income deleted successfully")
 	http.Redirect(w, r, h.BasePath+"/income", http.StatusSeeOther)
 }
 
-func (h *Handler) newIncomeFormData() incomeFormData {
-	active := true
-	revenueAccounts, _ := model.ListAccounts(h.DB, model.AccountFilter{Type: model.AccountTypeRevenue, IsActive: &active})
-	depositAccounts, _ := model.ListAccounts(h.DB, model.AccountFilter{Type: model.AccountTypeAsset, IsActive: &active})
-
-	return incomeFormData{
-		Entry:           &model.JournalEntry{},
-		RevenueAccounts: revenueAccounts,
-		DepositAccounts: depositAccounts,
-		Errors:          make(map[string]string),
-	}
+func incomeDraftFromForm(r *http.Request) journal.IncomeDraft {
+	revenue, _ := strconv.Atoi(r.FormValue("revenue_account"))
+	deposit, _ := strconv.Atoi(r.FormValue("deposit_account"))
+	return journal.IncomeDraft{EntryDate: r.FormValue("entry_date"), Description: r.FormValue("description"), Amount: parseIDR(r.FormValue("amount")),
+		RevenueAccount: revenue, DepositAccount: deposit}
 }
 
-// extractIncomeShape pulls the user-facing "amount + revenue + deposit
-// account" out of the journal lines that income.create wrote (debit on the
-// deposit asset, credit on the revenue account).
-func extractIncomeShape(je *model.JournalEntry) (amount, revenueAccount, depositAccount int) {
-	for _, l := range je.Lines {
-		if l.Debit > 0 {
-			depositAccount = l.AccountID
-			amount = l.Debit
+func (h *Handler) newIncomeFormData(r *http.Request) (incomeFormData, error) {
+	revenue, err := h.Journals.Options(r.Context(), model.AccountTypeRevenue, false)
+	if err != nil {
+		return incomeFormData{}, err
+	}
+	deposit, err := h.Journals.Options(r.Context(), model.AccountTypeAsset, false)
+	if err != nil {
+		return incomeFormData{}, err
+	}
+	return incomeFormData{Entry: &model.JournalEntry{}, RevenueAccounts: revenue.Accounts, DepositAccounts: deposit.Accounts, Errors: map[string]string{}}, nil
+}
+
+func (h *Handler) renderIncomeError(w http.ResponseWriter, r *http.Request, title string, draft journal.IncomeDraft, edit bool, err error) {
+	form, optionErr := h.newIncomeFormData(r)
+	if optionErr != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	form.Entry = &model.JournalEntry{ID: parsePathID(r), EntryDate: draft.EntryDate, Description: draft.Description, SourceType: model.SourceIncome, IsPosted: true}
+	form.Amount, form.RevenueAccount, form.DepositAccount = draft.Amount, draft.RevenueAccount, draft.DepositAccount
+	form.Errors, form.IsEdit = moduleFields(err), edit
+	if len(form.Errors) == 0 {
+		form.Errors["general"] = err.Error()
+	}
+	h.render(w, r, "templates/income/form.html", title, form)
+}
+
+func (h *Handler) incomeEntry(w http.ResponseWriter, r *http.Request) (*model.JournalEntry, bool) {
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.NotFound(w, r)
+		return nil, false
+	}
+	entry, err := h.Journals.Get(r.Context(), id)
+	if err != nil || entry.SourceType != model.SourceIncome {
+		http.NotFound(w, r)
+		return nil, false
+	}
+	return entry, true
+}
+
+func incomeActor(r *http.Request) journal.Actor {
+	user := auth.UserFromContext(r.Context())
+	if user == nil {
+		return journal.Actor{}
+	}
+	return journal.Actor{UserID: user.ID, CanManageIncome: user.HasCapability(model.CapIncomeManage)}
+}
+
+func extractIncomeShape(entry *model.JournalEntry) (amount, revenueAccount, depositAccount int) {
+	for _, line := range entry.Lines {
+		if line.Debit > 0 {
+			depositAccount, amount = line.AccountID, line.Debit
 		}
-		if l.Credit > 0 {
-			revenueAccount = l.AccountID
+		if line.Credit > 0 {
+			revenueAccount = line.AccountID
 		}
 	}
 	return
+}
+
+func parsePathID(r *http.Request) int {
+	id, _ := strconv.Atoi(r.PathValue("id"))
+	return id
 }

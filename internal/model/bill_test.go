@@ -70,7 +70,7 @@ func TestReceiveBill(t *testing.T) {
 	}
 
 	// Verify journal entry
-	je, _ := model.GetJournalEntry(db, *received.JournalID)
+	je, _ := testutil.GetJournalEntry(db, *received.JournalID)
 	if je.TotalDebit != 2000000 || je.TotalCredit != 2000000 {
 		t.Errorf("expected balanced 2000000, got debit=%d credit=%d", je.TotalDebit, je.TotalCredit)
 	}

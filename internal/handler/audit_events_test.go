@@ -551,6 +551,9 @@ func TestAudit_IncomeCreateAndDelete(t *testing.T) {
 	if !strings.Contains(createRow.Metadata, "2000000") {
 		t.Errorf("income.create should contain amount, got %q", createRow.Metadata)
 	}
+	if !strings.Contains(createRow.Metadata, `"amount"`) {
+		t.Errorf("income.create should use the amount field, got %q", createRow.Metadata)
+	}
 
 	var entryID int
 	db.QueryRow("SELECT id FROM journal_entries WHERE source_type = 'income' ORDER BY id DESC LIMIT 1").Scan(&entryID)
@@ -596,6 +599,9 @@ func TestAudit_ExpenseUpdate_DiffsAmount(t *testing.T) {
 	row := latestAuditFor(t, db, "expense.update")
 	if !strings.Contains(row.Metadata, "300000") || !strings.Contains(row.Metadata, "500000") {
 		t.Errorf("expense.update should contain before/after amounts, got %q", row.Metadata)
+	}
+	if !strings.Contains(row.Metadata, `"amount"`) {
+		t.Errorf("expense.update should diff the amount field, got %q", row.Metadata)
 	}
 	if strings.Contains(row.Metadata, "entry_date") {
 		t.Errorf("expense.update should not include unchanged entry_date, got %q", row.Metadata)

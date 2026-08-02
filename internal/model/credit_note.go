@@ -387,14 +387,14 @@ func IssueCreditNote(db *sql.DB, id int, userID int) error {
 		Memo:      cn.CNNumber,
 	})
 
-	// CreateJournalEntry manages its own transaction. Post it first; if it
+	// The source journal write manages its own transaction. Post it first; if it
 	// succeeds but the follow-up updates fail, the journal stays posted but
 	// the credit note remains in draft and the user can retry.
 	var journalID int
 	if cn.JournalID != nil {
 		journalID = *cn.JournalID
 	} else {
-		journalID, err = CreateJournalEntry(db, je, lines)
+		journalID, err = createSourceJournalEntry(db, je, lines)
 		if err != nil {
 			return fmt.Errorf("create journal entry: %w", err)
 		}
@@ -509,7 +509,7 @@ func VoidCreditNote(db *sql.DB, id int, userID int) error {
 		}
 	}
 
-	if _, err := CreateJournalEntry(db, je, lines); err != nil {
+	if _, err := createSourceJournalEntry(db, je, lines); err != nil {
 		return fmt.Errorf("create void journal: %w", err)
 	}
 

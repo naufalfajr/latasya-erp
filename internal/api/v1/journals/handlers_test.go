@@ -13,20 +13,17 @@ import (
 
 	v1 "github.com/naufal/latasya-erp/internal/api/v1"
 	"github.com/naufal/latasya-erp/internal/api/v1/journals"
+	"github.com/naufal/latasya-erp/internal/journal"
 	"github.com/naufal/latasya-erp/internal/model"
 	"github.com/naufal/latasya-erp/internal/testutil"
 )
 
 func newTestServer(t *testing.T, db *sql.DB) *httptest.Server {
 	t.Helper()
-	h := &journals.Handler{DB: db}
+	h := &journals.Handler{Journals: journal.New(db)}
 	idem := v1.Idempotency(db)
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/v1/journals", h.List)
-	mux.HandleFunc("GET /api/v1/journals/{id}", h.Get)
-	mux.Handle("POST /api/v1/journals", idem(http.HandlerFunc(h.Create)))
-	mux.Handle("PUT /api/v1/journals/{id}", idem(http.HandlerFunc(h.Update)))
-	mux.HandleFunc("DELETE /api/v1/journals/{id}", h.Delete)
+	h.RegisterRoutes(mux, idem)
 	ts := httptest.NewServer(v1.BearerOrCookie(db)(mux))
 	t.Cleanup(ts.Close)
 	return ts
@@ -369,14 +366,17 @@ func TestUpdateJournal(t *testing.T) {
 	db.QueryRow("SELECT id FROM users WHERE username='admin'").Scan(&adminID)
 	auto := &model.JournalEntry{
 		EntryDate: "2026-05-09", Reference: "AUTO-1",
-		Description: "Auto entry", SourceType: "income", IsPosted: true,
+		Description: "Auto entry", SourceType: model.SourceManual, IsPosted: true,
 		CreatedBy: adminID,
 	}
-	autoID, err := model.CreateJournalEntry(db, auto, []model.JournalLine{
+	autoID, err := testutil.CreateJournalEntry(db, auto, []model.JournalLine{
 		{AccountID: a, Debit: 5000}, {AccountID: b, Credit: 5000},
 	})
 	if err != nil {
 		t.Fatalf("create auto: %v", err)
+	}
+	if _, err := db.Exec("UPDATE journal_entries SET source_type='income' WHERE id=?", autoID); err != nil {
+		t.Fatalf("mark auto source: %v", err)
 	}
 	r3 := doReq(t, ts, http.MethodPut, fmt.Sprintf("/api/v1/journals/%d", autoID), token, "", updateBody)
 	defer r3.Body.Close()

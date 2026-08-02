@@ -5,6 +5,7 @@ This file is the entry point for the architecture. Detailed behavior lives besid
 | Area | Responsibility | Documentation |
 |---|---|---|
 | Invoice | Invoice lifecycle, validation, accounting mutations, and queries | [`internal/invoice/README.md`](internal/invoice/README.md) |
+| Journal | Manual journals, income, expenses, and accounting-entry invariants | [`internal/journal/README.md`](internal/journal/README.md) |
 | Audit | Best-effort business and security event recording | [`internal/audit/README.md`](internal/audit/README.md) |
 | JSON API | Versioned JSON transport, authentication, errors, pagination, and idempotency | [`internal/api/README.md`](internal/api/README.md) |
 | Templates | Full-page and HTMX fragment rendering conventions | [`templates/README.md`](templates/README.md) |

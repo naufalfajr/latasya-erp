@@ -275,7 +275,7 @@ func ReceiveBill(db *sql.DB, id int, userID int) error {
 		AccountID: apAccountID, Debit: 0, Credit: b.Total, Memo: b.BillNumber,
 	})
 
-	journalID, err := CreateJournalEntry(db, je, lines)
+	journalID, err := createSourceJournalEntry(db, je, lines)
 	if err != nil {
 		return fmt.Errorf("create journal entry: %w", err)
 	}
@@ -315,7 +315,7 @@ func RecordBillPayment(db *sql.DB, billID int, amount int, paymentDate string, p
 		{AccountID: paymentAccountID, Debit: 0, Credit: amount, Memo: "Payment"},
 	}
 
-	journalID, err := CreateJournalEntry(db, je, jLines)
+	journalID, err := createSourceJournalEntry(db, je, jLines)
 	if err != nil {
 		return fmt.Errorf("create payment journal: %w", err)
 	}

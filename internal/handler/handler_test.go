@@ -52,26 +52,7 @@ func testServer(t *testing.T, basePath ...string) (*httptest.Server, *sql.DB) {
 	protected.HandleFunc("POST /contacts/{id}", auth.CapabilityOnly("contacts.manage", h.UpdateContact))
 	protected.HandleFunc("DELETE /contacts/{id}", auth.CapabilityOnly("contacts.manage", h.DeleteContact))
 	protected.HandleFunc("POST /contacts/{id}/portal-code", auth.AdminOnly(h.SaveContactPortalCode))
-	protected.HandleFunc("GET /journals", h.ListJournals)
-	protected.HandleFunc("GET /journals/new", h.NewJournal)
-	protected.HandleFunc("POST /journals", auth.CapabilityOnly("journals.manage", h.CreateJournal))
-	protected.HandleFunc("GET /journals/{id}", h.ViewJournal)
-	protected.HandleFunc("GET /journals/{id}/edit", h.EditJournal)
-	protected.HandleFunc("POST /journals/{id}", auth.CapabilityOnly("journals.manage", h.UpdateJournal))
-	protected.HandleFunc("DELETE /journals/{id}", auth.CapabilityOnly("journals.manage", h.DeleteJournal))
-	protected.HandleFunc("GET /htmx/journal-line", h.JournalLinePartial)
-	protected.HandleFunc("GET /income", h.ListIncome)
-	protected.HandleFunc("GET /income/new", h.NewIncome)
-	protected.HandleFunc("POST /income", auth.CapabilityOnly("income.manage", h.CreateIncome))
-	protected.HandleFunc("GET /income/{id}/edit", h.EditIncome)
-	protected.HandleFunc("POST /income/{id}", auth.CapabilityOnly("income.manage", h.UpdateIncome))
-	protected.HandleFunc("DELETE /income/{id}", auth.CapabilityOnly("income.manage", h.DeleteIncome))
-	protected.HandleFunc("GET /expenses", h.ListExpenses)
-	protected.HandleFunc("GET /expenses/new", h.NewExpense)
-	protected.HandleFunc("POST /expenses", auth.CapabilityOnly("expenses.manage", h.CreateExpense))
-	protected.HandleFunc("GET /expenses/{id}/edit", h.EditExpense)
-	protected.HandleFunc("POST /expenses/{id}", auth.CapabilityOnly("expenses.manage", h.UpdateExpense))
-	protected.HandleFunc("DELETE /expenses/{id}", auth.CapabilityOnly("expenses.manage", h.DeleteExpense))
+	h.RegisterAccountingRoutes(protected)
 	h.RegisterInvoiceRoutes(protected)
 	protected.HandleFunc("GET /credit-notes", h.ListCreditNotes)
 	protected.HandleFunc("GET /credit-notes/new", h.NewCreditNote)
@@ -834,7 +815,7 @@ func TestListIncome(t *testing.T) {
 	var cashID, revenueID int
 	db.QueryRow("SELECT id FROM accounts WHERE code = '1-1001'").Scan(&cashID)
 	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
-	if _, err := model.CreateJournalEntry(db,
+	if _, err := testutil.CreateJournalEntry(db,
 		&model.JournalEntry{EntryDate: "2026-04-04", Description: "Bus fare", SourceType: model.SourceIncome, IsPosted: true, CreatedBy: 1},
 		[]model.JournalLine{{AccountID: cashID, Debit: 500000}, {AccountID: revenueID, Credit: 500000}},
 	); err != nil {
@@ -940,7 +921,7 @@ func TestListExpenses(t *testing.T) {
 	var cashID, fuelID int
 	db.QueryRow("SELECT id FROM accounts WHERE code = '1-1001'").Scan(&cashID)
 	db.QueryRow("SELECT id FROM accounts WHERE code = '5-1001'").Scan(&fuelID)
-	if _, err := model.CreateJournalEntry(db,
+	if _, err := testutil.CreateJournalEntry(db,
 		&model.JournalEntry{EntryDate: "2026-04-05", Description: "Fuel", SourceType: model.SourceExpense, IsPosted: true, CreatedBy: 1},
 		[]model.JournalLine{{AccountID: fuelID, Debit: 400000}, {AccountID: cashID, Credit: 400000}},
 	); err != nil {
