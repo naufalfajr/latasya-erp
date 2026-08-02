@@ -1,49 +1,21 @@
 package handler
 
 import (
+	"errors"
 	"fmt"
 	"html/template"
 	"net/http"
 	"strconv"
 
-	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/auth"
+	"github.com/naufal/latasya-erp/internal/journal"
 	"github.com/naufal/latasya-erp/internal/model"
 )
 
 type journalPageData struct {
 	Entries    []model.JournalEntry
-	Filter     model.JournalFilter
+	Filter     journal.Filter
 	Pagination Pagination
-}
-
-func (h *Handler) ListJournals(w http.ResponseWriter, r *http.Request) {
-	f := model.JournalFilter{
-		DateFrom:   r.URL.Query().Get("from"),
-		DateTo:     r.URL.Query().Get("to"),
-		SourceType: r.URL.Query().Get("source"),
-		Search:     r.URL.Query().Get("search"),
-	}
-
-	total, err := model.CountJournalEntries(h.DB, f)
-	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-	pg := newPagination(parsePage(r), total)
-	f.Limit, f.Offset = pg.PageSize, pg.Offset()
-
-	entries, err := model.ListJournalEntries(h.DB, f)
-	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-
-	h.render(w, r, "templates/journals/index.html", "Journal Entries", journalPageData{
-		Entries:    entries,
-		Filter:     f,
-		Pagination: pg,
-	})
 }
 
 type journalFormData struct {
@@ -57,85 +29,55 @@ type journalFormData struct {
 const journalFormTemplate = "templates/journals/form.html"
 const journalLinePartial = "templates/journals/line_partial.html"
 
+func (h *Handler) ListJournals(w http.ResponseWriter, r *http.Request) {
+	filter := journal.Filter{DateFrom: r.URL.Query().Get("from"), DateTo: r.URL.Query().Get("to"),
+		SourceType: r.URL.Query().Get("source"), Search: r.URL.Query().Get("search")}
+	page := parsePage(r)
+	filter.Limit, filter.Offset = listPageSize, (page-1)*listPageSize
+	result, err := h.Journals.List(r.Context(), filter)
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	pg := newPagination(page, result.Total)
+	data := journalPageData{Entries: result.Entries, Filter: filter, Pagination: pg}
+	if r.Header.Get("HX-Request") == "true" {
+		h.renderFragment(w, r, "templates/journals/index.html", "journal-table", data)
+		return
+	}
+	h.render(w, r, "templates/journals/index.html", "Journal Entries", data)
+}
+
 func (h *Handler) renderJournalForm(w http.ResponseWriter, r *http.Request, title string, data journalFormData) {
 	if data.Errors == nil {
-		data.Errors = make(map[string]string)
+		data.Errors = map[string]string{}
 	}
 	h.render(w, r, journalFormTemplate, title, data, journalLinePartial)
 }
 
 func (h *Handler) NewJournal(w http.ResponseWriter, r *http.Request) {
-	active := true
-	accounts, _ := model.ListAccounts(h.DB, model.AccountFilter{IsActive: &active})
-
-	h.renderJournalForm(w, r, "New Journal Entry", journalFormData{
-		Entry: &model.JournalEntry{IsPosted: true},
-		Lines: []model.JournalLine{
-			{}, // Start with 2 empty lines
-			{},
-		},
-		Accounts: accounts,
-	})
+	options, err := h.Journals.Options(r.Context(), "", false)
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	h.renderJournalForm(w, r, "New Journal Entry", journalFormData{Entry: &model.JournalEntry{IsPosted: true},
+		Lines: []model.JournalLine{{}, {}}, Accounts: options.Accounts})
 }
 
 func (h *Handler) CreateJournal(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
-	user := auth.UserFromContext(r.Context())
-
-	je := &model.JournalEntry{
-		EntryDate:   r.FormValue("entry_date"),
-		Description: r.FormValue("description"),
-		SourceType:  model.SourceManual,
-		IsPosted:    true,
-		CreatedBy:   user.ID,
-	}
-
+	entry := &model.JournalEntry{EntryDate: r.FormValue("entry_date"), Description: r.FormValue("description"), SourceType: model.SourceManual, IsPosted: true}
 	lines := parseJournalLines(r)
-	errors := validateJournal(je, lines)
-
-	if len(errors) > 0 {
-		active := true
-		accounts, _ := model.ListAccounts(h.DB, model.AccountFilter{IsActive: &active})
-		h.renderJournalForm(w, r, "New Journal Entry", journalFormData{
-			Entry:    je,
-			Lines:    lines,
-			Accounts: accounts,
-			Errors:   errors,
-		})
-		return
-	}
-
-	entryID, err := model.CreateJournalEntry(h.DB, je, lines)
-	if err != nil {
-		active := true
-		accounts, _ := model.ListAccounts(h.DB, model.AccountFilter{IsActive: &active})
-		errors["general"] = err.Error()
-		h.renderJournalForm(w, r, "New Journal Entry", journalFormData{
-			Entry:    je,
-			Lines:    lines,
-			Accounts: accounts,
-			Errors:   errors,
-		})
-		return
-	}
-
-	audit.Log(r.Context(), h.DB, audit.Event{
-		Action:      "journal.create",
-		TargetType:  "journal",
-		TargetID:    int64(entryID),
-		TargetLabel: je.Description,
-		Metadata: map[string]any{
-			"after": map[string]any{
-				"entry_date":  je.EntryDate,
-				"description": je.Description,
-				"line_count":  len(lines),
-				"total":       journalTotalDebit(lines),
-			},
-		},
+	created, err := h.Journals.CreateManual(r.Context(), journalActor(r), journal.ManualDraft{
+		EntryDate: entry.EntryDate, Description: entry.Description, Lines: toModuleLines(lines),
 	})
-
+	if err != nil {
+		h.renderJournalError(w, r, "New Journal Entry", entry, lines, false, err)
+		return
+	}
 	h.setFlash(w, "Journal entry created successfully")
-	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/journals/%d", entryID), http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/journals/%d", created.ID), http.StatusSeeOther)
 }
 
 func (h *Handler) ViewJournal(w http.ResponseWriter, r *http.Request) {
@@ -144,14 +86,12 @@ func (h *Handler) ViewJournal(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-
-	je, err := model.GetJournalEntry(h.DB, id)
+	entry, err := h.Journals.Get(r.Context(), id)
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
-
-	h.render(w, r, "templates/journals/view.html", "Journal Entry "+je.Reference, je)
+	h.render(w, r, "templates/journals/view.html", "Journal Entry "+entry.Reference, entry)
 }
 
 func (h *Handler) EditJournal(w http.ResponseWriter, r *http.Request) {
@@ -160,29 +100,22 @@ func (h *Handler) EditJournal(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-
-	je, err := model.GetJournalEntry(h.DB, id)
+	entry, err := h.Journals.Get(r.Context(), id)
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
-
-	// Don't allow editing auto-generated entries
-	if je.SourceType != "" && je.SourceType != model.SourceManual {
+	if entry.SourceType != "" && entry.SourceType != model.SourceManual {
 		h.setFlash(w, "Cannot edit auto-generated journal entries")
 		http.Redirect(w, r, h.BasePath+fmt.Sprintf("/journals/%d", id), http.StatusSeeOther)
 		return
 	}
-
-	active := true
-	accounts, _ := model.ListAccounts(h.DB, model.AccountFilter{IsActive: &active})
-
-	h.renderJournalForm(w, r, "Edit Journal Entry", journalFormData{
-		Entry:    je,
-		Lines:    je.Lines,
-		Accounts: accounts,
-		IsEdit:   true,
-	})
+	options, err := h.Journals.Options(r.Context(), "", false)
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	h.renderJournalForm(w, r, "Edit Journal Entry", journalFormData{Entry: entry, Lines: entry.Lines, Accounts: options.Accounts, IsEdit: true})
 }
 
 func (h *Handler) UpdateJournal(w http.ResponseWriter, r *http.Request) {
@@ -191,72 +124,24 @@ func (h *Handler) UpdateJournal(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-
-	oldJE, err := model.GetJournalEntry(h.DB, id)
-	if err != nil {
+	if _, err := h.Journals.Get(r.Context(), id); err != nil {
 		http.NotFound(w, r)
 		return
 	}
-
 	r.ParseForm()
-
-	je := &model.JournalEntry{
-		ID:          id,
-		EntryDate:   r.FormValue("entry_date"),
-		Description: r.FormValue("description"),
-	}
-
+	entry := &model.JournalEntry{ID: id, EntryDate: r.FormValue("entry_date"), Description: r.FormValue("description")}
 	lines := parseJournalLines(r)
-	errors := validateJournal(je, lines)
-
-	if len(errors) > 0 {
-		active := true
-		accounts, _ := model.ListAccounts(h.DB, model.AccountFilter{IsActive: &active})
-		h.renderJournalForm(w, r, "Edit Journal Entry", journalFormData{
-			Entry:    je,
-			Lines:    lines,
-			Accounts: accounts,
-			Errors:   errors,
-			IsEdit:   true,
-		})
+	_, err = h.Journals.UpdateManual(r.Context(), journalActor(r), id, journal.ManualDraft{
+		EntryDate: entry.EntryDate, Description: entry.Description, Lines: toModuleLines(lines),
+	})
+	if err != nil {
+		if errors.Is(err, journal.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		h.renderJournalError(w, r, "Edit Journal Entry", entry, lines, true, err)
 		return
 	}
-
-	if err := model.UpdateJournalEntry(h.DB, je, lines); err != nil {
-		active := true
-		accounts, _ := model.ListAccounts(h.DB, model.AccountFilter{IsActive: &active})
-		errors["general"] = err.Error()
-		h.renderJournalForm(w, r, "Edit Journal Entry", journalFormData{
-			Entry:    je,
-			Lines:    lines,
-			Accounts: accounts,
-			Errors:   errors,
-			IsEdit:   true,
-		})
-		return
-	}
-
-	oldFields := map[string]any{
-		"entry_date":  oldJE.EntryDate,
-		"description": oldJE.Description,
-		"total":       journalTotalDebit(oldJE.Lines),
-	}
-	newFields := map[string]any{
-		"entry_date":  je.EntryDate,
-		"description": je.Description,
-		"total":       journalTotalDebit(lines),
-	}
-	metadata := audit.Diff(oldFields, newFields, []string{"entry_date", "description", "total"})
-	if metadata != nil {
-		audit.Log(r.Context(), h.DB, audit.Event{
-			Action:      "journal.update",
-			TargetType:  "journal",
-			TargetID:    int64(id),
-			TargetLabel: je.Description,
-			Metadata:    metadata,
-		})
-	}
-
 	h.setFlash(w, "Journal entry updated successfully")
 	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/journals/%d", id), http.StatusSeeOther)
 }
@@ -267,131 +152,91 @@ func (h *Handler) DeleteJournal(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-
-	existing, _ := model.GetJournalEntry(h.DB, id)
-
-	if err := model.DeleteJournalEntry(h.DB, id); err != nil {
+	if _, err := h.Journals.DeleteManual(r.Context(), journalActor(r), id); err != nil {
 		h.setFlash(w, "Error: "+err.Error())
 		http.Redirect(w, r, h.BasePath+fmt.Sprintf("/journals/%d", id), http.StatusSeeOther)
 		return
 	}
-
-	if existing != nil {
-		audit.Log(r.Context(), h.DB, audit.Event{
-			Action:      "journal.delete",
-			TargetType:  "journal",
-			TargetID:    int64(id),
-			TargetLabel: existing.Description,
-			Metadata: map[string]any{
-				"before": map[string]any{
-					"entry_date":  existing.EntryDate,
-					"description": existing.Description,
-					"total":       journalTotalDebit(existing.Lines),
-					"source_type": existing.SourceType,
-				},
-			},
-		})
-	}
-
 	if r.Header.Get("HX-Request") == "true" {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-
 	h.setFlash(w, "Journal entry deleted successfully")
 	http.Redirect(w, r, h.BasePath+"/journals", http.StatusSeeOther)
 }
 
-// JournalLinePartial returns an empty journal line row for HTMX "Add Line"
 func (h *Handler) JournalLinePartial(w http.ResponseWriter, r *http.Request) {
-	active := true
-	accounts, _ := model.ListAccounts(h.DB, model.AccountFilter{IsActive: &active})
-
-	t, err := template.New("").Funcs(h.FuncMap).ParseFS(h.TemplateFS, "templates/journals/line_partial.html")
+	options, err := h.Journals.Options(r.Context(), "", false)
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
-
-	data := struct {
-		Accounts []model.Account
-	}{
-		Accounts: accounts,
+	t, err := template.New("").Funcs(h.FuncMap).ParseFS(h.TemplateFS, journalLinePartial)
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
 	}
-
-	t.ExecuteTemplate(w, "journal-line", data)
+	_ = t.ExecuteTemplate(w, "journal-line", struct{ Accounts []model.Account }{Accounts: options.Accounts})
 }
 
-// journalTotalDebit returns the sum of debits across lines. For a balanced
-// entry, credits sum to the same value; audit rows record only the debit
-// side to keep metadata compact.
-func journalTotalDebit(lines []model.JournalLine) int {
-	total := 0
-	for _, l := range lines {
-		total += l.Debit
+func (h *Handler) renderJournalError(w http.ResponseWriter, r *http.Request, title string, entry *model.JournalEntry, lines []model.JournalLine, edit bool, err error) {
+	options, optionErr := h.Journals.Options(r.Context(), "", false)
+	if optionErr != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
 	}
-	return total
+	errorsByField := moduleFields(err)
+	if len(errorsByField) == 0 {
+		errorsByField["general"] = err.Error()
+	}
+	h.renderJournalForm(w, r, title, journalFormData{Entry: entry, Lines: lines, Accounts: options.Accounts, Errors: errorsByField, IsEdit: edit})
 }
 
-// parseJournalLines extracts journal lines from form data
+func journalActor(r *http.Request) journal.Actor {
+	user := auth.UserFromContext(r.Context())
+	if user == nil {
+		return journal.Actor{}
+	}
+	return journal.Actor{UserID: user.ID, CanManageJournals: user.HasCapability(model.CapJournalsManage)}
+}
+
+func toModuleLines(lines []model.JournalLine) []journal.Line {
+	result := make([]journal.Line, 0, len(lines))
+	for _, line := range lines {
+		result = append(result, journal.Line{AccountID: line.AccountID, Debit: line.Debit, Credit: line.Credit, Memo: line.Memo})
+	}
+	return result
+}
+
+func moduleFields(err error) map[string]string {
+	var validation *journal.ValidationError
+	if errors.As(err, &validation) {
+		fields := make(map[string]string, len(validation.Fields))
+		for key, value := range validation.Fields {
+			fields[key] = value
+		}
+		if value, ok := fields["balance"]; ok {
+			fields["balance"] = value
+		}
+		return fields
+	}
+	return map[string]string{}
+}
+
 func parseJournalLines(r *http.Request) []model.JournalLine {
 	accountIDs := r.Form["line_account_id"]
 	debits := r.Form["line_debit"]
 	credits := r.Form["line_credit"]
 	memos := r.Form["line_memo"]
-
 	var lines []model.JournalLine
 	for i := range accountIDs {
 		accountID, _ := strconv.Atoi(accountIDs[i])
 		debit := parseIDR(getIndex(debits, i))
 		credit := parseIDR(getIndex(credits, i))
-
-		// Skip completely empty lines
 		if accountID == 0 && debit == 0 && credit == 0 {
 			continue
 		}
-
-		lines = append(lines, model.JournalLine{
-			AccountID: accountID,
-			Debit:     debit,
-			Credit:    credit,
-			Memo:      getIndex(memos, i),
-		})
+		lines = append(lines, model.JournalLine{AccountID: accountID, Debit: debit, Credit: credit, Memo: getIndex(memos, i)})
 	}
 	return lines
-}
-
-func validateJournal(je *model.JournalEntry, lines []model.JournalLine) map[string]string {
-	errors := make(map[string]string)
-
-	if je.EntryDate == "" {
-		errors["entry_date"] = "Date is required"
-	}
-	if je.Description == "" {
-		errors["description"] = "Description is required"
-	}
-	if len(lines) < 2 {
-		errors["lines"] = "At least 2 lines are required"
-	}
-
-	var totalDebit, totalCredit int
-	for i, l := range lines {
-		if l.AccountID == 0 {
-			errors[fmt.Sprintf("line_%d_account", i)] = "Account is required"
-		}
-		if l.Debit == 0 && l.Credit == 0 {
-			errors[fmt.Sprintf("line_%d_amount", i)] = "Debit or credit amount is required"
-		}
-		if l.Debit > 0 && l.Credit > 0 {
-			errors[fmt.Sprintf("line_%d_amount", i)] = "Line cannot have both debit and credit"
-		}
-		totalDebit += l.Debit
-		totalCredit += l.Credit
-	}
-
-	if len(lines) >= 2 && totalDebit != totalCredit {
-		errors["balance"] = fmt.Sprintf("Debits (%d) must equal credits (%d)", totalDebit, totalCredit)
-	}
-
-	return errors
 }

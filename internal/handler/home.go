@@ -17,7 +17,7 @@ type homeData struct {
 // to staff login. Parents reach their invoices via their own /p/{code} link,
 // never through this page.
 func (h *Handler) PublicHome(w http.ResponseWriter, r *http.Request) {
-	company, err := model.GetCompanyProfile(h.DB)
+	company, err := h.Company.Get(r.Context())
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return

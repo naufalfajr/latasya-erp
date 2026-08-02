@@ -12,6 +12,8 @@ import (
 	"time"
 
 	latasyaerp "github.com/naufal/latasya-erp"
+	"github.com/naufal/latasya-erp/internal/access"
+	"github.com/naufal/latasya-erp/internal/account"
 	v1 "github.com/naufal/latasya-erp/internal/api/v1"
 	v1accounts "github.com/naufal/latasya-erp/internal/api/v1/accounts"
 	v1apitokens "github.com/naufal/latasya-erp/internal/api/v1/apitokens"
@@ -29,12 +31,21 @@ import (
 	v1roles "github.com/naufal/latasya-erp/internal/api/v1/roles"
 	v1schoolcalendar "github.com/naufal/latasya-erp/internal/api/v1/school_calendar"
 	v1users "github.com/naufal/latasya-erp/internal/api/v1/users"
+	"github.com/naufal/latasya-erp/internal/apitoken"
 	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/auth"
+	"github.com/naufal/latasya-erp/internal/bill"
+	companyModule "github.com/naufal/latasya-erp/internal/company"
+	contactModule "github.com/naufal/latasya-erp/internal/contact"
+	"github.com/naufal/latasya-erp/internal/creditnote"
 	"github.com/naufal/latasya-erp/internal/database"
 	"github.com/naufal/latasya-erp/internal/googlecalendar"
 	"github.com/naufal/latasya-erp/internal/handler"
-	"github.com/naufal/latasya-erp/internal/model"
+	"github.com/naufal/latasya-erp/internal/idempotency"
+	"github.com/naufal/latasya-erp/internal/invoice"
+	"github.com/naufal/latasya-erp/internal/journal"
+	"github.com/naufal/latasya-erp/internal/reporting"
+	"github.com/naufal/latasya-erp/internal/schoolcalendar"
 	"github.com/naufal/latasya-erp/internal/tmpl"
 )
 
@@ -60,22 +71,47 @@ func main() {
 		slog.Error("failed to seed database", "error", err)
 		os.Exit(1)
 	}
+	idempotencyStore := idempotency.New(db)
 
 	go auth.CleanExpiredSessions(db)
 	go func() {
 		ticker := time.NewTicker(time.Hour)
 		defer ticker.Stop()
 		for range ticker.C {
-			model.CleanExpiredIdempotencyKeys(db)
+			idempotencyStore.CleanExpired(context.Background())
 		}
 	}()
 
+	invoiceModule := invoice.New(db)
+	journalModule := journal.New(db)
+	billModule := bill.New(db)
+	creditNoteModule := creditnote.New(db)
+	accountModule := account.New(db)
+	accessModule := access.New(db, auth.HashPassword)
+	apiTokenModule := apitoken.New(db)
+	auditModule := audit.New(db)
+	schoolCalendarModule := schoolcalendar.New(db)
+	reportingModule := reporting.New(db)
+	contactsModule := contactModule.New(db)
+	companyProfileModule := companyModule.New(db)
 	h := &handler.Handler{
-		DB:         db,
-		TemplateFS: latasyaerp.TemplateFS,
-		FuncMap:    tmpl.FuncMap(),
-		DevMode:    devMode,
-		BasePath:   "/dashboard",
+		DB:             db,
+		TemplateFS:     latasyaerp.TemplateFS,
+		FuncMap:        tmpl.FuncMap(),
+		DevMode:        devMode,
+		BasePath:       "/dashboard",
+		Invoices:       invoiceModule,
+		Journals:       journalModule,
+		Bills:          billModule,
+		CreditNotes:    creditNoteModule,
+		Accounts:       accountModule,
+		Access:         accessModule,
+		APITokens:      apiTokenModule,
+		Audit:          auditModule,
+		SchoolCalendar: schoolCalendarModule,
+		Contacts:       contactsModule,
+		Company:        companyProfileModule,
+		Reporting:      reportingModule,
 		GoogleCalendarConfig: googlecalendar.Config{
 			ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
 			ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
@@ -116,135 +152,67 @@ func main() {
 	// it bypasses BearerOrCookie; the rest are wired through apiMux so they
 	// inherit the standard auth + audit pipeline.
 	authAPI := v1auth.New(db, devMode)
-	apiMux.HandleFunc("POST /api/v1/auth/logout", authAPI.Logout)
-	apiMux.HandleFunc("GET /api/v1/auth/me", authAPI.Me)
-	apiMux.HandleFunc("GET /api/v1/auth/csrf", authAPI.CSRF)
-	apiMux.HandleFunc("POST /api/v1/auth/password/change", authAPI.PasswordChange)
+	authAPI.RegisterRoutes(apiMux)
 
-	accts := &v1accounts.Handler{DB: db}
-	apiMux.HandleFunc("GET /api/v1/accounts", accts.List)
-	apiMux.HandleFunc("GET /api/v1/accounts/{id}", accts.Get)
-	apiMux.HandleFunc("POST /api/v1/accounts", accts.Create)
-	apiMux.HandleFunc("PUT /api/v1/accounts/{id}", accts.Update)
-	apiMux.HandleFunc("DELETE /api/v1/accounts/{id}", accts.Delete)
+	accts := &v1accounts.Handler{Accounts: accountModule}
+	accts.RegisterRoutes(apiMux)
 
-	contacts := &v1contacts.Handler{DB: db}
-	apiMux.HandleFunc("GET /api/v1/contacts", contacts.List)
-	apiMux.HandleFunc("GET /api/v1/contacts/{id}", contacts.Get)
-	apiMux.HandleFunc("POST /api/v1/contacts", contacts.Create)
-	apiMux.HandleFunc("PUT /api/v1/contacts/{id}", contacts.Update)
-	apiMux.HandleFunc("DELETE /api/v1/contacts/{id}", contacts.Delete)
+	contacts := &v1contacts.Handler{Contacts: contactsModule}
+	contacts.RegisterRoutes(apiMux)
 
-	idem := v1.Idempotency(db)
+	idem := v1.Idempotency(idempotencyStore)
 
-	incomeAPI := &v1income.Handler{DB: db}
-	apiMux.HandleFunc("GET /api/v1/income", incomeAPI.List)
-	apiMux.HandleFunc("GET /api/v1/income/{id}", incomeAPI.Get)
-	apiMux.Handle("POST /api/v1/income", idem(http.HandlerFunc(incomeAPI.Create)))
-	apiMux.Handle("PUT /api/v1/income/{id}", idem(http.HandlerFunc(incomeAPI.Update)))
-	apiMux.HandleFunc("DELETE /api/v1/income/{id}", incomeAPI.Delete)
+	incomeAPI := &v1income.Handler{Journals: journalModule}
+	incomeAPI.RegisterRoutes(apiMux, idem)
 
-	expensesAPI := &v1expenses.Handler{DB: db}
-	apiMux.HandleFunc("GET /api/v1/expenses", expensesAPI.List)
-	apiMux.HandleFunc("GET /api/v1/expenses/{id}", expensesAPI.Get)
-	apiMux.Handle("POST /api/v1/expenses", idem(http.HandlerFunc(expensesAPI.Create)))
-	apiMux.Handle("PUT /api/v1/expenses/{id}", idem(http.HandlerFunc(expensesAPI.Update)))
-	apiMux.HandleFunc("DELETE /api/v1/expenses/{id}", expensesAPI.Delete)
+	expensesAPI := &v1expenses.Handler{Journals: journalModule}
+	expensesAPI.RegisterRoutes(apiMux, idem)
 
-	journalsAPI := &v1journals.Handler{DB: db}
-	apiMux.HandleFunc("GET /api/v1/journals", journalsAPI.List)
-	apiMux.HandleFunc("GET /api/v1/journals/{id}", journalsAPI.Get)
-	apiMux.Handle("POST /api/v1/journals", idem(http.HandlerFunc(journalsAPI.Create)))
-	apiMux.Handle("PUT /api/v1/journals/{id}", idem(http.HandlerFunc(journalsAPI.Update)))
-	apiMux.HandleFunc("DELETE /api/v1/journals/{id}", journalsAPI.Delete)
+	journalsAPI := &v1journals.Handler{Journals: journalModule}
+	journalsAPI.RegisterRoutes(apiMux, idem)
 
-	invoicesAPI := &v1invoices.Handler{DB: db}
-	apiMux.HandleFunc("GET /api/v1/invoices", invoicesAPI.List)
-	apiMux.HandleFunc("GET /api/v1/invoices/{id}", invoicesAPI.Get)
-	apiMux.HandleFunc("GET /api/v1/invoices/{id}/pdf", invoicesAPI.PDF)
-	apiMux.Handle("POST /api/v1/invoices", idem(http.HandlerFunc(invoicesAPI.Create)))
-	apiMux.Handle("PUT /api/v1/invoices/{id}", idem(http.HandlerFunc(invoicesAPI.Update)))
-	apiMux.HandleFunc("DELETE /api/v1/invoices/{id}", invoicesAPI.Delete)
-	apiMux.Handle("POST /api/v1/invoices/{id}/send", idem(http.HandlerFunc(invoicesAPI.Send)))
-	apiMux.Handle("POST /api/v1/invoices/{id}/payment", idem(http.HandlerFunc(invoicesAPI.Payment)))
-	apiMux.Handle("POST /api/v1/invoices/generate-recurring", idem(http.HandlerFunc(invoicesAPI.GenerateRecurring)))
-	apiMux.HandleFunc("POST /api/v1/invoices/bulk-delete", invoicesAPI.BulkDelete)
-	apiMux.HandleFunc("POST /api/v1/invoices/bulk-send", invoicesAPI.BulkSend)
+	invoicesAPI := &v1invoices.Handler{Invoices: invoiceModule}
+	invoicesAPI.RegisterRoutes(apiMux, idem)
 
-	apiTokensAPI := &v1apitokens.Handler{DB: db}
-	apiMux.HandleFunc("GET /api/v1/api-tokens", apiTokensAPI.List)
-	apiMux.Handle("POST /api/v1/api-tokens", idem(http.HandlerFunc(apiTokensAPI.Create)))
-	apiMux.HandleFunc("DELETE /api/v1/api-tokens/{id}", apiTokensAPI.Revoke)
+	apiTokensAPI := &v1apitokens.Handler{Tokens: apiTokenModule}
+	apiTokensAPI.RegisterRoutes(apiMux, idem)
 
-	bills := &v1bills.Handler{DB: db}
-	apiMux.HandleFunc("GET /api/v1/bills", bills.List)
-	apiMux.HandleFunc("GET /api/v1/bills/{id}", bills.Get)
-	apiMux.Handle("POST /api/v1/bills", idem(http.HandlerFunc(bills.Create)))
-	apiMux.Handle("PUT /api/v1/bills/{id}", idem(http.HandlerFunc(bills.Update)))
-	apiMux.HandleFunc("DELETE /api/v1/bills/{id}", bills.Delete)
-	apiMux.Handle("POST /api/v1/bills/{id}/receive", idem(http.HandlerFunc(bills.Receive)))
-	apiMux.Handle("POST /api/v1/bills/{id}/payment", idem(http.HandlerFunc(bills.Payment)))
+	bills := &v1bills.Handler{Bills: billModule}
+	bills.RegisterRoutes(apiMux, idem)
 
-	creditNotes := &v1creditnotes.Handler{DB: db}
-	apiMux.HandleFunc("GET /api/v1/credit-notes", creditNotes.List)
-	apiMux.HandleFunc("GET /api/v1/credit-notes/{id}", creditNotes.Get)
-	apiMux.Handle("POST /api/v1/credit-notes", idem(http.HandlerFunc(creditNotes.Create)))
-	apiMux.Handle("PUT /api/v1/credit-notes/{id}", idem(http.HandlerFunc(creditNotes.Update)))
-	apiMux.HandleFunc("DELETE /api/v1/credit-notes/{id}", creditNotes.Delete)
-	apiMux.Handle("POST /api/v1/credit-notes/{id}/issue", idem(http.HandlerFunc(creditNotes.Issue)))
-	apiMux.Handle("POST /api/v1/credit-notes/{id}/void", idem(http.HandlerFunc(creditNotes.Void)))
+	creditNotes := &v1creditnotes.Handler{CreditNotes: creditNoteModule}
+	creditNotes.RegisterRoutes(apiMux, idem)
 
-	reportsAPI := &v1reports.Handler{DB: db}
-	apiMux.HandleFunc("GET /api/v1/reports/trial-balance", reportsAPI.TrialBalance)
-	apiMux.HandleFunc("GET /api/v1/reports/profit-loss", reportsAPI.ProfitLoss)
-	apiMux.HandleFunc("GET /api/v1/reports/balance-sheet", reportsAPI.BalanceSheet)
-	apiMux.HandleFunc("GET /api/v1/reports/cash-flow", reportsAPI.CashFlow)
-	apiMux.HandleFunc("GET /api/v1/reports/general-ledger", reportsAPI.GeneralLedger)
+	reportsAPI := &v1reports.Handler{Reporting: reportingModule}
+	reportsAPI.RegisterRoutes(apiMux)
 
-	usersAPI := &v1users.Handler{DB: db}
-	apiMux.HandleFunc("GET /api/v1/users", usersAPI.List)
-	apiMux.HandleFunc("GET /api/v1/users/{id}", usersAPI.Get)
-	apiMux.HandleFunc("POST /api/v1/users", usersAPI.Create)
-	apiMux.HandleFunc("PUT /api/v1/users/{id}", usersAPI.Update)
-	apiMux.HandleFunc("DELETE /api/v1/users/{id}", usersAPI.Delete)
+	usersAPI := &v1users.Handler{Access: accessModule}
+	usersAPI.RegisterRoutes(apiMux)
 
-	rolesAPI := &v1roles.Handler{DB: db}
-	apiMux.HandleFunc("GET /api/v1/roles", rolesAPI.List)
-	apiMux.HandleFunc("GET /api/v1/roles/capabilities", rolesAPI.Capabilities)
-	apiMux.HandleFunc("GET /api/v1/roles/{name}", rolesAPI.Get)
-	apiMux.HandleFunc("POST /api/v1/roles", rolesAPI.Create)
-	apiMux.HandleFunc("PUT /api/v1/roles/{name}", rolesAPI.Update)
-	apiMux.HandleFunc("DELETE /api/v1/roles/{name}", rolesAPI.Delete)
+	rolesAPI := &v1roles.Handler{Access: accessModule}
+	rolesAPI.RegisterRoutes(apiMux)
 
-	auditAPI := &v1audit.Handler{DB: db}
-	apiMux.HandleFunc("GET /api/v1/audit", auditAPI.List)
+	auditAPI := &v1audit.Handler{Audit: auditModule}
+	auditAPI.RegisterRoutes(apiMux)
 
-	dashboardAPI := &v1dashboard.Handler{DB: db}
-	apiMux.HandleFunc("GET /api/v1/dashboard", dashboardAPI.Get)
+	dashboardAPI := &v1dashboard.Handler{Reporting: reportingModule}
+	dashboardAPI.RegisterRoutes(apiMux)
 
-	schoolCalendarAPI := &v1schoolcalendar.Handler{DB: db, GoogleCalendarConfig: h.GoogleCalendarConfig}
-	apiMux.HandleFunc("GET /api/v1/school-calendar/closures", schoolCalendarAPI.ListClosures)
-	apiMux.HandleFunc("POST /api/v1/school-calendar/closures", schoolCalendarAPI.CreateClosure)
-	apiMux.HandleFunc("DELETE /api/v1/school-calendar/closures/{id}", schoolCalendarAPI.DeleteClosure)
-	apiMux.HandleFunc("GET /api/v1/school-calendar/effective-days", schoolCalendarAPI.EffectiveDays)
-	apiMux.HandleFunc("POST /api/v1/integrations/google-calendar/sync", schoolCalendarAPI.SyncGoogleCalendar)
+	schoolCalendarAPI := &v1schoolcalendar.Handler{Calendar: schoolCalendarModule, GoogleCalendarConfig: h.GoogleCalendarConfig}
+	schoolCalendarAPI.RegisterRoutes(apiMux)
 
 	mux.Handle("/api/v1/", v1.BearerOrCookie(db)(apiMux))
-	mux.Handle("POST /api/v1/auth/login", v1.LoginRateLimiter()(http.HandlerFunc(authAPI.Login)))
+	authAPI.RegisterLoginRoute(mux, v1.LoginRateLimiter())
 
 	// Public site: company profile at the bare domain, plus the parent
 	// invoice portal. No auth required.
-	mux.HandleFunc("GET /{$}", h.PublicHome)
 	// Short parent link. Rate limited: guessable code, no login behind it.
 	// One limiter instance, so both routes share a bucket per IP.
 	portalLimiter := v1.PortalCodeLimiter()
-	mux.Handle("GET /p/{code}", portalLimiter(http.HandlerFunc(h.PortalIndex)))
-	mux.Handle("GET /p/{code}/invoice/{id}/pdf", portalLimiter(http.HandlerFunc(h.PortalInvoicePDF)))
+	h.RegisterPublicRoutes(mux, portalLimiter)
 
 	// Auth routes (no auth required)
-	mux.HandleFunc("GET /dashboard/login", h.LoginPage)
-	mux.Handle("POST /dashboard/login", v1.LoginRateLimiter()(http.HandlerFunc(h.Login)))
-	mux.HandleFunc("POST /dashboard/logout", h.Logout)
+	h.RegisterAuthRoutes(mux, v1.LoginRateLimiter())
 
 	// Protected routes (any authenticated user), mounted under BasePath.
 	// StripPrefix removes it before dispatch, so every pattern below and
@@ -252,154 +220,9 @@ func main() {
 	// untouched — only outbound redirects and rendered links need it,
 	// via h.BasePath.
 	protected := http.NewServeMux()
-	protected.HandleFunc("GET /{$}", h.Dashboard)
+	h.RegisterProtectedRoutes(protected)
 
-	// Accounts (read: any user, write: requires accounts.manage)
-	protected.HandleFunc("GET /accounts", h.ListAccounts)
-	protected.HandleFunc("GET /accounts/new", h.NewAccount)
-	protected.HandleFunc("POST /accounts", auth.CapabilityOnly(model.CapAccountsManage, h.CreateAccount))
-	protected.HandleFunc("GET /accounts/{id}/edit", h.EditAccount)
-	protected.HandleFunc("POST /accounts/{id}", auth.CapabilityOnly(model.CapAccountsManage, h.UpdateAccount))
-	protected.HandleFunc("DELETE /accounts/{id}", auth.CapabilityOnly(model.CapAccountsManage, h.DeleteAccount))
-
-	// Contacts
-	protected.HandleFunc("GET /contacts", h.ListContacts)
-	protected.HandleFunc("GET /contacts/new", h.NewContact)
-	protected.HandleFunc("POST /contacts", auth.CapabilityOnly(model.CapContactsManage, h.CreateContact))
-	protected.HandleFunc("GET /contacts/{id}/edit", h.EditContact)
-	protected.HandleFunc("POST /contacts/{id}", auth.CapabilityOnly(model.CapContactsManage, h.UpdateContact))
-	protected.HandleFunc("DELETE /contacts/{id}", auth.CapabilityOnly(model.CapContactsManage, h.DeleteContact))
-	// Admin-only: choosing a weak code weakens an unauthenticated portal.
-	protected.HandleFunc("POST /contacts/{id}/portal-code", auth.AdminOnly(h.SaveContactPortalCode))
-
-	// Journal Entries
-	protected.HandleFunc("GET /journals", h.ListJournals)
-	protected.HandleFunc("GET /journals/new", h.NewJournal)
-	protected.HandleFunc("POST /journals", auth.CapabilityOnly(model.CapJournalsManage, h.CreateJournal))
-	protected.HandleFunc("GET /journals/{id}", h.ViewJournal)
-	protected.HandleFunc("GET /journals/{id}/edit", h.EditJournal)
-	protected.HandleFunc("POST /journals/{id}", auth.CapabilityOnly(model.CapJournalsManage, h.UpdateJournal))
-	protected.HandleFunc("DELETE /journals/{id}", auth.CapabilityOnly(model.CapJournalsManage, h.DeleteJournal))
-
-	// Income
-	protected.HandleFunc("GET /income", h.ListIncome)
-	protected.HandleFunc("GET /income/new", h.NewIncome)
-	protected.HandleFunc("POST /income", auth.CapabilityOnly(model.CapIncomeManage, h.CreateIncome))
-	protected.HandleFunc("GET /income/{id}/edit", h.EditIncome)
-	protected.HandleFunc("POST /income/{id}", auth.CapabilityOnly(model.CapIncomeManage, h.UpdateIncome))
-	protected.HandleFunc("DELETE /income/{id}", auth.CapabilityOnly(model.CapIncomeManage, h.DeleteIncome))
-
-	// Expenses
-	protected.HandleFunc("GET /expenses", h.ListExpenses)
-	protected.HandleFunc("GET /expenses/new", h.NewExpense)
-	protected.HandleFunc("POST /expenses", auth.CapabilityOnly(model.CapExpensesManage, h.CreateExpense))
-	protected.HandleFunc("GET /expenses/{id}/edit", h.EditExpense)
-	protected.HandleFunc("POST /expenses/{id}", auth.CapabilityOnly(model.CapExpensesManage, h.UpdateExpense))
-	protected.HandleFunc("DELETE /expenses/{id}", auth.CapabilityOnly(model.CapExpensesManage, h.DeleteExpense))
-
-	// Invoices
-	protected.HandleFunc("GET /invoices", h.ListInvoices)
-	protected.HandleFunc("GET /invoices/new", h.NewInvoice)
-	protected.HandleFunc("POST /invoices", auth.CapabilityOnly(model.CapInvoicesManage, h.CreateInvoice))
-	protected.HandleFunc("POST /invoices/generate-recurring", auth.CapabilityOnly(model.CapInvoicesManage, h.GenerateRecurringInvoices))
-	protected.HandleFunc("POST /invoices/bulk-delete", auth.CapabilityOnly(model.CapInvoicesManage, h.BulkDeleteInvoices))
-	protected.HandleFunc("POST /invoices/bulk-send", auth.CapabilityOnly(model.CapInvoicesManage, h.BulkSendInvoices))
-	protected.HandleFunc("GET /invoices/{id}", h.ViewInvoice)
-	protected.HandleFunc("GET /invoices/{id}/edit", h.EditInvoice)
-	protected.HandleFunc("POST /invoices/{id}", auth.CapabilityOnly(model.CapInvoicesManage, h.UpdateInvoice))
-	protected.HandleFunc("DELETE /invoices/{id}", auth.CapabilityOnly(model.CapInvoicesManage, h.DeleteInvoice))
-	protected.HandleFunc("POST /invoices/{id}/send", auth.CapabilityOnly(model.CapInvoicesManage, h.SendInvoice))
-	protected.HandleFunc("POST /invoices/{id}/payment", auth.CapabilityOnly(model.CapInvoicesManage, h.InvoicePayment))
-	protected.HandleFunc("GET /invoices/{id}/print", h.PrintInvoice)
-	protected.HandleFunc("GET /invoices/{id}/pdf", h.InvoicePDF)
-	protected.HandleFunc("GET /invoices/{id}/whatsapp", auth.CapabilityOnly(model.CapInvoicesManage, h.InvoiceWhatsApp))
-
-	// Credit Notes (piggyback on invoices.manage capability)
-	protected.HandleFunc("GET /credit-notes", h.ListCreditNotes)
-	protected.HandleFunc("GET /credit-notes/new", h.NewCreditNote)
-	protected.HandleFunc("POST /credit-notes", auth.CapabilityOnly(model.CapInvoicesManage, h.CreateCreditNote))
-	protected.HandleFunc("GET /credit-notes/{id}", h.ViewCreditNote)
-	protected.HandleFunc("GET /credit-notes/{id}/edit", h.EditCreditNote)
-	protected.HandleFunc("POST /credit-notes/{id}", auth.CapabilityOnly(model.CapInvoicesManage, h.UpdateCreditNote))
-	protected.HandleFunc("DELETE /credit-notes/{id}", auth.CapabilityOnly(model.CapInvoicesManage, h.DeleteCreditNote))
-	protected.HandleFunc("POST /credit-notes/{id}/issue", auth.CapabilityOnly(model.CapInvoicesManage, h.IssueCreditNote))
-	protected.HandleFunc("POST /credit-notes/{id}/void", auth.CapabilityOnly(model.CapInvoicesManage, h.VoidCreditNote))
-
-	// Bills
-	protected.HandleFunc("GET /bills", h.ListBills)
-	protected.HandleFunc("GET /bills/new", h.NewBill)
-	protected.HandleFunc("POST /bills", auth.CapabilityOnly(model.CapBillsManage, h.CreateBill))
-	protected.HandleFunc("GET /bills/{id}", h.ViewBill)
-	protected.HandleFunc("GET /bills/{id}/edit", h.EditBill)
-	protected.HandleFunc("POST /bills/{id}", auth.CapabilityOnly(model.CapBillsManage, h.UpdateBill))
-	protected.HandleFunc("DELETE /bills/{id}", auth.CapabilityOnly(model.CapBillsManage, h.DeleteBill))
-	protected.HandleFunc("POST /bills/{id}/receive", auth.CapabilityOnly(model.CapBillsManage, h.ReceiveBill))
-	protected.HandleFunc("POST /bills/{id}/payment", auth.CapabilityOnly(model.CapBillsManage, h.BillPayment))
-
-	// Reports
-	protected.HandleFunc("GET /reports/trial-balance", h.TrialBalance)
-	protected.HandleFunc("GET /reports/profit-loss", h.ProfitLoss)
-	protected.HandleFunc("GET /reports/balance-sheet", h.BalanceSheet)
-	protected.HandleFunc("GET /reports/cash-flow", h.CashFlowReport)
-	protected.HandleFunc("GET /reports/general-ledger", h.GeneralLedger)
-
-	// User Management (requires users.manage capability — admin by default)
-	userMux := http.NewServeMux()
-	userMux.HandleFunc("GET /users", h.ListUsers)
-	userMux.HandleFunc("GET /users/new", h.NewUser)
-	userMux.HandleFunc("POST /users", h.CreateUser)
-	userMux.HandleFunc("GET /users/{id}/edit", h.EditUser)
-	userMux.HandleFunc("POST /users/{id}", h.UpdateUser)
-	userMux.HandleFunc("DELETE /users/{id}", h.DeleteUser)
-	protected.Handle("/users", auth.RequireCapability(model.CapUsersManage)(userMux))
-	protected.Handle("/users/", auth.RequireCapability(model.CapUsersManage)(userMux))
-
-	// Role Management (requires roles.manage capability — admin by default)
-	roleMux := http.NewServeMux()
-	roleMux.HandleFunc("GET /roles", h.ListRoles)
-	roleMux.HandleFunc("GET /roles/new", h.NewRole)
-	roleMux.HandleFunc("POST /roles", h.CreateRole)
-	roleMux.HandleFunc("GET /roles/{name}/edit", h.EditRole)
-	roleMux.HandleFunc("POST /roles/{name}", h.UpdateRole)
-	roleMux.HandleFunc("DELETE /roles/{name}", h.DeleteRole)
-	protected.Handle("/roles", auth.RequireCapability(model.CapRolesManage)(roleMux))
-	protected.Handle("/roles/", auth.RequireCapability(model.CapRolesManage)(roleMux))
-
-	// HTMX partials
-	protected.HandleFunc("GET /htmx/journal-line", h.JournalLinePartial)
-	protected.HandleFunc("GET /htmx/invoice-line", h.InvoiceLinePartial)
-	protected.HandleFunc("GET /htmx/bill-line", h.BillLinePartial)
-	protected.HandleFunc("GET /htmx/credit-note-line", h.CreditNoteLinePartial)
-
-	// Password change (self-service + forced on first login)
-	protected.HandleFunc("GET /password/change", h.PasswordChangePage)
-	protected.HandleFunc("POST /password/change", h.PasswordChange)
-
-	// API Tokens management UI
-	protected.HandleFunc("GET /settings/api-tokens", auth.AdminOnly(h.ListAPITokens))
-	protected.HandleFunc("GET /settings/api-tokens/new", auth.AdminOnly(h.NewAPIToken))
-	protected.HandleFunc("GET /settings/api-tokens/created", auth.AdminOnly(h.CreatedAPIToken))
-	protected.HandleFunc("POST /settings/api-tokens", auth.AdminOnly(h.CreateAPIToken))
-	protected.HandleFunc("POST /settings/api-tokens/{id}/revoke", auth.AdminOnly(h.RevokeAPIToken))
-
-	// Company Profile (admin-only settings shown on invoices)
-	protected.HandleFunc("GET /settings/company", auth.AdminOnly(h.CompanyProfilePage))
-	protected.HandleFunc("POST /settings/company", auth.AdminOnly(h.UpdateCompanyProfile))
-
-	// School Calendar (admin-only closures and Google Calendar integration)
-	protected.HandleFunc("GET /settings/school-calendar", auth.AdminOnly(h.SchoolCalendarPage))
-	protected.HandleFunc("POST /settings/school-calendar/closures", auth.AdminOnly(h.CreateSchoolClosure))
-	protected.HandleFunc("POST /settings/school-calendar/closures/{id}/delete", auth.AdminOnly(h.DeleteSchoolClosure))
-	protected.HandleFunc("POST /settings/school-calendar/google-calendar-id", auth.AdminOnly(h.SaveGoogleCalendarID))
-	protected.HandleFunc("POST /integrations/google-calendar/connect", auth.AdminOnly(h.ConnectGoogleCalendar))
-	protected.HandleFunc("GET /integrations/google-calendar/callback", auth.AdminOnly(h.GoogleCalendarCallback))
-	protected.HandleFunc("POST /integrations/google-calendar/sync", auth.AdminOnly(h.SyncGoogleCalendar))
-	protected.HandleFunc("POST /integrations/google-calendar/disconnect", auth.AdminOnly(h.DisconnectGoogleCalendar))
-
-	// Audit log (admin-only via audit.view capability)
-	protected.HandleFunc("GET /audit", auth.CapabilityOnly(model.CapAuditView, h.AuditList))
-
-	mux.Handle(h.BasePath+"/", http.StripPrefix(h.BasePath, auth.RequireAuth(db, auth.CSRFProtect(h.EnforcePasswordChange(protected)))))
+	mux.Handle(h.BasePath+"/", http.StripPrefix(h.BasePath, auth.RequireAuth(db, accessModule, auth.CSRFProtect(h.EnforcePasswordChange(protected)))))
 
 	// audit.RequestContext wraps everything so pre-auth events (login attempts)
 	// still get a request_id and client IP attached.

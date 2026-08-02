@@ -1,23 +1,23 @@
-// Package school_calendar implements the /api/v1/school-calendar endpoints.
+// Package school_calendar exposes school-calendar JSON endpoints.
 package school_calendar
 
 import (
-	"database/sql"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
 	v1 "github.com/naufal/latasya-erp/internal/api/v1"
-	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/auth"
 	"github.com/naufal/latasya-erp/internal/googlecalendar"
 	"github.com/naufal/latasya-erp/internal/model"
+	"github.com/naufal/latasya-erp/internal/schoolcalendar"
 )
 
 type Handler struct {
-	DB                   *sql.DB
+	Calendar             *schoolcalendar.Module
 	GoogleCalendarConfig googlecalendar.Config
 }
 
@@ -26,19 +26,39 @@ type closureInput struct {
 	StartDate string `json:"start_date"`
 	EndDate   string `json:"end_date"`
 }
-
 type effectiveDaysResponse struct {
 	Month             string `json:"month"`
 	EffectiveDays     int    `json:"effective_days"`
 	MultiplierPercent int    `json:"multiplier_percent"`
 }
 
+func actor(r *http.Request) schoolcalendar.Actor {
+	u := auth.UserFromContext(r.Context())
+	if u == nil {
+		return schoolcalendar.Actor{}
+	}
+	return schoolcalendar.Actor{UserID: u.ID, Username: u.Username, CanManage: v1.HasEffectiveCapability(r.Context(), model.CapInvoicesManage), IsAdmin: u.IsAdmin()}
+}
+func authorized(w http.ResponseWriter, r *http.Request) bool {
+	if v1.HasEffectiveCapability(r.Context(), model.CapInvoicesManage) {
+		return true
+	}
+	v1.WriteError(w, r, http.StatusForbidden, v1.CodeForbidden, "invoices.manage capability required", nil)
+	return false
+}
+
+func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/v1/school-calendar/closures", h.ListClosures)
+	mux.HandleFunc("POST /api/v1/school-calendar/closures", h.CreateClosure)
+	mux.HandleFunc("DELETE /api/v1/school-calendar/closures/{id}", h.DeleteClosure)
+	mux.HandleFunc("GET /api/v1/school-calendar/effective-days", h.EffectiveDays)
+	mux.HandleFunc("POST /api/v1/integrations/google-calendar/sync", h.SyncGoogleCalendar)
+}
+
 func (h *Handler) ListClosures(w http.ResponseWriter, r *http.Request) {
-	if !v1.HasEffectiveCapability(r.Context(), model.CapInvoicesManage) {
-		v1.WriteError(w, r, http.StatusForbidden, v1.CodeForbidden, "invoices.manage capability required", nil)
+	if !authorized(w, r) {
 		return
 	}
-
 	month := strings.TrimSpace(r.URL.Query().Get("month"))
 	if month != "" {
 		if _, err := time.Parse("2006-01", month); err != nil {
@@ -46,71 +66,31 @@ func (h *Handler) ListClosures(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-
-	closures, err := model.ListSchoolClosures(h.DB, month)
+	closures, err := h.Calendar.List(r.Context(), month)
 	if err != nil {
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to list school closures", nil)
+		writeError(w, r, err)
 		return
-	}
-	if closures == nil {
-		closures = []model.SchoolClosure{}
 	}
 	v1.WriteJSON(w, http.StatusOK, map[string]any{"data": closures})
 }
-
 func (h *Handler) CreateClosure(w http.ResponseWriter, r *http.Request) {
-	if !v1.HasEffectiveCapability(r.Context(), model.CapInvoicesManage) {
-		v1.WriteError(w, r, http.StatusForbidden, v1.CodeForbidden, "invoices.manage capability required", nil)
+	if !authorized(w, r) {
 		return
 	}
-
-	var inp closureInput
-	if err := v1.DecodeJSON(w, r, &inp); err != nil {
+	var input closureInput
+	if err := v1.DecodeJSON(w, r, &input); err != nil {
 		v1.WriteError(w, r, http.StatusBadRequest, v1.CodeInvalidRequest, "invalid request body", nil)
 		return
 	}
-
-	closure := model.SchoolClosure{
-		Source:    model.SchoolClosureSourceManual,
-		Title:     strings.TrimSpace(inp.Title),
-		StartDate: strings.TrimSpace(inp.StartDate),
-		EndDate:   strings.TrimSpace(inp.EndDate),
-	}
-	if fields := validateClosure(closure); len(fields) > 0 {
-		v1.WriteError(w, r, http.StatusUnprocessableEntity, v1.CodeValidationFailed, "validation failed", fields)
-		return
-	}
-
-	id, err := model.CreateSchoolClosure(h.DB, &closure)
+	closure, err := h.Calendar.CreateManual(r.Context(), actor(r), schoolcalendar.ClosureDraft{Title: input.Title, StartDate: input.StartDate, EndDate: input.EndDate})
 	if err != nil {
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to create school closure", nil)
+		writeError(w, r, err)
 		return
 	}
-	created, err := model.GetSchoolClosure(h.DB, id)
-	if err != nil {
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to load created school closure", nil)
-		return
-	}
-
-	audit.Log(r.Context(), h.DB, audit.Event{
-		Action:      "school_closure.create",
-		TargetType:  "school_closure",
-		TargetID:    int64(id),
-		TargetLabel: created.Title,
-		Metadata: map[string]any{"after": map[string]any{
-			"source":     created.Source,
-			"title":      created.Title,
-			"start_date": created.StartDate,
-			"end_date":   created.EndDate,
-		}},
-	})
-
-	v1.WriteJSON(w, http.StatusCreated, map[string]any{"data": created})
+	v1.WriteJSON(w, http.StatusCreated, map[string]any{"data": closure})
 }
-
 func (h *Handler) DeleteClosure(w http.ResponseWriter, r *http.Request) {
-	if !v1.HasEffectiveCapability(r.Context(), model.CapInvoicesManage) {
-		v1.WriteError(w, r, http.StatusForbidden, v1.CodeForbidden, "invoices.manage capability required", nil)
+	if !authorized(w, r) {
 		return
 	}
 	id, err := strconv.Atoi(r.PathValue("id"))
@@ -118,39 +98,14 @@ func (h *Handler) DeleteClosure(w http.ResponseWriter, r *http.Request) {
 		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "school closure not found", nil)
 		return
 	}
-	existing, err := model.GetSchoolClosure(h.DB, id)
-	if errors.Is(err, sql.ErrNoRows) {
-		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "school closure not found", nil)
+	if _, err := h.Calendar.Delete(r.Context(), actor(r), id); err != nil {
+		writeError(w, r, err)
 		return
 	}
-	if err != nil {
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to load school closure", nil)
-		return
-	}
-	if err := model.DeleteSchoolClosure(h.DB, id); err != nil {
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to delete school closure", nil)
-		return
-	}
-
-	audit.Log(r.Context(), h.DB, audit.Event{
-		Action:      "school_closure.delete",
-		TargetType:  "school_closure",
-		TargetID:    int64(id),
-		TargetLabel: existing.Title,
-		Metadata: map[string]any{"before": map[string]any{
-			"source":     existing.Source,
-			"title":      existing.Title,
-			"start_date": existing.StartDate,
-			"end_date":   existing.EndDate,
-		}},
-	})
-
 	v1.WriteJSON(w, http.StatusOK, map[string]any{"data": map[string]any{"deleted": true}})
 }
-
 func (h *Handler) EffectiveDays(w http.ResponseWriter, r *http.Request) {
-	if !v1.HasEffectiveCapability(r.Context(), model.CapInvoicesManage) {
-		v1.WriteError(w, r, http.StatusForbidden, v1.CodeForbidden, "invoices.manage capability required", nil)
+	if !authorized(w, r) {
 		return
 	}
 	month := strings.TrimSpace(r.URL.Query().Get("month"))
@@ -158,68 +113,50 @@ func (h *Handler) EffectiveDays(w http.ResponseWriter, r *http.Request) {
 		v1.WriteError(w, r, http.StatusBadRequest, v1.CodeInvalidRequest, "invalid month", map[string]string{"month": "must be YYYY-MM"})
 		return
 	}
-
-	days, err := model.EffectiveSchoolDays(h.DB, month)
+	days, err := h.Calendar.EffectiveDays(r.Context(), month)
 	if err != nil {
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to calculate effective school days", nil)
+		writeError(w, r, err)
 		return
 	}
-	v1.WriteJSON(w, http.StatusOK, map[string]any{"data": effectiveDaysResponse{
-		Month:             month,
-		EffectiveDays:     days,
-		MultiplierPercent: model.MonthlyPriceMultiplierPercent(days),
-	}})
+	v1.WriteJSON(w, http.StatusOK, map[string]any{"data": effectiveDaysResponse{Month: month, EffectiveDays: days, MultiplierPercent: schoolcalendar.MultiplierPercent(days)}})
 }
-
 func (h *Handler) SyncGoogleCalendar(w http.ResponseWriter, r *http.Request) {
-	user := auth.UserFromContext(r.Context())
-	if user == nil {
+	a := actor(r)
+	if a.UserID == 0 {
 		v1.WriteError(w, r, http.StatusUnauthorized, v1.CodeUnauthorized, "authentication required", nil)
 		return
 	}
-	if user.Role != model.RoleAdmin {
+	if !a.IsAdmin {
 		v1.WriteError(w, r, http.StatusForbidden, v1.CodeForbidden, "admin user required", nil)
 		return
 	}
-	if !v1.HasEffectiveCapability(r.Context(), model.CapInvoicesManage) {
+	if !a.CanManage {
 		v1.WriteError(w, r, http.StatusForbidden, v1.CodeForbidden, "invoices.manage capability required", nil)
 		return
 	}
-
-	result, err := googlecalendar.Sync(r.Context(), h.DB, h.GoogleCalendarConfig, "")
+	result, err := googlecalendar.Sync(r.Context(), h.Calendar, h.GoogleCalendarConfig, "")
 	if err != nil {
-		v1.WriteError(w, r, http.StatusBadRequest, v1.CodeInvalidRequest, err.Error(), nil)
+		if errors.Is(err, googlecalendar.ErrNotConnected) {
+			v1.WriteError(w, r, http.StatusBadRequest, v1.CodeInvalidRequest, googlecalendar.ErrNotConnected.Error(), nil)
+		} else {
+			slog.Error("google_calendar: api sync", "error", err)
+			v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "google calendar sync failed", nil)
+		}
 		return
 	}
-	audit.Log(r.Context(), h.DB, audit.Event{
-		Action:     "google_calendar.sync",
-		TargetType: "google_calendar_connection",
-		TargetID:   1,
-		Metadata: map[string]any{
-			"fetched":      result.Fetched,
-			"stored":       result.Stored,
-			"window_start": result.WindowStart,
-			"window_end":   result.WindowEnd,
-		},
-	})
+	_ = h.Calendar.RecordSync(r.Context(), a, result.Fetched, result.Stored, result.WindowStart, result.WindowEnd)
 	v1.WriteJSON(w, http.StatusOK, map[string]any{"data": result})
 }
-
-func validateClosure(closure model.SchoolClosure) map[string]string {
-	fields := map[string]string{}
-	if closure.Title == "" {
-		fields["title"] = "required"
+func writeError(w http.ResponseWriter, r *http.Request, err error) {
+	var validation *schoolcalendar.ValidationError
+	switch {
+	case errors.Is(err, schoolcalendar.ErrNotFound):
+		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "school closure not found", nil)
+	case errors.Is(err, schoolcalendar.ErrForbidden):
+		v1.WriteError(w, r, http.StatusForbidden, v1.CodeForbidden, "invoices.manage capability required", nil)
+	case errors.As(err, &validation):
+		v1.WriteError(w, r, http.StatusUnprocessableEntity, v1.CodeValidationFailed, "validation failed", validation.Fields)
+	default:
+		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "school calendar operation failed", nil)
 	}
-	start, startErr := time.Parse("2006-01-02", closure.StartDate)
-	if closure.StartDate == "" || startErr != nil {
-		fields["start_date"] = "must be YYYY-MM-DD"
-	}
-	end, endErr := time.Parse("2006-01-02", closure.EndDate)
-	if closure.EndDate == "" || endErr != nil {
-		fields["end_date"] = "must be YYYY-MM-DD"
-	}
-	if startErr == nil && endErr == nil && start.After(end) {
-		fields["end_date"] = "must be on or after start_date"
-	}
-	return fields
 }

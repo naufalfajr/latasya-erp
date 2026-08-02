@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/naufal/latasya-erp/internal/schoolcalendar"
 	"time"
 
 	v1 "github.com/naufal/latasya-erp/internal/api/v1"
@@ -20,14 +22,10 @@ import (
 func setupServer(t *testing.T, config googlecalendar.Config) (*httptest.Server, *sql.DB) {
 	t.Helper()
 	db := testutil.SetupTestDB(t)
-	h := &v1schoolcalendar.Handler{DB: db, GoogleCalendarConfig: config}
+	h := &v1schoolcalendar.Handler{Calendar: schoolcalendar.New(db), GoogleCalendarConfig: config}
 
 	apiMux := http.NewServeMux()
-	apiMux.HandleFunc("GET /api/v1/school-calendar/closures", h.ListClosures)
-	apiMux.HandleFunc("POST /api/v1/school-calendar/closures", h.CreateClosure)
-	apiMux.HandleFunc("DELETE /api/v1/school-calendar/closures/{id}", h.DeleteClosure)
-	apiMux.HandleFunc("GET /api/v1/school-calendar/effective-days", h.EffectiveDays)
-	apiMux.HandleFunc("POST /api/v1/integrations/google-calendar/sync", h.SyncGoogleCalendar)
+	h.RegisterRoutes(apiMux)
 
 	mux := http.NewServeMux()
 	mux.Handle("/api/v1/", v1.BearerOrCookie(db)(apiMux))
@@ -47,7 +45,7 @@ func adminID(t *testing.T, db *sql.DB) int {
 
 func bearerFor(t *testing.T, db *sql.DB, userID int, scopes []string) string {
 	t.Helper()
-	_, plaintext, err := model.CreateAPIToken(db, userID, fmt.Sprintf("test-%d", time.Now().UnixNano()), scopes, nil)
+	_, plaintext, err := testutil.CreateAPIToken(db, userID, fmt.Sprintf("test-%d", time.Now().UnixNano()), scopes, nil)
 	if err != nil {
 		t.Fatalf("create token: %v", err)
 	}
@@ -148,7 +146,7 @@ func TestManualClosureCreateListDelete(t *testing.T) {
 	if deleteResp.StatusCode != http.StatusOK {
 		t.Fatalf("delete status: got %d want 200", deleteResp.StatusCode)
 	}
-	closures, err := model.ListSchoolClosures(db, "2026-06")
+	closures, err := testutil.ListSchoolClosures(db, "2026-06")
 	if err != nil {
 		t.Fatalf("list model closures: %v", err)
 	}
@@ -160,7 +158,7 @@ func TestManualClosureCreateListDelete(t *testing.T) {
 func TestEffectiveDaysResponse(t *testing.T) {
 	ts, db := setupServer(t, googlecalendar.Config{})
 	token := bearerFor(t, db, adminID(t, db), []string{model.CapInvoicesManage})
-	_, err := model.CreateSchoolClosure(db, &model.SchoolClosure{
+	_, err := testutil.CreateSchoolClosure(db, &model.SchoolClosure{
 		Source:    model.SchoolClosureSourceManual,
 		Title:     "Long break",
 		StartDate: "2026-06-01",
@@ -193,7 +191,7 @@ func TestEffectiveDaysResponse(t *testing.T) {
 func TestGoogleCalendarSyncRequiresAdmin(t *testing.T) {
 	ts, db := setupServer(t, googlecalendar.Config{})
 	roleName := fmt.Sprintf("calendar-manager-%d", time.Now().UnixNano())
-	if err := model.CreateRole(db, &model.Role{Name: roleName, Capabilities: []string{model.CapInvoicesManage}}); err != nil {
+	if err := testutil.CreateRole(db, &model.Role{Name: roleName, Capabilities: []string{model.CapInvoicesManage}}); err != nil {
 		t.Fatalf("create role: %v", err)
 	}
 	userID := testutil.CreateTestUser(t, db, "calendar-manager", "pw", roleName)

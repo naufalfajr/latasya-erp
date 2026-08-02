@@ -13,17 +13,16 @@ import (
 
 	v1 "github.com/naufal/latasya-erp/internal/api/v1"
 	"github.com/naufal/latasya-erp/internal/api/v1/apitokens"
+	"github.com/naufal/latasya-erp/internal/apitoken"
 	"github.com/naufal/latasya-erp/internal/model"
 	"github.com/naufal/latasya-erp/internal/testutil"
 )
 
 func newTestServer(t *testing.T, db *sql.DB) *httptest.Server {
 	t.Helper()
-	h := &apitokens.Handler{DB: db}
+	h := &apitokens.Handler{Tokens: apitoken.New(db)}
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /api/v1/api-tokens", h.Create)
-	mux.HandleFunc("GET /api/v1/api-tokens", h.List)
-	mux.HandleFunc("DELETE /api/v1/api-tokens/{id}", h.Revoke)
+	h.RegisterRoutes(mux, func(next http.Handler) http.Handler { return next })
 	ts := httptest.NewServer(v1.BearerOrCookie(db)(mux))
 	t.Cleanup(ts.Close)
 	return ts
@@ -46,7 +45,7 @@ func cookieFor(t *testing.T, db *sql.DB, userID int) *http.Cookie {
 
 func bearerFor(t *testing.T, db *sql.DB, userID int, scopes []string) string {
 	t.Helper()
-	_, plaintext, err := model.CreateAPIToken(db, userID,
+	_, plaintext, err := testutil.CreateAPIToken(db, userID,
 		fmt.Sprintf("test-%d", time.Now().UnixNano()), scopes, nil)
 	if err != nil {
 		t.Fatalf("create bearer: %v", err)
@@ -252,7 +251,7 @@ func TestListTokens_NeverShowsPlaintext(t *testing.T) {
 	ts := newTestServer(t, db)
 	uid := adminID(t, db)
 
-	if _, _, err := model.CreateAPIToken(db, uid, "alpha", []string{model.CapReportsView}, nil); err != nil {
+	if _, _, err := testutil.CreateAPIToken(db, uid, "alpha", []string{model.CapReportsView}, nil); err != nil {
 		t.Fatalf("seed token: %v", err)
 	}
 
@@ -310,7 +309,7 @@ func TestRevokeToken_Success(t *testing.T) {
 	ts := newTestServer(t, db)
 	uid := adminID(t, db)
 
-	tok, _, err := model.CreateAPIToken(db, uid, "to-revoke", []string{model.CapReportsView}, nil)
+	tok, _, err := testutil.CreateAPIToken(db, uid, "to-revoke", []string{model.CapReportsView}, nil)
 	if err != nil {
 		t.Fatalf("seed: %v", err)
 	}
@@ -338,7 +337,7 @@ func TestRevokeToken_BearerRejected(t *testing.T) {
 	uid := adminID(t, db)
 
 	bearer := bearerFor(t, db, uid, []string{model.CapReportsView})
-	tok, _, err := model.CreateAPIToken(db, uid, "victim", []string{model.CapReportsView}, nil)
+	tok, _, err := testutil.CreateAPIToken(db, uid, "victim", []string{model.CapReportsView}, nil)
 	if err != nil {
 		t.Fatalf("seed: %v", err)
 	}
@@ -357,7 +356,7 @@ func TestRevokeToken_CrossUser(t *testing.T) {
 	ts := newTestServer(t, db)
 
 	otherID := testutil.CreateTestUser(t, db, "other-user", "pw", "viewer")
-	tok, _, err := model.CreateAPIToken(db, otherID, "other-tok", []string{}, nil)
+	tok, _, err := testutil.CreateAPIToken(db, otherID, "other-tok", []string{}, nil)
 	if err != nil {
 		t.Fatalf("seed: %v", err)
 	}

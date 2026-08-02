@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/naufal/latasya-erp/internal/model"
+	"github.com/naufal/latasya-erp/internal/testutil"
 )
 
 // All routes exercised here (GET/POST /journals/{id}/edit, DELETE
@@ -16,7 +17,7 @@ import (
 // testServer in handler_test.go, so no custom mux is needed for this file.
 
 // mustCreateManualJournal creates a balanced, posted manual journal entry
-// directly via the model layer and returns its ID.
+// through the journal module fixture helper and returns its ID.
 func mustCreateManualJournal(t *testing.T, db *sql.DB, description string) int {
 	t.Helper()
 	var adminID, cashID, revenueID int
@@ -35,7 +36,7 @@ func mustCreateManualJournal(t *testing.T, db *sql.DB, description string) int {
 		{AccountID: cashID, Debit: 1000000},
 		{AccountID: revenueID, Credit: 1000000},
 	}
-	id, err := model.CreateJournalEntry(db, je, lines)
+	id, err := testutil.CreateJournalEntry(db, je, lines)
 	if err != nil {
 		t.Fatalf("create manual journal: %v", err)
 	}
@@ -62,7 +63,7 @@ func mustCreateIncomeJournal(t *testing.T, db *sql.DB, description string) int {
 		{AccountID: cashID, Debit: 500000},
 		{AccountID: revenueID, Credit: 500000},
 	}
-	id, err := model.CreateJournalEntry(db, je, lines)
+	id, err := testutil.CreateJournalEntry(db, je, lines)
 	if err != nil {
 		t.Fatalf("create income journal: %v", err)
 	}

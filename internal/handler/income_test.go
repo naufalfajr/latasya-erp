@@ -222,7 +222,7 @@ func TestDeleteIncome_NotFound(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	// DeleteJournalEntryBySource errors for a missing id, which the handler
+	// The journal module errors for a missing id, which the handler
 	// turns into a flash + redirect rather than a hard 404.
 	if resp.StatusCode != http.StatusSeeOther {
 		t.Errorf("expected 303 redirect (delete rejected), got %d", resp.StatusCode)

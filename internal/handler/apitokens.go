@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"database/sql"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -9,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/naufal/latasya-erp/internal/audit"
+	"github.com/naufal/latasya-erp/internal/apitoken"
 	"github.com/naufal/latasya-erp/internal/auth"
 	"github.com/naufal/latasya-erp/internal/model"
 )
@@ -82,7 +81,7 @@ func (h *Handler) ListAPITokens(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tokens, err := model.ListAPITokensByUser(h.DB, user.ID)
+	tokens, err := h.APITokens.List(ctx, tokenActor(user))
 	if err != nil {
 		slog.Error("api_token: list", "user_id", user.ID, "error", err)
 		h.render(w, r, "templates/settings/api_tokens.html", "API Tokens", apiTokenFormData{
@@ -185,11 +184,12 @@ func (h *Handler) CreateAPIToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, plaintext, err := model.CreateAPIToken(h.DB, user.ID, name, scopes, expiresAt)
+	created, err := h.APITokens.Create(ctx, tokenActor(user), apitoken.Draft{Name: name, Scopes: scopes, ExpiresAt: expiresAt})
 	if err != nil {
 		slog.Error("api_token: create", "user_id", user.ID, "error", err)
 		fieldErrs := map[string]string{}
-		if strings.Contains(err.Error(), "UNIQUE constraint") {
+		var conflict *apitoken.ConflictError
+		if errors.As(err, &conflict) {
 			fieldErrs["name"] = "A token with this name already exists"
 		} else {
 			fieldErrs["general"] = "Failed to create token"
@@ -204,19 +204,7 @@ func (h *Handler) CreateAPIToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	audit.Log(ctx, h.DB, audit.Event{
-		Action:      "api_token.create",
-		TargetType:  "api_token",
-		TargetID:    int64(token.ID),
-		TargetLabel: token.Name,
-		Metadata: map[string]any{
-			"name":       token.Name,
-			"scopes":     token.Scopes,
-			"expires_at": token.ExpiresAt,
-		},
-	})
-
-	h.setFlash(w, plaintext)
+	h.setFlash(w, created.Plaintext)
 	http.Redirect(w, r, h.BasePath+"/settings/api-tokens/created", http.StatusSeeOther)
 }
 
@@ -254,9 +242,9 @@ func (h *Handler) RevokeAPIToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = model.RevokeAPIToken(h.DB, user.ID, tokenID)
+	_, err = h.APITokens.Revoke(ctx, tokenActor(user), tokenID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, apitoken.ErrNotFound) {
 			h.setFlash(w, "Token not found")
 		} else {
 			slog.Error("api_token: revoke", "user_id", user.ID, "token_id", tokenID, "error", err)
@@ -266,12 +254,10 @@ func (h *Handler) RevokeAPIToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	audit.Log(ctx, h.DB, audit.Event{
-		Action:     "api_token.revoke",
-		TargetType: "api_token",
-		TargetID:   int64(tokenID),
-	})
-
 	h.setFlash(w, "Token revoked")
 	http.Redirect(w, r, h.BasePath+"/settings/api-tokens", http.StatusSeeOther)
+}
+
+func tokenActor(user *model.User) apitoken.Actor {
+	return apitoken.Actor{UserID: user.ID, Username: user.Username, IsAdmin: user.IsAdmin(), Capabilities: user.Capabilities}
 }

@@ -13,18 +13,15 @@ import (
 	v1 "github.com/naufal/latasya-erp/internal/api/v1"
 	"github.com/naufal/latasya-erp/internal/api/v1/reports"
 	"github.com/naufal/latasya-erp/internal/model"
+	"github.com/naufal/latasya-erp/internal/reporting"
 	"github.com/naufal/latasya-erp/internal/testutil"
 )
 
 func newTestServer(t *testing.T, db *sql.DB) *httptest.Server {
 	t.Helper()
-	h := &reports.Handler{DB: db}
+	h := &reports.Handler{Reporting: reporting.New(db)}
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/v1/reports/trial-balance", h.TrialBalance)
-	mux.HandleFunc("GET /api/v1/reports/profit-loss", h.ProfitLoss)
-	mux.HandleFunc("GET /api/v1/reports/balance-sheet", h.BalanceSheet)
-	mux.HandleFunc("GET /api/v1/reports/cash-flow", h.CashFlow)
-	mux.HandleFunc("GET /api/v1/reports/general-ledger", h.GeneralLedger)
+	h.RegisterRoutes(mux)
 	ts := httptest.NewServer(v1.BearerOrCookie(db)(mux))
 	t.Cleanup(ts.Close)
 	return ts
@@ -36,7 +33,7 @@ func adminToken(t *testing.T, db *sql.DB) string {
 	if err := db.QueryRow("SELECT id FROM users WHERE username = 'admin'").Scan(&adminID); err != nil {
 		t.Fatalf("get admin: %v", err)
 	}
-	_, tok, err := model.CreateAPIToken(db, adminID,
+	_, tok, err := testutil.CreateAPIToken(db, adminID,
 		fmt.Sprintf("test-reports-%d", time.Now().UnixNano()),
 		model.AllCapabilities, nil)
 	if err != nil {
@@ -251,7 +248,7 @@ func TestCapabilityEnforcement(t *testing.T) {
 	ts := newTestServer(t, db)
 
 	viewerID := testutil.CreateTestUser(t, db, "viewer-reports", "pw", "viewer")
-	_, noCapTok, err := model.CreateAPIToken(db, viewerID, "no-cap-reports", []string{}, nil)
+	_, noCapTok, err := testutil.CreateAPIToken(db, viewerID, "no-cap-reports", []string{}, nil)
 	if err != nil {
 		t.Fatalf("create token: %v", err)
 	}

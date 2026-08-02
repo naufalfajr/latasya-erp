@@ -2,23 +2,18 @@
 package journals
 
 import (
-	"database/sql"
 	"errors"
 	"net/http"
 	"strconv"
 	"strings"
 
 	v1 "github.com/naufal/latasya-erp/internal/api/v1"
-	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/auth"
+	"github.com/naufal/latasya-erp/internal/journal"
 	"github.com/naufal/latasya-erp/internal/model"
 )
 
-const maxLinesPerEntry = 100
-
-type Handler struct {
-	DB *sql.DB
-}
+type Handler struct{ Journals *journal.Module }
 
 type lineInput struct {
 	AccountID int    `json:"account_id"`
@@ -33,310 +28,143 @@ type journalInput struct {
 	Lines       []lineInput `json:"lines"`
 }
 
-// parseIDR parses an integer-IDR string (no decimals, no separators).
-// Empty string is treated as 0.
-func parseIDR(s string) (int, error) {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return 0, nil
+func actor(r *http.Request) journal.Actor {
+	user := auth.UserFromContext(r.Context())
+	if user == nil {
+		return journal.Actor{}
 	}
-	n, err := strconv.Atoi(s)
-	if err != nil {
-		return 0, err
-	}
-	if n < 0 {
-		return 0, errors.New("must be non-negative")
-	}
-	return n, nil
+	return journal.Actor{UserID: user.ID, CanManageJournals: v1.HasEffectiveCapability(r.Context(), model.CapJournalsManage)}
 }
 
-func validateInput(inp *journalInput) (map[string]string, []model.JournalLine) {
+func draft(input journalInput) (journal.ManualDraft, map[string]string) {
 	fields := map[string]string{}
-	if strings.TrimSpace(inp.EntryDate) == "" {
-		fields["entry_date"] = "required"
-	}
-	if strings.TrimSpace(inp.Description) == "" {
-		fields["description"] = "required"
-	}
-	if len(inp.Lines) < 2 {
-		fields["lines"] = "at least two lines required"
-	}
-	if len(inp.Lines) > maxLinesPerEntry {
-		fields["lines"] = "too many lines (max 100)"
-	}
-
-	var totalDebit, totalCredit int
-	lines := make([]model.JournalLine, 0, len(inp.Lines))
-	for i, l := range inp.Lines {
-		if l.AccountID <= 0 {
-			fields["lines["+strconv.Itoa(i)+"].account_id"] = "required"
-			continue
-		}
-		debit, err := parseIDR(l.Debit)
+	lines := make([]journal.Line, 0, len(input.Lines))
+	for i, inputLine := range input.Lines {
+		debit, err := parseIDR(inputLine.Debit)
 		if err != nil {
 			fields["lines["+strconv.Itoa(i)+"].debit"] = "invalid amount"
-			continue
 		}
-		credit, err := parseIDR(l.Credit)
+		credit, err := parseIDR(inputLine.Credit)
 		if err != nil {
 			fields["lines["+strconv.Itoa(i)+"].credit"] = "invalid amount"
-			continue
 		}
-		if debit > 0 && credit > 0 {
-			fields["lines["+strconv.Itoa(i)+"]"] = "cannot have both debit and credit"
-			continue
-		}
-		totalDebit += debit
-		totalCredit += credit
-		lines = append(lines, model.JournalLine{
-			AccountID: l.AccountID,
-			Debit:     debit,
-			Credit:    credit,
-			Memo:      l.Memo,
-		})
+		lines = append(lines, journal.Line{AccountID: inputLine.AccountID, Debit: debit, Credit: credit, Memo: inputLine.Memo})
 	}
-
-	if len(fields) == 0 {
-		if totalDebit == 0 || totalCredit == 0 {
-			fields["lines"] = "must have at least one debit and one credit line"
-		} else if totalDebit != totalCredit {
-			fields["lines"] = "debits must equal credits"
-		}
-	}
-
 	if len(fields) > 0 {
-		return fields, nil
+		return journal.ManualDraft{}, fields
 	}
-	return nil, lines
+	return journal.ManualDraft{EntryDate: input.EntryDate, Description: input.Description, Lines: lines}, nil
 }
 
-// List handles GET /api/v1/journals.
+func parseIDR(value string) (int, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0, nil
+	}
+	amount, err := strconv.Atoi(value)
+	if err != nil || amount < 0 {
+		return 0, errors.New("invalid amount")
+	}
+	return amount, nil
+}
+
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	page := v1.ParsePage(r)
-	filter := model.JournalFilter{
-		DateFrom:   r.URL.Query().Get("from"),
-		DateTo:     r.URL.Query().Get("to"),
-		SourceType: r.URL.Query().Get("source"),
-		Search:     r.URL.Query().Get("search"),
-		Limit:      page.PerPage,
-		Offset:     page.Offset(),
-	}
-
-	total, err := model.CountJournalEntries(h.DB, filter)
+	result, err := h.Journals.List(r.Context(), journal.Filter{DateFrom: r.URL.Query().Get("from"),
+		DateTo: r.URL.Query().Get("to"), SourceType: r.URL.Query().Get("source"), Search: r.URL.Query().Get("search"),
+		Limit: page.PerPage, Offset: page.Offset()})
 	if err != nil {
 		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to list journals", nil)
 		return
 	}
-
-	entries, err := model.ListJournalEntries(h.DB, filter)
-	if err != nil {
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to list journals", nil)
-		return
-	}
-	if entries == nil {
-		entries = []model.JournalEntry{}
-	}
-
-	v1.WriteList(w, http.StatusOK, entries, page, total)
+	v1.WriteList(w, http.StatusOK, result.Entries, page, result.Total)
 }
 
-// Get handles GET /api/v1/journals/{id}.
 func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "journal entry not found", nil)
 		return
 	}
-
-	je, err := model.GetJournalEntry(h.DB, id)
+	entry, err := h.Journals.Get(r.Context(), id)
 	if err != nil {
 		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "journal entry not found", nil)
 		return
 	}
-
-	v1.WriteJSON(w, http.StatusOK, map[string]any{"data": je})
+	v1.WriteJSON(w, http.StatusOK, map[string]any{"data": entry})
 }
 
-// Create handles POST /api/v1/journals.
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
-	if !v1.HasEffectiveCapability(r.Context(), model.CapJournalsManage) {
-		v1.WriteError(w, r, http.StatusForbidden, v1.CodeForbidden, "journals.manage capability required", nil)
+	if !requireManage(w, r) {
 		return
 	}
-
-	user := auth.UserFromContext(r.Context())
-	if user == nil {
-		v1.WriteError(w, r, http.StatusUnauthorized, v1.CodeUnauthorized, "authentication required", nil)
-		return
-	}
-
-	var inp journalInput
-	if err := v1.DecodeJSON(w, r, &inp); err != nil {
+	var input journalInput
+	if err := v1.DecodeJSON(w, r, &input); err != nil {
 		v1.WriteError(w, r, http.StatusBadRequest, v1.CodeInvalidRequest, "invalid request body", nil)
 		return
 	}
-
-	fields, lines := validateInput(&inp)
+	command, fields := draft(input)
 	if fields != nil {
 		v1.WriteError(w, r, http.StatusUnprocessableEntity, v1.CodeValidationFailed, "validation failed", fields)
 		return
 	}
-
-	ref, err := model.GenerateDocNumber(h.DB, "journal_entries", "reference", "JE")
-	if err != nil {
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to generate reference", nil)
+	created, err := h.Journals.CreateManual(r.Context(), actor(r), command)
+	if !writeModuleError(w, r, err) {
 		return
 	}
-
-	je := &model.JournalEntry{
-		EntryDate:   inp.EntryDate,
-		Reference:   ref,
-		Description: inp.Description,
-		SourceType:  "manual",
-		IsPosted:    true,
-		CreatedBy:   user.ID,
-	}
-
-	id, err := model.CreateJournalEntry(h.DB, je, lines)
-	if err != nil {
-		v1.WriteError(w, r, http.StatusUnprocessableEntity, v1.CodeValidationFailed, err.Error(), nil)
-		return
-	}
-
-	created, err := model.GetJournalEntry(h.DB, id)
-	if err != nil {
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to load created entry", nil)
-		return
-	}
-
-	audit.Log(r.Context(), h.DB, audit.Event{
-		Action:      "journal.create",
-		TargetType:  "journal_entry",
-		TargetID:    int64(id),
-		TargetLabel: created.Reference,
-		Metadata: map[string]any{
-			"after": map[string]any{
-				"reference":   created.Reference,
-				"entry_date":  created.EntryDate,
-				"description": created.Description,
-				"line_count":  len(created.Lines),
-			},
-		},
-	})
-
 	v1.WriteJSON(w, http.StatusCreated, map[string]any{"data": created})
 }
 
-// Update handles PUT /api/v1/journals/{id}.
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
-	if !v1.HasEffectiveCapability(r.Context(), model.CapJournalsManage) {
-		v1.WriteError(w, r, http.StatusForbidden, v1.CodeForbidden, "journals.manage capability required", nil)
+	if !requireManage(w, r) {
 		return
 	}
-
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "journal entry not found", nil)
 		return
 	}
-
-	existing, err := model.GetJournalEntry(h.DB, id)
-	if err != nil {
-		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "journal entry not found", nil)
-		return
-	}
-
-	if existing.SourceType != "" && existing.SourceType != "manual" {
-		v1.WriteError(w, r, http.StatusConflict, v1.CodeConflict,
-			"cannot edit auto-generated journal entry", nil)
-		return
-	}
-
-	var inp journalInput
-	if err := v1.DecodeJSON(w, r, &inp); err != nil {
+	var input journalInput
+	if err := v1.DecodeJSON(w, r, &input); err != nil {
 		v1.WriteError(w, r, http.StatusBadRequest, v1.CodeInvalidRequest, "invalid request body", nil)
 		return
 	}
-
-	fields, lines := validateInput(&inp)
+	command, fields := draft(input)
 	if fields != nil {
 		v1.WriteError(w, r, http.StatusUnprocessableEntity, v1.CodeValidationFailed, "validation failed", fields)
 		return
 	}
-
-	je := &model.JournalEntry{
-		ID:          id,
-		EntryDate:   inp.EntryDate,
-		Description: inp.Description,
-	}
-	if err := model.UpdateJournalEntry(h.DB, je, lines); err != nil {
-		v1.WriteError(w, r, http.StatusUnprocessableEntity, v1.CodeValidationFailed, err.Error(), nil)
+	updated, err := h.Journals.UpdateManual(r.Context(), actor(r), id, command)
+	if !writeModuleError(w, r, err) {
 		return
 	}
-
-	updated, err := model.GetJournalEntry(h.DB, id)
-	if err != nil {
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to load entry", nil)
-		return
-	}
-
-	audit.Log(r.Context(), h.DB, audit.Event{
-		Action:      "journal.update",
-		TargetType:  "journal_entry",
-		TargetID:    int64(id),
-		TargetLabel: updated.Reference,
-		Metadata: map[string]any{
-			"before": map[string]any{
-				"entry_date":  existing.EntryDate,
-				"description": existing.Description,
-			},
-			"after": map[string]any{
-				"entry_date":  updated.EntryDate,
-				"description": updated.Description,
-			},
-		},
-	})
-
 	v1.WriteJSON(w, http.StatusOK, map[string]any{"data": updated})
 }
 
-// Delete handles DELETE /api/v1/journals/{id}.
 func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
-	if !v1.HasEffectiveCapability(r.Context(), model.CapJournalsManage) {
-		v1.WriteError(w, r, http.StatusForbidden, v1.CodeForbidden, "journals.manage capability required", nil)
+	if !requireManage(w, r) {
 		return
 	}
-
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "journal entry not found", nil)
 		return
 	}
-
-	existing, err := model.GetJournalEntry(h.DB, id)
-	if err != nil {
-		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "journal entry not found", nil)
+	_, err = h.Journals.DeleteManual(r.Context(), actor(r), id)
+	if !writeModuleError(w, r, err) {
 		return
 	}
-
-	if err := model.DeleteJournalEntry(h.DB, id); err != nil {
-		v1.WriteError(w, r, http.StatusConflict, v1.CodeConflict, err.Error(), nil)
-		return
-	}
-
-	audit.Log(r.Context(), h.DB, audit.Event{
-		Action:      "journal.delete",
-		TargetType:  "journal_entry",
-		TargetID:    int64(id),
-		TargetLabel: existing.Reference,
-		Metadata: map[string]any{
-			"before": map[string]any{
-				"reference":   existing.Reference,
-				"entry_date":  existing.EntryDate,
-				"description": existing.Description,
-			},
-		},
-	})
-
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func requireManage(w http.ResponseWriter, r *http.Request) bool {
+	if v1.HasEffectiveCapability(r.Context(), model.CapJournalsManage) {
+		return true
+	}
+	v1.WriteError(w, r, http.StatusForbidden, v1.CodeForbidden, "journals.manage capability required", nil)
+	return false
+}
+
+func writeModuleError(w http.ResponseWriter, r *http.Request, err error) bool {
+	return v1.WriteJournalError(w, r, err, v1.JournalErrorLabels{Capability: "journals.manage", NotFound: "journal entry", Operation: "journal operation", BalanceKey: "lines"})
 }

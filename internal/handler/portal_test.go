@@ -10,7 +10,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/naufal/latasya-erp/internal/model"
 	"github.com/naufal/latasya-erp/internal/testutil"
 )
 
@@ -22,11 +21,9 @@ func publicTestServer(t *testing.T) (*httptest.Server, *sql.DB) {
 	h := testutil.SetupTestHandler(t, db)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /{$}", h.PublicHome)
 	// No PortalCodeLimiter here: it is exercised in internal/api/v1, and
 	// omitting it keeps miss-looping tests from throttling themselves.
-	mux.HandleFunc("GET /p/{code}", h.PortalIndex)
-	mux.HandleFunc("GET /p/{code}/invoice/{id}/pdf", h.PortalInvoicePDF)
+	h.RegisterPublicRoutes(mux, func(next http.Handler) http.Handler { return next })
 
 	ts := httptest.NewServer(mux)
 	t.Cleanup(ts.Close)
@@ -89,11 +86,11 @@ func TestPortalIndex_ValidCode_ShowsIssuedInvoiceOnly(t *testing.T) {
 
 	draftID := mustInvoice(t, db, contactID)
 	sentID := mustInvoice(t, db, contactID)
-	if err := model.SendInvoice(db, sentID, 1); err != nil {
+	if err := testutil.SendInvoice(db, sentID, 1); err != nil {
 		t.Fatalf("send invoice: %v", err)
 	}
 
-	code, err := model.GetOrCreatePortalCode(db, contactID)
+	code, err := testutil.GetOrCreatePortalCode(db, contactID)
 	if err != nil {
 		t.Fatalf("get code: %v", err)
 	}
@@ -106,12 +103,12 @@ func TestPortalIndex_ValidCode_ShowsIssuedInvoiceOnly(t *testing.T) {
 	body, _ := io.ReadAll(resp.Body)
 	text := string(body)
 
-	sentInv, _ := model.GetInvoice(db, sentID)
+	sentInv, _ := testutil.GetInvoice(db, sentID)
 	if !strings.Contains(text, sentInv.InvoiceNumber) {
 		t.Error("expected the sent invoice number in the portal page")
 	}
 
-	draftInv, _ := model.GetInvoice(db, draftID)
+	draftInv, _ := testutil.GetInvoice(db, draftID)
 	if strings.Contains(text, draftInv.InvoiceNumber) {
 		t.Error("draft invoice should not appear on the parent portal")
 	}
@@ -124,11 +121,11 @@ func TestPortalIndex_ConfirmPaymentButton_HiddenWithoutCompanyPhone(t *testing.T
 
 	contactID := mustContact(t, db, "No Company Phone", "081111111111")
 	invID := mustInvoice(t, db, contactID)
-	if err := model.SendInvoice(db, invID, 1); err != nil {
+	if err := testutil.SendInvoice(db, invID, 1); err != nil {
 		t.Fatalf("send invoice: %v", err)
 	}
 
-	code, _ := model.GetOrCreatePortalCode(db, contactID)
+	code, _ := testutil.GetOrCreatePortalCode(db, contactID)
 	resp, err := http.Get(ts.URL + "/p/" + code)
 	if err != nil {
 		t.Fatal(err)
@@ -152,11 +149,11 @@ func TestPortalInvoicePDF_WrongFamily_NotFound(t *testing.T) {
 	contactB := mustContact(t, db, "Family B", "082222222222")
 
 	invB := mustInvoice(t, db, contactB)
-	if err := model.SendInvoice(db, invB, 1); err != nil {
+	if err := testutil.SendInvoice(db, invB, 1); err != nil {
 		t.Fatalf("send invoice: %v", err)
 	}
 
-	codeA, _ := model.GetOrCreatePortalCode(db, contactA)
+	codeA, _ := testutil.GetOrCreatePortalCode(db, contactA)
 
 	resp, err := http.Get(ts.URL + "/p/" + codeA + "/invoice/" + strconv.Itoa(invB) + "/pdf")
 	if err != nil {
@@ -172,7 +169,7 @@ func TestPortalInvoicePDF_InvalidID_NotFound(t *testing.T) {
 	t.Parallel()
 	ts, db := publicTestServer(t)
 	contactID := mustContact(t, db, "Bad ID Family", "081111111111")
-	code, _ := model.GetOrCreatePortalCode(db, contactID)
+	code, _ := testutil.GetOrCreatePortalCode(db, contactID)
 
 	resp, err := http.Get(ts.URL + "/p/" + code + "/invoice/not-a-number/pdf")
 	if err != nil {
@@ -189,7 +186,7 @@ func TestPortalInvoicePDF_UnknownCode_NotFound(t *testing.T) {
 	ts, db := publicTestServer(t)
 	contactID := mustContact(t, db, "Unknown Code Family", "081111111111")
 	invID := mustInvoice(t, db, contactID)
-	if err := model.SendInvoice(db, invID, 1); err != nil {
+	if err := testutil.SendInvoice(db, invID, 1); err != nil {
 		t.Fatalf("send invoice: %v", err)
 	}
 
@@ -208,11 +205,11 @@ func TestPortalInvoicePDF_OwnInvoice_Succeeds(t *testing.T) {
 	ts, db := publicTestServer(t)
 	contactID := mustContact(t, db, "Portal PDF", "083333333333")
 	invID := mustInvoice(t, db, contactID)
-	if err := model.SendInvoice(db, invID, 1); err != nil {
+	if err := testutil.SendInvoice(db, invID, 1); err != nil {
 		t.Fatalf("send invoice: %v", err)
 	}
 
-	code, _ := model.GetOrCreatePortalCode(db, contactID)
+	code, _ := testutil.GetOrCreatePortalCode(db, contactID)
 
 	resp, err := http.Get(ts.URL + "/p/" + code + "/invoice/" + strconv.Itoa(invID) + "/pdf")
 	if err != nil {
@@ -235,10 +232,10 @@ func TestPortalPages_NoStore(t *testing.T) {
 	ts, db := publicTestServer(t)
 	contactID := mustContact(t, db, "No Store", "085555555555")
 	invID := mustInvoice(t, db, contactID)
-	if err := model.SendInvoice(db, invID, 1); err != nil {
+	if err := testutil.SendInvoice(db, invID, 1); err != nil {
 		t.Fatalf("send invoice: %v", err)
 	}
-	code, _ := model.GetOrCreatePortalCode(db, contactID)
+	code, _ := testutil.GetOrCreatePortalCode(db, contactID)
 
 	indexResp, err := http.Get(ts.URL + "/p/" + code)
 	if err != nil {
@@ -285,7 +282,7 @@ func TestInvoiceWhatsApp_NoPhone_RedirectsBackWithoutSending(t *testing.T) {
 	cookies := loginAsAdmin(t, ts)
 	contactID := mustContact(t, db, "WA NoPhone", "")
 	invID := mustInvoice(t, db, contactID)
-	if err := model.SendInvoice(db, invID, 1); err != nil {
+	if err := testutil.SendInvoice(db, invID, 1); err != nil {
 		t.Fatalf("send invoice: %v", err)
 	}
 
@@ -308,7 +305,7 @@ func TestInvoiceWhatsApp_Sent_RedirectsToWALink(t *testing.T) {
 	cookies := loginAsAdmin(t, ts)
 	contactID := mustContact(t, db, "WA Sent", "081234567890")
 	invID := mustInvoice(t, db, contactID)
-	if err := model.SendInvoice(db, invID, 1); err != nil {
+	if err := testutil.SendInvoice(db, invID, 1); err != nil {
 		t.Fatalf("send invoice: %v", err)
 	}
 
@@ -370,7 +367,7 @@ func TestContactEditPage_ShowsPortalLinkControl(t *testing.T) {
 		t.Error("expected the save-link control before any code exists")
 	}
 
-	code, _ := model.GetOrCreatePortalCode(db, contactID)
+	code, _ := testutil.GetOrCreatePortalCode(db, contactID)
 	req2, _ := requestWithCookies(db, "GET", ts.URL+"/contacts/"+strconv.Itoa(contactID)+"/edit", cookies, "")
 	resp2, err := noRedirectClient().Do(req2)
 	if err != nil {
@@ -397,7 +394,7 @@ func TestSaveContactPortalCode_BlankRegeneratesAndRedirects(t *testing.T) {
 	cookies := loginAsAdmin(t, ts)
 	contactID := mustContact(t, db, "Reset Me", "081111111111")
 
-	oldCode, _ := model.GetOrCreatePortalCode(db, contactID)
+	oldCode, _ := testutil.GetOrCreatePortalCode(db, contactID)
 
 	req, _ := requestWithCookies(db, "POST", ts.URL+"/contacts/"+strconv.Itoa(contactID)+"/portal-code", cookies, "")
 	resp, err := noRedirectClient().Do(req)
@@ -420,7 +417,7 @@ func TestSaveContactPortalCode_BlankRegeneratesAndRedirects(t *testing.T) {
 		t.Error("expected a new code after reset")
 	}
 
-	fam, err := model.ContactsByPortalCode(db, oldCode)
+	fam, err := testutil.ContactsByPortalCode(db, oldCode)
 	if err != nil {
 		t.Fatalf("lookup old code: %v", err)
 	}
@@ -434,11 +431,11 @@ func TestPortalIndex_ValidCode_ShowsInvoicesAndPDFLinks(t *testing.T) {
 	ts, db := publicTestServer(t)
 	contactID := mustContact(t, db, "Short Code Kid", "086666666666")
 	invID := mustInvoice(t, db, contactID)
-	if err := model.SendInvoice(db, invID, 1); err != nil {
+	if err := testutil.SendInvoice(db, invID, 1); err != nil {
 		t.Fatalf("send invoice: %v", err)
 	}
 
-	code, err := model.GetOrCreatePortalCode(db, contactID)
+	code, err := testutil.GetOrCreatePortalCode(db, contactID)
 	if err != nil {
 		t.Fatalf("get code: %v", err)
 	}
@@ -454,7 +451,7 @@ func TestPortalIndex_ValidCode_ShowsInvoicesAndPDFLinks(t *testing.T) {
 	body, _ := io.ReadAll(resp.Body)
 	text := string(body)
 
-	inv, _ := model.GetInvoice(db, invID)
+	inv, _ := testutil.GetInvoice(db, invID)
 	if !strings.Contains(text, inv.InvoiceNumber) {
 		t.Error("expected the invoice number on the portal page")
 	}
@@ -488,7 +485,7 @@ func TestPortalIndex_EchoesCanonicalLink(t *testing.T) {
 	t.Parallel()
 	ts, db := publicTestServer(t)
 	contactID := mustContact(t, db, "Learns Short Link", "081212121212")
-	code, _ := model.GetOrCreatePortalCode(db, contactID)
+	code, _ := testutil.GetOrCreatePortalCode(db, contactID)
 
 	resp, err := http.Get(ts.URL + "/p/" + strings.ToUpper(strings.ReplaceAll(code, "-", "")))
 	if err != nil {
@@ -516,14 +513,14 @@ func TestPortalIndex_PastDueInvoice_ShowsDueDateNotOverdueBadge(t *testing.T) {
 	ts, db := publicTestServer(t)
 	contactID := mustContact(t, db, "Past Due Kid", "081414141414")
 	invID := mustInvoice(t, db, contactID)
-	if err := model.SendInvoice(db, invID, 1); err != nil {
+	if err := testutil.SendInvoice(db, invID, 1); err != nil {
 		t.Fatalf("send invoice: %v", err)
 	}
 	if _, err := db.Exec("UPDATE invoices SET due_date = '2020-01-15' WHERE id = ?", invID); err != nil {
 		t.Fatalf("backdate due date: %v", err)
 	}
 
-	code, _ := model.GetOrCreatePortalCode(db, contactID)
+	code, _ := testutil.GetOrCreatePortalCode(db, contactID)
 	resp, err := http.Get(ts.URL + "/p/" + code)
 	if err != nil {
 		t.Fatal(err)
@@ -572,8 +569,8 @@ func TestSaveContactPortalCode_TakenCodeLeavesExistingIntact(t *testing.T) {
 	first := mustContact(t, db, "First Kid", "081111111111")
 	second := mustContact(t, db, "Second Kid", "082222222222")
 
-	model.SetPortalCode(db, first, "shared-777")
-	original, _ := model.GetOrCreatePortalCode(db, second)
+	testutil.SetPortalCode(db, first, "shared-777")
+	original, _ := testutil.GetOrCreatePortalCode(db, second)
 
 	req, _ := requestWithCookies(db, "POST", ts.URL+"/contacts/"+strconv.Itoa(second)+"/portal-code",
 		cookies, "portal_code=shared777")
@@ -597,7 +594,7 @@ func TestSaveContactPortalCode_NonAdminForbidden(t *testing.T) {
 	ts, db := testServer(t)
 	cookies := loginAsViewer(t, ts, db)
 	contactID := mustContact(t, db, "Guarded Kid", "081111111111")
-	original, _ := model.GetOrCreatePortalCode(db, contactID)
+	original, _ := testutil.GetOrCreatePortalCode(db, contactID)
 
 	req, _ := requestWithCookies(db, "POST", ts.URL+"/contacts/"+strconv.Itoa(contactID)+"/portal-code",
 		cookies, "portal_code=easy-guess")
@@ -622,7 +619,7 @@ func TestContactEditPage_HidesCodeEditorFromNonAdmin(t *testing.T) {
 	ts, db := testServer(t)
 	cookies := loginAsViewer(t, ts, db)
 	contactID := mustContact(t, db, "Viewer Sees", "081111111111")
-	model.GetOrCreatePortalCode(db, contactID)
+	testutil.GetOrCreatePortalCode(db, contactID)
 
 	req, _ := requestWithCookies(db, "GET", ts.URL+"/contacts/"+strconv.Itoa(contactID)+"/edit", cookies, "")
 	resp, err := noRedirectClient().Do(req)

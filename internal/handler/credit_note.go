@@ -1,12 +1,13 @@
 package handler
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
 
-	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/auth"
+	creditModule "github.com/naufal/latasya-erp/internal/creditnote"
 	"github.com/naufal/latasya-erp/internal/model"
 )
 
@@ -18,72 +19,65 @@ type creditNoteFormData struct {
 	Reasons         []reasonOption
 	Errors          map[string]string
 	IsEdit          bool
-	// SourceInvoice is set when creating from an invoice's "Create Credit Note"
-	// pre-fill button so the form can show the link explicitly.
-	SourceInvoice *model.Invoice
+	SourceInvoice   *model.Invoice
 }
+type reasonOption struct{ Value, Label string }
 
-type reasonOption struct {
-	Value string
-	Label string
+var creditNoteReasons = []reasonOption{{model.CreditNoteReasonCancellation, "Cancellation"}, {model.CreditNoteReasonReturn, "Return"}, {model.CreditNoteReasonDiscount, "Discount"}, {model.CreditNoteReasonOther, "Other"}}
+
+func (h *Handler) creditActor(r *http.Request) creditModule.Actor {
+	u := auth.UserFromContext(r.Context())
+	if u == nil {
+		return creditModule.Actor{}
+	}
+	return creditModule.Actor{UserID: u.ID, CanManage: u.HasCapability(model.CapInvoicesManage)}
 }
-
-var creditNoteReasons = []reasonOption{
-	{Value: model.CreditNoteReasonCancellation, Label: "Cancellation"},
-	{Value: model.CreditNoteReasonReturn, Label: "Return"},
-	{Value: model.CreditNoteReasonDiscount, Label: "Discount"},
-	{Value: model.CreditNoteReasonOther, Label: "Other"},
+func creditDraft(cn *model.CreditNote, lines []model.CreditNoteLine) creditModule.Draft {
+	d := creditModule.Draft{ContactID: cn.ContactID, InvoiceID: cn.InvoiceID, Date: cn.CNDate, Reason: cn.Reason, TaxAmount: cn.TaxAmount, Notes: cn.Notes, Lines: make([]creditModule.Line, len(lines))}
+	for i, l := range lines {
+		d.Lines[i] = creditModule.Line{Description: l.Description, Quantity: l.Quantity, UnitPrice: l.UnitPrice, AccountID: l.AccountID}
+	}
+	return d
 }
 
 func (h *Handler) ListCreditNotes(w http.ResponseWriter, r *http.Request) {
-	f := model.CreditNoteFilter{
-		Status: r.URL.Query().Get("status"),
-		Search: r.URL.Query().Get("search"),
-	}
-	total, err := model.CountCreditNotes(h.DB, f)
+	f := creditModule.Filter{Status: r.URL.Query().Get("status"), Search: r.URL.Query().Get("search")}
+	page := parsePage(r)
+	f.Limit, f.Offset = listPageSize, (page-1)*listPageSize
+	result, err := h.CreditNotes.List(r.Context(), f)
 	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		http.Error(w, "Internal Server Error", 500)
 		return
 	}
-	pg := newPagination(parsePage(r), total)
-	f.Limit, f.Offset = pg.PageSize, pg.Offset()
-
-	notes, err := model.ListCreditNotes(h.DB, f)
-	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
+	pg := newPagination(page, result.Total)
+	if pg.Page != page {
+		f.Offset = pg.Offset()
+		result, err = h.CreditNotes.List(r.Context(), f)
+		if err != nil {
+			http.Error(w, "Internal Server Error", 500)
+			return
+		}
 	}
-	h.render(w, r, "templates/credit_notes/index.html", "Credit Notes", map[string]any{
-		"CreditNotes": notes,
-		"Filter":      f.Status,
-		"Search":      f.Search,
-		"Pagination":  newPageNav(pg, map[string]string{"status": f.Status, "search": f.Search}),
-	})
+	h.render(w, r, "templates/credit_notes/index.html", "Credit Notes", map[string]any{"CreditNotes": result.CreditNotes, "Filter": f.Status, "Search": f.Search, "Pagination": newPageNav(pg, map[string]string{"status": f.Status, "search": f.Search})})
 }
-
 func (h *Handler) NewCreditNote(w http.ResponseWriter, r *http.Request) {
-	fd := h.newCreditNoteFormData()
+	fd, err := h.newCreditNoteFormData(r)
+	if err != nil {
+		http.Error(w, "Internal Server Error", 500)
+		return
+	}
 	fd.CreditNote = &model.CreditNote{Reason: model.CreditNoteReasonCancellation}
 	fd.Lines = []model.CreditNoteLine{{Quantity: 100}}
-
-	// Pre-fill from an invoice (?invoice_id=N) — typically the "Create
-	// Credit Note" button on the invoice view page.
-	if invIDStr := r.URL.Query().Get("invoice_id"); invIDStr != "" {
-		if invID, err := strconv.Atoi(invIDStr); err == nil {
-			if inv, err := model.GetInvoice(h.DB, invID); err == nil {
+	if raw := r.URL.Query().Get("invoice_id"); raw != "" {
+		if id, err := strconv.Atoi(raw); err == nil {
+			if inv, err := h.Invoices.Get(r.Context(), id); err == nil {
 				fd.SourceInvoice = inv
 				fd.CreditNote.ContactID = inv.ContactID
 				fd.CreditNote.InvoiceID = &inv.ID
 				fd.CreditNote.TaxAmount = inv.TaxAmount
 				lines := make([]model.CreditNoteLine, 0, len(inv.Lines))
-				for _, il := range inv.Lines {
-					lines = append(lines, model.CreditNoteLine{
-						Description: il.Description,
-						Quantity:    il.Quantity,
-						UnitPrice:   il.UnitPrice,
-						Amount:      il.Amount,
-						AccountID:   il.AccountID,
-					})
+				for _, l := range inv.Lines {
+					lines = append(lines, model.CreditNoteLine{Description: l.Description, Quantity: l.Quantity, UnitPrice: l.UnitPrice, Amount: l.Amount, AccountID: l.AccountID})
 				}
 				if len(lines) > 0 {
 					fd.Lines = lines
@@ -91,105 +85,39 @@ func (h *Handler) NewCreditNote(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-
 	h.render(w, r, "templates/credit_notes/form.html", "New Credit Note", fd, "templates/credit_notes/line_partial.html")
 }
-
 func (h *Handler) CreateCreditNote(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
-	user := auth.UserFromContext(r.Context())
-
-	contactID, _ := strconv.Atoi(r.FormValue("contact_id"))
-	taxAmount := parseIDR(r.FormValue("tax_amount"))
-	var invoiceID *int
-	if v := r.FormValue("invoice_id"); v != "" {
-		if id, err := strconv.Atoi(v); err == nil && id > 0 {
-			invoiceID = &id
-		}
-	}
-
-	cn := &model.CreditNote{
-		ContactID: contactID,
-		InvoiceID: invoiceID,
-		CNDate:    r.FormValue("cn_date"),
-		Reason:    r.FormValue("reason"),
-		TaxAmount: taxAmount,
-		Notes:     r.FormValue("notes"),
-		CreatedBy: user.ID,
-	}
-	lines := parseCreditNoteLines(r)
-	errors := validateCreditNote(cn, lines)
-
-	if len(errors) > 0 {
-		fd := h.newCreditNoteFormData()
-		fd.CreditNote = cn
-		fd.Lines = lines
-		fd.Errors = errors
-		h.render(w, r, "templates/credit_notes/form.html", "New Credit Note", fd, "templates/credit_notes/line_partial.html")
-		return
-	}
-
-	cnID, err := model.CreateCreditNote(h.DB, cn, lines)
+	cn, lines := parseCreditNote(r)
+	created, err := h.CreditNotes.Create(r.Context(), h.creditActor(r), creditDraft(cn, lines))
 	if err != nil {
-		fd := h.newCreditNoteFormData()
-		fd.CreditNote = cn
-		fd.Lines = lines
-		fd.Errors = map[string]string{"general": err.Error()}
-		h.render(w, r, "templates/credit_notes/form.html", "New Credit Note", fd, "templates/credit_notes/line_partial.html")
+		h.renderCreditForm(w, r, cn, lines, creditFormErrors(err), false)
 		return
 	}
-
-	created, _ := model.GetCreditNote(h.DB, cnID)
-	cnNumber := ""
-	total := 0
-	if created != nil {
-		cnNumber = created.CNNumber
-		total = created.Total
-	}
-	audit.Log(r.Context(), h.DB, audit.Event{
-		Action:      "credit_note.create",
-		TargetType:  "credit_note",
-		TargetID:    int64(cnID),
-		TargetLabel: cnNumber,
-		Metadata: map[string]any{
-			"after": map[string]any{
-				"contact_id": cn.ContactID,
-				"invoice_id": cn.InvoiceID,
-				"cn_date":    cn.CNDate,
-				"reason":     cn.Reason,
-				"total":      total,
-				"line_count": len(lines),
-			},
-		},
-	})
-
 	h.setFlash(w, "Credit note created")
-	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/credit-notes/%d", cnID), http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/credit-notes/%d", created.ID), http.StatusSeeOther)
 }
-
 func (h *Handler) ViewCreditNote(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.Atoi(r.PathValue("id"))
+	id, err := pathID(r)
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
-	cn, err := model.GetCreditNote(h.DB, id)
+	cn, err := h.CreditNotes.Get(r.Context(), id)
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
-	h.render(w, r, "templates/credit_notes/view.html", "Credit Note "+cn.CNNumber, map[string]any{
-		"CreditNote": cn,
-	})
+	h.render(w, r, "templates/credit_notes/view.html", "Credit Note "+cn.CNNumber, map[string]any{"CreditNote": cn})
 }
-
 func (h *Handler) EditCreditNote(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.Atoi(r.PathValue("id"))
+	id, err := pathID(r)
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
-	cn, err := model.GetCreditNote(h.DB, id)
+	cn, err := h.CreditNotes.Get(r.Context(), id)
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -199,265 +127,145 @@ func (h *Handler) EditCreditNote(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, h.BasePath+fmt.Sprintf("/credit-notes/%d", id), http.StatusSeeOther)
 		return
 	}
-	fd := h.newCreditNoteFormData()
-	fd.CreditNote = cn
-	fd.Lines = cn.Lines
-	fd.IsEdit = true
+	fd, err := h.newCreditNoteFormData(r)
+	if err != nil {
+		http.Error(w, "Internal Server Error", 500)
+		return
+	}
+	fd.CreditNote, fd.Lines, fd.IsEdit = cn, cn.Lines, true
 	h.render(w, r, "templates/credit_notes/form.html", "Edit Credit Note", fd, "templates/credit_notes/line_partial.html")
 }
-
 func (h *Handler) UpdateCreditNote(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.Atoi(r.PathValue("id"))
+	id, err := pathID(r)
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
-	old, err := model.GetCreditNote(h.DB, id)
-	if err != nil {
+	if _, err = h.CreditNotes.Get(r.Context(), id); err != nil {
 		http.NotFound(w, r)
 		return
 	}
-
 	r.ParseForm()
-	contactID, _ := strconv.Atoi(r.FormValue("contact_id"))
-	taxAmount := parseIDR(r.FormValue("tax_amount"))
-	var invoiceID *int
-	if v := r.FormValue("invoice_id"); v != "" {
-		if pid, perr := strconv.Atoi(v); perr == nil && pid > 0 {
-			invoiceID = &pid
-		}
-	}
-
-	cn := &model.CreditNote{
-		ID:        id,
-		ContactID: contactID,
-		InvoiceID: invoiceID,
-		CNDate:    r.FormValue("cn_date"),
-		Reason:    r.FormValue("reason"),
-		TaxAmount: taxAmount,
-		Notes:     r.FormValue("notes"),
-	}
-	lines := parseCreditNoteLines(r)
-	errors := validateCreditNote(cn, lines)
-
-	if len(errors) > 0 {
-		fd := h.newCreditNoteFormData()
-		fd.CreditNote = cn
-		fd.Lines = lines
-		fd.Errors = errors
-		fd.IsEdit = true
-		h.render(w, r, "templates/credit_notes/form.html", "Edit Credit Note", fd, "templates/credit_notes/line_partial.html")
+	cn, lines := parseCreditNote(r)
+	cn.ID = id
+	if _, err = h.CreditNotes.Update(r.Context(), h.creditActor(r), id, creditDraft(cn, lines)); err != nil {
+		h.renderCreditForm(w, r, cn, lines, creditFormErrors(err), true)
 		return
 	}
-
-	if err := model.UpdateCreditNote(h.DB, cn, lines); err != nil {
-		fd := h.newCreditNoteFormData()
-		fd.CreditNote = cn
-		fd.Lines = lines
-		fd.Errors = map[string]string{"general": err.Error()}
-		fd.IsEdit = true
-		h.render(w, r, "templates/credit_notes/form.html", "Edit Credit Note", fd, "templates/credit_notes/line_partial.html")
-		return
-	}
-
-	updated, _ := model.GetCreditNote(h.DB, id)
-	oldFields := map[string]any{
-		"contact_id": old.ContactID, "invoice_id": old.InvoiceID, "cn_date": old.CNDate,
-		"reason": old.Reason, "tax_amount": old.TaxAmount, "notes": old.Notes, "total": old.Total,
-	}
-	newFields := map[string]any{
-		"contact_id": cn.ContactID, "invoice_id": cn.InvoiceID, "cn_date": cn.CNDate,
-		"reason": cn.Reason, "tax_amount": cn.TaxAmount, "notes": cn.Notes,
-	}
-	if updated != nil {
-		newFields["total"] = updated.Total
-	}
-	metadata := audit.Diff(oldFields, newFields,
-		[]string{"contact_id", "invoice_id", "cn_date", "reason", "tax_amount", "notes", "total"})
-	if metadata != nil {
-		audit.Log(r.Context(), h.DB, audit.Event{
-			Action: "credit_note.update", TargetType: "credit_note",
-			TargetID: int64(id), TargetLabel: old.CNNumber, Metadata: metadata,
-		})
-	}
-
 	h.setFlash(w, "Credit note updated")
 	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/credit-notes/%d", id), http.StatusSeeOther)
 }
-
 func (h *Handler) IssueCreditNote(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.Atoi(r.PathValue("id"))
+	id, err := pathID(r)
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
-	user := auth.UserFromContext(r.Context())
-	if err := model.IssueCreditNote(h.DB, id, user.ID); err != nil {
+	if _, err = h.CreditNotes.Issue(r.Context(), h.creditActor(r), id); err != nil {
 		h.setFlash(w, "Error: "+err.Error())
 	} else {
-		if cn, err := model.GetCreditNote(h.DB, id); err == nil {
-			audit.Log(r.Context(), h.DB, audit.Event{
-				Action: "credit_note.issue", TargetType: "credit_note",
-				TargetID: int64(id), TargetLabel: cn.CNNumber,
-				Metadata: map[string]any{
-					"after":      map[string]any{"status": cn.Status},
-					"journal_id": cn.JournalID,
-					"invoice_id": cn.InvoiceID,
-				},
-			})
-		}
 		h.setFlash(w, "Credit note issued — journal entry posted")
 	}
 	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/credit-notes/%d", id), http.StatusSeeOther)
 }
-
 func (h *Handler) VoidCreditNote(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.Atoi(r.PathValue("id"))
+	id, err := pathID(r)
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
-	user := auth.UserFromContext(r.Context())
-	if err := model.VoidCreditNote(h.DB, id, user.ID); err != nil {
+	if _, err = h.CreditNotes.Void(r.Context(), h.creditActor(r), id); err != nil {
 		h.setFlash(w, "Error: "+err.Error())
 	} else {
-		if cn, err := model.GetCreditNote(h.DB, id); err == nil {
-			audit.Log(r.Context(), h.DB, audit.Event{
-				Action: "credit_note.void", TargetType: "credit_note",
-				TargetID: int64(id), TargetLabel: cn.CNNumber,
-				Metadata: map[string]any{
-					"after":      map[string]any{"status": cn.Status},
-					"invoice_id": cn.InvoiceID,
-				},
-			})
-		}
 		h.setFlash(w, "Credit note voided")
 	}
 	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/credit-notes/%d", id), http.StatusSeeOther)
 }
-
 func (h *Handler) DeleteCreditNote(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.Atoi(r.PathValue("id"))
+	id, err := pathID(r)
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
-	existing, _ := model.GetCreditNote(h.DB, id)
-	if err := model.DeleteCreditNote(h.DB, id); err != nil {
+	if _, err = h.CreditNotes.Delete(r.Context(), h.creditActor(r), id); err != nil {
 		h.setFlash(w, "Error: "+err.Error())
 		http.Redirect(w, r, h.BasePath+fmt.Sprintf("/credit-notes/%d", id), http.StatusSeeOther)
 		return
 	}
-	if existing != nil {
-		audit.Log(r.Context(), h.DB, audit.Event{
-			Action: "credit_note.delete", TargetType: "credit_note",
-			TargetID: int64(id), TargetLabel: existing.CNNumber,
-			Metadata: map[string]any{
-				"before": map[string]any{
-					"contact_id": existing.ContactID,
-					"invoice_id": existing.InvoiceID,
-					"cn_date":    existing.CNDate,
-					"status":     existing.Status,
-					"total":      existing.Total,
-				},
-			},
-		})
-	}
 	if r.Header.Get("HX-Request") == "true" {
-		w.WriteHeader(http.StatusOK)
+		w.WriteHeader(200)
 		return
 	}
 	h.setFlash(w, "Credit note deleted")
 	http.Redirect(w, r, h.BasePath+"/credit-notes", http.StatusSeeOther)
 }
-
-// CreditNoteLinePartial returns one new blank credit note line row for HTMX.
 func (h *Handler) CreditNoteLinePartial(w http.ResponseWriter, r *http.Request) {
-	active := true
-	accounts, _ := model.ListAccounts(h.DB, model.AccountFilter{Type: "revenue", IsActive: &active})
-
-	t, err := h.getTemplate("templates/credit_notes/line_partial.html")
+	options, err := h.CreditNotes.Options(r.Context())
 	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		http.Error(w, "Internal Server Error", 500)
 		return
 	}
-	t.ExecuteTemplate(w, "credit-note-line", map[string]any{"Accounts": accounts})
+	t, err := h.getTemplate("templates/credit_notes/line_partial.html")
+	if err != nil {
+		http.Error(w, "Internal Server Error", 500)
+		return
+	}
+	t.ExecuteTemplate(w, "credit-note-line", map[string]any{"Accounts": options.RevenueAccounts})
 }
 
+func parseCreditNote(r *http.Request) (*model.CreditNote, []model.CreditNoteLine) {
+	contact, _ := strconv.Atoi(r.FormValue("contact_id"))
+	var invoiceID *int
+	if raw := r.FormValue("invoice_id"); raw != "" {
+		if id, err := strconv.Atoi(raw); err == nil && id > 0 {
+			invoiceID = &id
+		}
+	}
+	cn := &model.CreditNote{ContactID: contact, InvoiceID: invoiceID, CNDate: r.FormValue("cn_date"), Reason: r.FormValue("reason"), TaxAmount: parseIDR(r.FormValue("tax_amount")), Notes: r.FormValue("notes")}
+	return cn, parseCreditNoteLines(r)
+}
 func parseCreditNoteLines(r *http.Request) []model.CreditNoteLine {
-	descriptions := r.Form["line_description"]
-	quantities := r.Form["line_quantity"]
-	unitPrices := r.Form["line_unit_price"]
-	accountIDs := r.Form["line_account_id"]
-
-	var lines []model.CreditNoteLine
+	descriptions, quantities, prices, accounts := r.Form["line_description"], r.Form["line_quantity"], r.Form["line_unit_price"], r.Form["line_account_id"]
+	lines := []model.CreditNoteLine{}
 	for i := range descriptions {
 		desc := getIndex(descriptions, i)
 		qty := parseQuantity(getIndex(quantities, i))
 		if qty == 0 {
 			qty = 100
 		}
-		price := parseIDR(getIndex(unitPrices, i))
-		accountID, _ := strconv.Atoi(getIndex(accountIDs, i))
-		if desc == "" && price == 0 && accountID == 0 {
+		price := parseIDR(getIndex(prices, i))
+		account, _ := strconv.Atoi(getIndex(accounts, i))
+		if desc == "" && price == 0 && account == 0 {
 			continue
 		}
-		lines = append(lines, model.CreditNoteLine{
-			Description: desc, Quantity: qty, UnitPrice: price,
-			AccountID: accountID, Amount: qty * price / 100,
-		})
+		lines = append(lines, model.CreditNoteLine{Description: desc, Quantity: qty, UnitPrice: price, AccountID: account, Amount: qty * price / 100})
 	}
 	return lines
 }
-
-func validateCreditNote(cn *model.CreditNote, lines []model.CreditNoteLine) map[string]string {
-	errors := make(map[string]string)
-	if cn.ContactID == 0 {
-		errors["contact_id"] = "Customer is required"
+func creditFormErrors(err error) map[string]string {
+	var validation *creditModule.ValidationError
+	if !errors.As(err, &validation) {
+		return map[string]string{"general": err.Error()}
 	}
-	if cn.CNDate == "" {
-		errors["cn_date"] = "Date is required"
-	}
-	if cn.Reason == "" {
-		errors["reason"] = "Reason is required"
-	}
-	if cn.Reason != "" {
-		validReasons := map[string]bool{
-			model.CreditNoteReasonCancellation: true,
-			model.CreditNoteReasonReturn:       true,
-			model.CreditNoteReasonDiscount:     true,
-			model.CreditNoteReasonOther:        true,
-		}
-		if !validReasons[cn.Reason] {
-			errors["reason"] = "Invalid reason"
-		}
-	}
-	if len(lines) == 0 {
-		errors["lines"] = "At least one line item is required"
-	}
-	for i, l := range lines {
-		if l.Description == "" {
-			errors[fmt.Sprintf("line_%d_desc", i)] = "Description required"
-		}
-		if l.UnitPrice <= 0 {
-			errors[fmt.Sprintf("line_%d_price", i)] = "Price required"
-		}
-		if l.AccountID == 0 {
-			errors[fmt.Sprintf("line_%d_account", i)] = "Account required"
-		}
-	}
-	return errors
+	return transportFormFields(validation.Fields)
 }
-
-func (h *Handler) newCreditNoteFormData() creditNoteFormData {
-	active := true
-	contacts, _ := model.ListContacts(h.DB, model.ContactFilter{Type: "customer", IsActive: &active})
-	revenueAccounts, _ := model.ListAccounts(h.DB, model.AccountFilter{Type: "revenue", IsActive: &active})
-
-	return creditNoteFormData{
-		Contacts:        contacts,
-		RevenueAccounts: revenueAccounts,
-		Reasons:         creditNoteReasons,
-		Errors:          make(map[string]string),
+func (h *Handler) newCreditNoteFormData(r *http.Request) (creditNoteFormData, error) {
+	options, err := h.CreditNotes.Options(r.Context())
+	if err != nil {
+		return creditNoteFormData{}, err
 	}
+	return creditNoteFormData{Contacts: options.Contacts, RevenueAccounts: options.RevenueAccounts, Reasons: creditNoteReasons, Errors: map[string]string{}}, nil
+}
+func (h *Handler) renderCreditForm(w http.ResponseWriter, r *http.Request, cn *model.CreditNote, lines []model.CreditNoteLine, errs map[string]string, edit bool) {
+	fd, err := h.newCreditNoteFormData(r)
+	if err != nil {
+		http.Error(w, "Internal Server Error", 500)
+		return
+	}
+	fd.CreditNote, fd.Lines, fd.Errors, fd.IsEdit = cn, lines, errs, edit
+	title := "New Credit Note"
+	if edit {
+		title = "Edit Credit Note"
+	}
+	h.render(w, r, "templates/credit_notes/form.html", title, fd, "templates/credit_notes/line_partial.html")
 }

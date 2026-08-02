@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/naufal/latasya-erp/internal/model"
+	"github.com/naufal/latasya-erp/internal/testutil"
 )
 
 func TestNewAccount_RendersForm(t *testing.T) {
@@ -235,7 +236,7 @@ func TestDeleteAccount_HTMX_RemovesRow(t *testing.T) {
 	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
-	if err := model.CreateAccount(db, &model.Account{
+	if err := testutil.CreateAccount(db, &model.Account{
 		Code: "9-7777", Name: "Delete Me", AccountType: "asset", NormalBalance: "debit", IsActive: true,
 	}); err != nil {
 		t.Fatalf("seed account: %v", err)

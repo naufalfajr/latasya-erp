@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/naufal/latasya-erp/internal/audit"
+	"github.com/naufal/latasya-erp/internal/auth"
+	"github.com/naufal/latasya-erp/internal/model"
 )
 
 type auditListData struct {
@@ -59,20 +61,21 @@ func (h *Handler) AuditList(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	entries, total, err := audit.List(h.DB, filter)
+	user := auth.UserFromContext(r.Context())
+	result, err := h.Audit.List(r.Context(), audit.Actor{UserID: user.ID, CanView: user.HasCapability(model.CapAuditView)}, filter)
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
-	totalPages := (total + pageSize - 1) / pageSize
+	totalPages := (result.Total + pageSize - 1) / pageSize
 	if totalPages < 1 {
 		totalPages = 1
 	}
 
 	h.render(w, r, "templates/audit/list.html", "Audit Log", auditListData{
-		Entries:    entries,
-		Total:      total,
+		Entries:    result.Entries,
+		Total:      result.Total,
 		Page:       page,
 		PageSize:   pageSize,
 		TotalPages: totalPages,

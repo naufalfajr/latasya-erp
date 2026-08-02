@@ -6,10 +6,11 @@ import (
 	"testing"
 
 	"github.com/naufal/latasya-erp/internal/model"
+	"github.com/naufal/latasya-erp/internal/testutil"
 )
 
 // Minimal smoke tests: render end-to-end, assert 200 + one expected keyword
-// per page. Math correctness is covered by internal/model/report_test.go;
+// per page. Math correctness is covered by internal/reporting/report_test.go;
 // these only guard the handler/template/routing seam from regressions.
 
 func TestReport_TrialBalance_Renders(t *testing.T) {
@@ -54,7 +55,7 @@ func TestReport_GeneralLedger_WithAccountFilter(t *testing.T) {
 		t.Fatalf("revenue account not seeded: %v", err)
 	}
 
-	if _, err := model.CreateJournalEntry(db,
+	if _, err := testutil.CreateJournalEntry(db,
 		&model.JournalEntry{EntryDate: "2026-04-01", Description: "GL test entry", IsPosted: true, CreatedBy: 1},
 		[]model.JournalLine{
 			{AccountID: cashID, Debit: 100000},
@@ -127,7 +128,7 @@ func assertReportWithData(t *testing.T, path, sourceType string, amount int, wan
 	if err := db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID); err != nil {
 		t.Fatalf("revenue account not seeded: %v", err)
 	}
-	if _, err := model.CreateJournalEntry(db,
+	if _, err := testutil.CreateJournalEntry(db,
 		&model.JournalEntry{EntryDate: "2026-04-01", Description: "report test entry", SourceType: sourceType, IsPosted: true, CreatedBy: 1},
 		[]model.JournalLine{
 			{AccountID: cashID, Debit: amount},

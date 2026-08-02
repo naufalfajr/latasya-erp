@@ -2,12 +2,29 @@ package audit_test
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/testutil"
 )
+
+func listAudit(db *sql.DB, filter audit.ListFilter) ([]audit.Entry, int, error) {
+	page, err := audit.New(db).List(context.Background(), audit.Actor{UserID: 1, CanView: true}, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+	return page.Entries, page.Total, nil
+}
+
+func TestListRequiresAuthorization(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	if _, err := audit.New(db).List(context.Background(), audit.Actor{}, audit.ListFilter{}); !errors.Is(err, audit.ErrForbidden) {
+		t.Fatalf("error=%v", err)
+	}
+}
 
 func TestList_ReturnsMostRecentFirst(t *testing.T) {
 	db := testutil.SetupTestDB(t)
@@ -19,7 +36,7 @@ func TestList_ReturnsMostRecentFirst(t *testing.T) {
 	time.Sleep(5 * time.Millisecond)
 	audit.Log(ctx, db, audit.Event{Action: "third", ActorUsername: "a"})
 
-	entries, total, err := audit.List(db, audit.ListFilter{})
+	entries, total, err := listAudit(db, audit.ListFilter{})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
@@ -42,7 +59,7 @@ func TestList_FilterByActor(t *testing.T) {
 	audit.Log(ctx, db, audit.Event{Action: "b", ActorUsername: "bob"})
 	audit.Log(ctx, db, audit.Event{Action: "c", ActorUsername: "alice"})
 
-	entries, total, err := audit.List(db, audit.ListFilter{ActorUsername: "alice"})
+	entries, total, err := listAudit(db, audit.ListFilter{ActorUsername: "alice"})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
@@ -59,7 +76,7 @@ func TestList_FilterByActionPrefix(t *testing.T) {
 	audit.Log(ctx, db, audit.Event{Action: "invoice.update"})
 	audit.Log(ctx, db, audit.Event{Action: "bill.create"})
 
-	entries, total, err := audit.List(db, audit.ListFilter{ActionPrefix: "invoice."})
+	entries, total, err := listAudit(db, audit.ListFilter{ActionPrefix: "invoice."})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
@@ -76,7 +93,7 @@ func TestList_Pagination(t *testing.T) {
 		audit.Log(ctx, db, audit.Event{Action: "test", ActorUsername: "a"})
 	}
 
-	page1, total, err := audit.List(db, audit.ListFilter{Limit: 3, Offset: 0})
+	page1, total, err := listAudit(db, audit.ListFilter{Limit: 3, Offset: 0})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
@@ -87,7 +104,7 @@ func TestList_Pagination(t *testing.T) {
 		t.Errorf("page1 len = %d, want 3", len(page1))
 	}
 
-	page3, _, _ := audit.List(db, audit.ListFilter{Limit: 3, Offset: 6})
+	page3, _, _ := listAudit(db, audit.ListFilter{Limit: 3, Offset: 6})
 	if len(page3) != 1 {
 		t.Errorf("page3 len = %d, want 1 (leftover from 7)", len(page3))
 	}

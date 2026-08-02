@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/naufal/latasya-erp/internal/access"
 	"github.com/naufal/latasya-erp/internal/auth"
 	"github.com/naufal/latasya-erp/internal/testutil"
 )
@@ -12,7 +13,7 @@ import (
 func TestRequireAuth_NoSession(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 
-	handler := auth.RequireAuth(db, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := auth.RequireAuth(db, access.New(db, nil), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -37,7 +38,7 @@ func TestSetLoginPath(t *testing.T) {
 
 	db := testutil.SetupTestDB(t)
 
-	handler := auth.RequireAuth(db, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := auth.RequireAuth(db, access.New(db, nil), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -56,7 +57,7 @@ func TestSetLoginPath(t *testing.T) {
 func TestRequireAuth_InvalidSession(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 
-	handler := auth.RequireAuth(db, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := auth.RequireAuth(db, access.New(db, nil), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -74,7 +75,7 @@ func TestRequireAuth_ValidSession(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 
 	var reached bool
-	handler := auth.RequireAuth(db, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := auth.RequireAuth(db, access.New(db, nil), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		reached = true
 		user := auth.UserFromContext(r.Context())
 		if user == nil {
@@ -113,7 +114,7 @@ func TestRequireAdmin_AdminAllowed(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	handler := auth.RequireAuth(db, auth.RequireAdmin(inner))
+	handler := auth.RequireAuth(db, access.New(db, nil), auth.RequireAdmin(inner))
 
 	var userID int
 	db.QueryRow("SELECT id FROM users WHERE username = 'admin'").Scan(&userID)
@@ -139,7 +140,7 @@ func TestRequireAdmin_ViewerDenied(t *testing.T) {
 		t.Error("viewer should not reach admin handler")
 	})
 
-	handler := auth.RequireAuth(db, auth.RequireAdmin(inner))
+	handler := auth.RequireAuth(db, access.New(db, nil), auth.RequireAdmin(inner))
 
 	viewerID := testutil.CreateTestUser(t, db, "testviewer", "pass", "viewer")
 	sessionID := testutil.CreateTestSession(t, db, viewerID)
@@ -163,7 +164,7 @@ func TestRequireCapability_AdminAllowedForAnyCap(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	handler := auth.RequireAuth(db, auth.RequireCapability("accounts.manage")(inner))
+	handler := auth.RequireAuth(db, access.New(db, nil), auth.RequireCapability("accounts.manage")(inner))
 
 	var userID int
 	db.QueryRow("SELECT id FROM users WHERE username = 'admin'").Scan(&userID)
@@ -191,7 +192,7 @@ func TestRequireCapability_BookkeeperAllowedForGrantedCap(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	handler := auth.RequireAuth(db, auth.RequireCapability("invoices.manage")(inner))
+	handler := auth.RequireAuth(db, access.New(db, nil), auth.RequireCapability("invoices.manage")(inner))
 
 	bkID := testutil.CreateTestUser(t, db, "bk", "pw", "bookkeeper")
 	sessionID := testutil.CreateTestSession(t, db, bkID)
@@ -216,7 +217,7 @@ func TestRequireCapability_BookkeeperDeniedForUngrantedCap(t *testing.T) {
 		t.Error("bookkeeper should not pass users.manage")
 	})
 
-	handler := auth.RequireAuth(db, auth.RequireCapability("users.manage")(inner))
+	handler := auth.RequireAuth(db, access.New(db, nil), auth.RequireCapability("users.manage")(inner))
 
 	bkID := testutil.CreateTestUser(t, db, "bk", "pw", "bookkeeper")
 	sessionID := testutil.CreateTestSession(t, db, bkID)
@@ -239,7 +240,7 @@ func TestRequireCapability_ViewerDeniedForWriteCaps(t *testing.T) {
 			inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				t.Errorf("viewer should not pass %s", cap)
 			})
-			handler := auth.RequireAuth(db, auth.RequireCapability(cap)(inner))
+			handler := auth.RequireAuth(db, access.New(db, nil), auth.RequireCapability(cap)(inner))
 
 			viewerID := testutil.CreateTestUser(t, db, "viewer_"+cap, "pw", "viewer")
 			sessionID := testutil.CreateTestSession(t, db, viewerID)
@@ -262,7 +263,7 @@ func TestCapabilityOnly_DeniesWithoutCapability(t *testing.T) {
 	fn := auth.CapabilityOnly("invoices.manage", func(w http.ResponseWriter, r *http.Request) {
 		t.Error("viewer should not reach handler")
 	})
-	handler := auth.RequireAuth(db, http.HandlerFunc(fn))
+	handler := auth.RequireAuth(db, access.New(db, nil), http.HandlerFunc(fn))
 
 	viewerID := testutil.CreateTestUser(t, db, "vonly", "pw", "viewer")
 	sessionID := testutil.CreateTestSession(t, db, viewerID)
@@ -289,7 +290,7 @@ func TestRequireAuth_InactiveUser(t *testing.T) {
 	userID, _ := result.LastInsertId()
 	sessionID, _ := auth.CreateSession(db, int(userID))
 
-	handler := auth.RequireAuth(db, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := auth.RequireAuth(db, access.New(db, nil), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Error("inactive user should not reach handler")
 	}))
 

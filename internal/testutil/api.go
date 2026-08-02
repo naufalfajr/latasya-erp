@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/naufal/latasya-erp/internal/auth"
-	"github.com/naufal/latasya-erp/internal/model"
 )
 
 // apiMatrixSeq provides unique suffixes for usernames created inside APIMatrix
@@ -63,7 +62,7 @@ func APIMatrix(t *testing.T, ts *httptest.Server, db *sql.DB, method, path, body
 	createBearer := func(userID int, scopes []string, expiresAt *time.Time) string {
 		t.Helper()
 		tokenSeq++
-		_, plaintext, err := model.CreateAPIToken(db, userID, fmt.Sprintf("apimatrix-%d-%d", seq, tokenSeq), scopes, expiresAt)
+		_, plaintext, err := CreateAPIToken(db, userID, fmt.Sprintf("apimatrix-%d-%d", seq, tokenSeq), scopes, expiresAt)
 		if err != nil {
 			t.Fatalf("APIMatrix: create api token: %v", err)
 		}
@@ -127,11 +126,11 @@ func APIMatrix(t *testing.T, ts *httptest.Server, db *sql.DB, method, path, body
 
 	if matrix.RevokedBearer != 0 {
 		tokenSeq++
-		tokenObj, plaintext, err := model.CreateAPIToken(db, adminID, fmt.Sprintf("apimatrix-%d-%d", seq, tokenSeq), []string{"accounts.manage"}, nil)
+		tokenObj, plaintext, err := CreateAPIToken(db, adminID, fmt.Sprintf("apimatrix-%d-%d", seq, tokenSeq), []string{"accounts.manage"}, nil)
 		if err != nil {
 			t.Fatalf("APIMatrix: create revoked token: %v", err)
 		}
-		if err := model.RevokeAPIToken(db, adminID, tokenObj.ID); err != nil {
+		if err := RevokeAPIToken(db, adminID, tokenObj.ID); err != nil {
 			t.Fatalf("APIMatrix: revoke token: %v", err)
 		}
 		revokedPlaintext := plaintext

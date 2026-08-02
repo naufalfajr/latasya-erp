@@ -4,52 +4,14 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"strconv"
 	"strings"
 	"testing"
 
-	"github.com/naufal/latasya-erp/internal/auth"
 	"github.com/naufal/latasya-erp/internal/model"
 	"github.com/naufal/latasya-erp/internal/testutil"
 )
-
-// testServerForInvoiceBulkActions wires up only the bulk-action /
-// recurring-invoice routes that aren't part of the shared testServer's route
-// table (see handler_test.go), mirroring the pattern in
-// testServerWithSchoolCalendar (school_calendar_test.go). Kept separate so we
-// never touch handler_test.go, which other agents are editing concurrently.
-func testServerForInvoiceBulkActions(t *testing.T) (*httptest.Server, *sql.DB) {
-	t.Helper()
-	db := testutil.SetupTestDB(t)
-	h := testutil.SetupTestHandler(t, db)
-
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /login", h.LoginPage)
-	mux.HandleFunc("POST /login", h.Login)
-
-	protected := http.NewServeMux()
-	protected.HandleFunc("POST /invoices/generate-recurring", auth.CapabilityOnly(model.CapInvoicesManage, h.GenerateRecurringInvoices))
-	protected.HandleFunc("POST /invoices/bulk-delete", auth.CapabilityOnly(model.CapInvoicesManage, h.BulkDeleteInvoices))
-	protected.HandleFunc("POST /invoices/bulk-send", auth.CapabilityOnly(model.CapInvoicesManage, h.BulkSendInvoices))
-	protected.HandleFunc("GET /password/change", h.PasswordChangePage)
-	protected.HandleFunc("POST /password/change", h.PasswordChange)
-
-	mux.Handle("/", auth.RequireAuth(db, auth.CSRFProtect(h.EnforcePasswordChange(protected))))
-
-	hash, err := auth.HashPassword(adminTestPassword)
-	if err != nil {
-		t.Fatalf("hash admin password: %v", err)
-	}
-	if _, err := db.Exec("UPDATE users SET password=?, must_change_password=0 WHERE username='admin'", hash); err != nil {
-		t.Fatalf("update admin: %v", err)
-	}
-
-	ts := httptest.NewServer(mux)
-	t.Cleanup(ts.Close)
-	return ts, db
-}
 
 // seedCustomer inserts an active customer contact and returns its ID.
 func seedCustomer(t *testing.T, db *sql.DB, name string) int {
@@ -64,9 +26,8 @@ func seedCustomer(t *testing.T, db *sql.DB, name string) int {
 	return id
 }
 
-// mustCreateDraftInvoice creates a draft invoice directly via the model layer
-// (bypassing HTTP/handler validation) so bulk-action tests can set up fixture
-// invoices without going through the full form-submission flow.
+// mustCreateDraftInvoice creates a fixture through the invoice module so
+// bulk-action tests do not depend on form parsing.
 func mustCreateDraftInvoice(t *testing.T, db *sql.DB, contactID, accountID, unitPrice int) int {
 	t.Helper()
 	var adminID int
@@ -80,7 +41,7 @@ func mustCreateDraftInvoice(t *testing.T, db *sql.DB, contactID, accountID, unit
 		CreatedBy:   adminID,
 	}
 	lines := []model.InvoiceLine{{Description: "Bus fee", Quantity: 100, UnitPrice: unitPrice, AccountID: accountID}}
-	id, err := model.CreateInvoice(db, inv, lines)
+	id, err := testutil.CreateInvoice(db, inv, lines)
 	if err != nil {
 		t.Fatalf("create draft invoice: %v", err)
 	}
@@ -100,7 +61,7 @@ func accountID(t *testing.T, db *sql.DB, code string) int {
 
 func TestGenerateRecurringInvoices_CreatesDraftsForActiveCustomers(t *testing.T) {
 	t.Parallel()
-	ts, db := testServerForInvoiceBulkActions(t)
+	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 	seedCustomer(t, db, "Recurring Customer")
 
@@ -131,7 +92,7 @@ func TestGenerateRecurringInvoices_CreatesDraftsForActiveCustomers(t *testing.T)
 
 func TestGenerateRecurringInvoices_NoDefaultRevenueAccount(t *testing.T) {
 	t.Parallel()
-	ts, db := testServerForInvoiceBulkActions(t)
+	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 	seedCustomer(t, db, "No Default Account Customer")
 
@@ -162,7 +123,7 @@ func TestGenerateRecurringInvoices_NoDefaultRevenueAccount(t *testing.T) {
 
 func TestGenerateRecurringInvoices_PerCustomerFailureReported(t *testing.T) {
 	t.Parallel()
-	ts, db := testServerForInvoiceBulkActions(t)
+	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 	seedCustomer(t, db, "Dangling Account Customer")
 
@@ -201,7 +162,7 @@ func TestGenerateRecurringInvoices_PerCustomerFailureReported(t *testing.T) {
 
 func TestBulkDeleteInvoices_NoneSelected(t *testing.T) {
 	t.Parallel()
-	ts, db := testServerForInvoiceBulkActions(t)
+	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
 	req, _ := requestWithCookies(db, "POST", ts.URL+"/invoices/bulk-delete", cookies, "")
@@ -221,7 +182,7 @@ func TestBulkDeleteInvoices_NoneSelected(t *testing.T) {
 
 func TestBulkDeleteInvoices_DeletesDraftsSkipsRest(t *testing.T) {
 	t.Parallel()
-	ts, db := testServerForInvoiceBulkActions(t)
+	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
 	contactID := seedCustomer(t, db, "Bulk Delete Customer")
@@ -232,7 +193,7 @@ func TestBulkDeleteInvoices_DeletesDraftsSkipsRest(t *testing.T) {
 	sentInv := mustCreateDraftInvoice(t, db, contactID, revenueID, 100000)
 	var adminID int
 	db.QueryRow("SELECT id FROM users WHERE username = 'admin'").Scan(&adminID)
-	if err := model.SendInvoice(db, sentInv, adminID); err != nil {
+	if err := testutil.SendInvoice(db, sentInv, adminID); err != nil {
 		t.Fatalf("send invoice: %v", err)
 	}
 
@@ -273,7 +234,7 @@ func TestBulkDeleteInvoices_DeletesDraftsSkipsRest(t *testing.T) {
 
 func TestBulkSendInvoices_NoneSelected(t *testing.T) {
 	t.Parallel()
-	ts, db := testServerForInvoiceBulkActions(t)
+	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
 	req, _ := requestWithCookies(db, "POST", ts.URL+"/invoices/bulk-send", cookies, "")
@@ -293,22 +254,24 @@ func TestBulkSendInvoices_NoneSelected(t *testing.T) {
 
 func TestBulkSendInvoices_SendsSkipsAndReportsFailures(t *testing.T) {
 	t.Parallel()
-	ts, db := testServerForInvoiceBulkActions(t)
+	ts, db := testServer(t)
 	cookies := loginAsAdmin(t, ts)
 
 	contactID := seedCustomer(t, db, "Bulk Send Customer")
 	revenueID := accountID(t, db, "4-1001")
 
 	okDraft := mustCreateDraftInvoice(t, db, contactID, revenueID, 100000)
-	// A zero-price line makes the invoice total 0, which makes SendInvoice's
-	// underlying journal entry fail balance validation ("must have at least
-	// one debit and credit line") — a realistic per-invoice send failure.
-	zeroTotalDraft := mustCreateDraftInvoice(t, db, contactID, revenueID, 0)
+	// Corrupt one otherwise-valid fixture after creation so its debit no longer
+	// balances the revenue line, exercising per-invoice send failure handling.
+	zeroTotalDraft := mustCreateDraftInvoice(t, db, contactID, revenueID, 100000)
+	if _, err := db.Exec("UPDATE invoices SET subtotal=0, total=0 WHERE id=?", zeroTotalDraft); err != nil {
+		t.Fatal(err)
+	}
 
 	var adminID int
 	db.QueryRow("SELECT id FROM users WHERE username = 'admin'").Scan(&adminID)
 	alreadySent := mustCreateDraftInvoice(t, db, contactID, revenueID, 100000)
-	if err := model.SendInvoice(db, alreadySent, adminID); err != nil {
+	if err := testutil.SendInvoice(db, alreadySent, adminID); err != nil {
 		t.Fatalf("send invoice: %v", err)
 	}
 
@@ -487,7 +450,7 @@ func TestEditInvoice_NonDraftRedirects(t *testing.T) {
 
 	var adminID int
 	db.QueryRow("SELECT id FROM users WHERE username = 'admin'").Scan(&adminID)
-	if err := model.SendInvoice(db, invID, adminID); err != nil {
+	if err := testutil.SendInvoice(db, invID, adminID); err != nil {
 		t.Fatalf("send invoice: %v", err)
 	}
 
@@ -573,7 +536,7 @@ func TestUpdateInvoice_ModelErrorOnNonDraft(t *testing.T) {
 
 	var adminID int
 	db.QueryRow("SELECT id FROM users WHERE username = 'admin'").Scan(&adminID)
-	if err := model.SendInvoice(db, invID, adminID); err != nil {
+	if err := testutil.SendInvoice(db, invID, adminID); err != nil {
 		t.Fatalf("send invoice: %v", err)
 	}
 
@@ -762,6 +725,12 @@ func TestInvoiceLinePartial_HTMX(t *testing.T) {
 	body := readBody(t, resp)
 	if !strings.Contains(body, `name="line_account_id"`) || !strings.Contains(body, "4-1001") {
 		t.Errorf("expected invoice-line partial with a revenue account option, got body of length %d", len(body))
+	}
+	if strings.Count(body, "<tr>") != 1 || strings.Contains(body, "<html") || strings.Contains(body, "<body") {
+		t.Errorf("expected one standalone table-row fragment, got %q", body)
+	}
+	if contentType := resp.Header.Get("Content-Type"); contentType != "text/html; charset=utf-8" {
+		t.Errorf("Content-Type = %q", contentType)
 	}
 }
 

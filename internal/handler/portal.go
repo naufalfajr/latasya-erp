@@ -47,7 +47,7 @@ func (h *Handler) PortalIndex(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "private, no-store")
 
 	code := r.PathValue("code")
-	family, err := model.ContactsByPortalCode(h.DB, code)
+	family, err := h.Contacts.FamilyByPortalCode(r.Context(), code)
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
@@ -69,12 +69,12 @@ func (h *Handler) PortalIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	invoices, err := model.ListPortalInvoices(h.DB, family.ContactIDs())
+	invoices, err := h.Invoices.PortalInvoices(r.Context(), family.ContactIDs())
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
-	company, err := model.GetCompanyProfile(h.DB)
+	company, err := h.Company.Get(r.Context())
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
@@ -144,7 +144,7 @@ func (h *Handler) PortalInvoicePDF(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	family, err := model.ContactsByPortalCode(h.DB, code)
+	family, err := h.Contacts.FamilyByPortalCode(r.Context(), code)
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
@@ -154,13 +154,13 @@ func (h *Handler) PortalInvoicePDF(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	inv, err := model.GetInvoice(h.DB, id)
+	inv, err := h.Invoices.Get(r.Context(), id)
 	if err != nil || inv.Status == model.StatusDraft || !family.Has(inv.ContactID) {
 		http.NotFound(w, r)
 		return
 	}
 
-	company, err := model.GetCompanyProfile(h.DB)
+	company, err := h.Company.Get(r.Context())
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
@@ -175,4 +175,10 @@ func (h *Handler) PortalInvoicePDF(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/pdf")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=%q", inv.InvoiceNumber+".pdf"))
 	w.Write(data)
+}
+
+func (h *Handler) RegisterPublicRoutes(mux *http.ServeMux, portalMiddleware func(http.Handler) http.Handler) {
+	mux.HandleFunc("GET /{$}", h.PublicHome)
+	mux.Handle("GET /p/{code}", portalMiddleware(http.HandlerFunc(h.PortalIndex)))
+	mux.Handle("GET /p/{code}/invoice/{id}/pdf", portalMiddleware(http.HandlerFunc(h.PortalInvoicePDF)))
 }

@@ -2,376 +2,194 @@
 package expenses
 
 import (
-	"database/sql"
-	"errors"
 	"net/http"
 	"strconv"
 
 	v1 "github.com/naufal/latasya-erp/internal/api/v1"
-	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/auth"
+	"github.com/naufal/latasya-erp/internal/journal"
 	"github.com/naufal/latasya-erp/internal/model"
 )
 
-// Handler handles /api/v1/expenses endpoints.
-type Handler struct {
-	DB *sql.DB
-}
+type Handler struct{ Journals *journal.Module }
 
-// accountRef is a compact account reference returned in responses.
 type accountRef struct {
 	ID   int    `json:"id"`
 	Code string `json:"code"`
 	Name string `json:"name"`
 }
 
-// expenseEntry is the canonical JSON representation of an expense record.
 type expenseEntry struct {
 	ID             int         `json:"id"`
 	Reference      string      `json:"reference"`
 	EntryDate      string      `json:"entry_date"`
 	Description    string      `json:"description"`
-	Amount         string      `json:"amount"` // IDR as integer string
+	Amount         string      `json:"amount"`
 	ExpenseAccount *accountRef `json:"expense_account,omitempty"`
 	PaymentAccount *accountRef `json:"payment_account,omitempty"`
 	CreatedAt      string      `json:"created_at"`
 }
 
-// expenseInput is the JSON request body for Create and Update.
 type expenseInput struct {
 	EntryDate      string `json:"entry_date"`
 	Description    string `json:"description"`
-	Amount         string `json:"amount"` // IDR as integer string
+	Amount         string `json:"amount"`
 	ExpenseAccount int    `json:"expense_account"`
 	PaymentAccount int    `json:"payment_account"`
 }
 
-// toExpenseEntry converts a JournalEntry to the API response shape.
-// For list entries (no Lines loaded), account refs will be nil.
-func toExpenseEntry(je *model.JournalEntry) expenseEntry {
-	e := expenseEntry{
-		ID:          je.ID,
-		Reference:   je.Reference,
-		EntryDate:   je.EntryDate,
-		Description: je.Description,
-		Amount:      strconv.Itoa(je.TotalDebit),
-		CreatedAt:   je.CreatedAt,
-	}
-	// Lines are only populated by GetJournalEntry (not ListJournalEntries).
-	for _, l := range je.Lines {
-		if l.Debit > 0 {
-			// Expense account: debited when expense is recorded
-			e.ExpenseAccount = &accountRef{ID: l.AccountID, Code: l.AccountCode, Name: l.AccountName}
+func toExpenseEntry(entry *model.JournalEntry) expenseEntry {
+	result := expenseEntry{ID: entry.ID, Reference: entry.Reference, EntryDate: entry.EntryDate,
+		Description: entry.Description, Amount: strconv.Itoa(entry.TotalDebit), CreatedAt: entry.CreatedAt}
+	for _, line := range entry.Lines {
+		if line.Debit > 0 {
+			result.ExpenseAccount = &accountRef{ID: line.AccountID, Code: line.AccountCode, Name: line.AccountName}
 		}
-		if l.Credit > 0 {
-			// Payment account: asset that pays for the expense (credit decreases asset)
-			e.PaymentAccount = &accountRef{ID: l.AccountID, Code: l.AccountCode, Name: l.AccountName}
+		if line.Credit > 0 {
+			result.PaymentAccount = &accountRef{ID: line.AccountID, Code: line.AccountCode, Name: line.AccountName}
 		}
 	}
-	return e
+	return result
 }
 
-func validateExpenseInput(inp *expenseInput) map[string]string {
-	fields := make(map[string]string)
-	if inp.EntryDate == "" {
-		fields["entry_date"] = "required"
+func actor(r *http.Request) journal.Actor {
+	user := auth.UserFromContext(r.Context())
+	if user == nil {
+		return journal.Actor{}
 	}
-	if inp.Description == "" {
-		fields["description"] = "required"
-	}
-	if inp.Amount == "" {
-		fields["amount"] = "required"
-	} else {
-		amt, err := strconv.Atoi(inp.Amount)
-		if err != nil || amt <= 0 {
-			fields["amount"] = "must be a positive integer"
-		}
-	}
-	if inp.ExpenseAccount == 0 {
-		fields["expense_account"] = "required"
-	}
-	if inp.PaymentAccount == 0 {
-		fields["payment_account"] = "required"
-	}
-	if len(fields) == 0 {
-		return nil
-	}
-	return fields
+	return journal.Actor{UserID: user.ID, CanManageExpenses: v1.HasEffectiveCapability(r.Context(), model.CapExpensesManage)}
 }
 
-// extractExpenseShape extracts amount + expense + payment account IDs from journal lines.
-func extractExpenseShape(je *model.JournalEntry) (amount, expenseAccount, paymentAccount int) {
-	for _, l := range je.Lines {
-		if l.Debit > 0 {
-			expenseAccount = l.AccountID
-			amount = l.Debit
-		}
-		if l.Credit > 0 {
-			paymentAccount = l.AccountID
-		}
+func draft(input expenseInput) (journal.ExpenseDraft, map[string]string) {
+	amount := 0
+	var err error
+	if input.Amount != "" {
+		amount, err = strconv.Atoi(input.Amount)
 	}
-	return
+	if err != nil {
+		return journal.ExpenseDraft{}, map[string]string{"amount": "must be a positive integer"}
+	}
+	return journal.ExpenseDraft{EntryDate: input.EntryDate, Description: input.Description, Amount: amount,
+		ExpenseAccount: input.ExpenseAccount, PaymentAccount: input.PaymentAccount}, nil
 }
 
-// List handles GET /api/v1/expenses
-// Query params: ?from=, ?to=, ?search=, ?page=, ?per_page=
-// Auth: any authenticated user.
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	page := v1.ParsePage(r)
-	f := model.JournalFilter{
-		SourceType: model.SourceExpense,
-		DateFrom:   r.URL.Query().Get("from"),
-		DateTo:     r.URL.Query().Get("to"),
-		Search:     r.URL.Query().Get("search"),
-		Limit:      page.PerPage,
-		Offset:     page.Offset(),
-	}
-
-	total, err := model.CountJournalEntries(h.DB, f)
+	result, err := h.Journals.List(r.Context(), journal.Filter{SourceType: model.SourceExpense,
+		DateFrom: r.URL.Query().Get("from"), DateTo: r.URL.Query().Get("to"), Search: r.URL.Query().Get("search"),
+		Limit: page.PerPage, Offset: page.Offset()})
 	if err != nil {
 		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to list expense entries", nil)
 		return
 	}
-
-	entries, err := model.ListJournalEntries(h.DB, f)
-	if err != nil {
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to list expense entries", nil)
-		return
+	entries := make([]expenseEntry, 0, len(result.Entries))
+	for i := range result.Entries {
+		entries = append(entries, toExpenseEntry(&result.Entries[i]))
 	}
-
-	result := make([]expenseEntry, 0, len(entries))
-	for _, je := range entries {
-		result = append(result, toExpenseEntry(&je))
-	}
-
-	v1.WriteList(w, http.StatusOK, result, page, total)
+	v1.WriteList(w, http.StatusOK, entries, page, result.Total)
 }
 
-// Get handles GET /api/v1/expenses/{id}
-// Auth: any authenticated user.
 func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.Atoi(r.PathValue("id"))
-	if err != nil {
-		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "expense entry not found", nil)
+	entry, ok := h.get(w, r)
+	if !ok {
 		return
 	}
-
-	je, err := model.GetJournalEntry(h.DB, id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "expense entry not found", nil)
-			return
-		}
-		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "expense entry not found", nil)
-		return
-	}
-
-	if je.SourceType != model.SourceExpense {
-		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "expense entry not found", nil)
-		return
-	}
-
-	v1.WriteJSON(w, http.StatusOK, map[string]any{"data": toExpenseEntry(je)})
+	v1.WriteJSON(w, http.StatusOK, map[string]any{"data": toExpenseEntry(entry)})
 }
 
-// Create handles POST /api/v1/expenses
-// Requires: CapExpensesManage. Idempotency-Key supported.
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
-	if !v1.HasEffectiveCapability(r.Context(), model.CapExpensesManage) {
-		v1.WriteError(w, r, http.StatusForbidden, v1.CodeForbidden, "expenses.manage capability required", nil)
+	if !requireManage(w, r) {
 		return
 	}
-
-	var inp expenseInput
-	if err := v1.DecodeJSON(w, r, &inp); err != nil {
+	var input expenseInput
+	if err := v1.DecodeJSON(w, r, &input); err != nil {
 		v1.WriteError(w, r, http.StatusBadRequest, v1.CodeInvalidRequest, "invalid request body", nil)
 		return
 	}
-
-	if fields := validateExpenseInput(&inp); fields != nil {
+	command, fields := draft(input)
+	if fields != nil {
 		v1.WriteError(w, r, http.StatusUnprocessableEntity, v1.CodeValidationFailed, "validation failed", fields)
 		return
 	}
-
-	amount, _ := strconv.Atoi(inp.Amount)
-
-	user := auth.UserFromContext(r.Context())
-	je := &model.JournalEntry{
-		EntryDate:   inp.EntryDate,
-		Description: inp.Description,
-		SourceType:  model.SourceExpense,
-		IsPosted:    true,
-		CreatedBy:   user.ID,
-	}
-
-	// Debit expense account (increases expense), credit asset (decreases cash/bank)
-	lines := []model.JournalLine{
-		{AccountID: inp.ExpenseAccount, Debit: amount, Credit: 0},
-		{AccountID: inp.PaymentAccount, Debit: 0, Credit: amount},
-	}
-
-	entryID, err := model.CreateJournalEntry(h.DB, je, lines)
-	if err != nil {
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to create expense entry", nil)
+	created, err := h.Journals.CreateExpense(r.Context(), actor(r), command)
+	if !writeModuleError(w, r, err) {
 		return
 	}
-
-	created, err := model.GetJournalEntry(h.DB, entryID)
-	if err != nil {
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to retrieve created expense entry", nil)
-		return
-	}
-
-	audit.Log(r.Context(), h.DB, audit.Event{
-		Action:      "expense.create",
-		TargetType:  "expense",
-		TargetID:    int64(entryID),
-		TargetLabel: inp.Description,
-		Metadata: map[string]any{
-			"after": map[string]any{
-				"entry_date":      inp.EntryDate,
-				"description":     inp.Description,
-				"amount":          amount,
-				"expense_account": inp.ExpenseAccount,
-				"payment_account": inp.PaymentAccount,
-			},
-		},
-	})
-
 	v1.WriteJSON(w, http.StatusCreated, map[string]any{"data": toExpenseEntry(created)})
 }
 
-// Update handles PUT /api/v1/expenses/{id}
-// Requires: CapExpensesManage. Idempotency-Key supported.
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
-	if !v1.HasEffectiveCapability(r.Context(), model.CapExpensesManage) {
-		v1.WriteError(w, r, http.StatusForbidden, v1.CodeForbidden, "expenses.manage capability required", nil)
+	if !requireManage(w, r) {
 		return
 	}
-
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "expense entry not found", nil)
 		return
 	}
-
-	existing, err := model.GetJournalEntry(h.DB, id)
-	if err != nil || existing.SourceType != model.SourceExpense {
+	if entry, err := h.Journals.Get(r.Context(), id); err != nil || entry.SourceType != model.SourceExpense {
 		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "expense entry not found", nil)
 		return
 	}
-
-	var inp expenseInput
-	if err := v1.DecodeJSON(w, r, &inp); err != nil {
+	var input expenseInput
+	if err := v1.DecodeJSON(w, r, &input); err != nil {
 		v1.WriteError(w, r, http.StatusBadRequest, v1.CodeInvalidRequest, "invalid request body", nil)
 		return
 	}
-
-	if fields := validateExpenseInput(&inp); fields != nil {
+	command, fields := draft(input)
+	if fields != nil {
 		v1.WriteError(w, r, http.StatusUnprocessableEntity, v1.CodeValidationFailed, "validation failed", fields)
 		return
 	}
-
-	amount, _ := strconv.Atoi(inp.Amount)
-
-	je := &model.JournalEntry{
-		ID:          id,
-		EntryDate:   inp.EntryDate,
-		Description: inp.Description,
-		SourceType:  model.SourceExpense,
-		IsPosted:    true,
-	}
-
-	lines := []model.JournalLine{
-		{AccountID: inp.ExpenseAccount, Debit: amount, Credit: 0},
-		{AccountID: inp.PaymentAccount, Debit: 0, Credit: amount},
-	}
-
-	if err := model.UpdateJournalEntry(h.DB, je, lines); err != nil {
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to update expense entry", nil)
+	updated, err := h.Journals.UpdateExpense(r.Context(), actor(r), id, command)
+	if !writeModuleError(w, r, err) {
 		return
 	}
-
-	updated, err := model.GetJournalEntry(h.DB, id)
-	if err != nil {
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to retrieve updated expense entry", nil)
-		return
-	}
-
-	oldAmount, oldExpenseAcct, oldPaymentAcct := extractExpenseShape(existing)
-	oldFields := map[string]any{
-		"entry_date":      existing.EntryDate,
-		"description":     existing.Description,
-		"amount":          oldAmount,
-		"expense_account": oldExpenseAcct,
-		"payment_account": oldPaymentAcct,
-	}
-	newFields := map[string]any{
-		"entry_date":      inp.EntryDate,
-		"description":     inp.Description,
-		"amount":          amount,
-		"expense_account": inp.ExpenseAccount,
-		"payment_account": inp.PaymentAccount,
-	}
-	if metadata := audit.Diff(oldFields, newFields,
-		[]string{"entry_date", "description", "amount", "expense_account", "payment_account"}); metadata != nil {
-		audit.Log(r.Context(), h.DB, audit.Event{
-			Action:      "expense.update",
-			TargetType:  "expense",
-			TargetID:    int64(id),
-			TargetLabel: inp.Description,
-			Metadata:    metadata,
-		})
-	}
-
 	v1.WriteJSON(w, http.StatusOK, map[string]any{"data": toExpenseEntry(updated)})
 }
 
-// Delete handles DELETE /api/v1/expenses/{id}
-// Requires: CapExpensesManage. Returns 204.
 func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
-	if !v1.HasEffectiveCapability(r.Context(), model.CapExpensesManage) {
-		v1.WriteError(w, r, http.StatusForbidden, v1.CodeForbidden, "expenses.manage capability required", nil)
+	if !requireManage(w, r) {
 		return
 	}
-
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "expense entry not found", nil)
 		return
 	}
+	if entry, err := h.Journals.Get(r.Context(), id); err != nil || entry.SourceType != model.SourceExpense {
+		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "expense entry not found", nil)
+		return
+	}
+	_, err = h.Journals.DeleteExpense(r.Context(), actor(r), id)
+	if !writeModuleError(w, r, err) {
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
 
-	existing, err := model.GetJournalEntry(h.DB, id)
+func requireManage(w http.ResponseWriter, r *http.Request) bool {
+	if v1.HasEffectiveCapability(r.Context(), model.CapExpensesManage) {
+		return true
+	}
+	v1.WriteError(w, r, http.StatusForbidden, v1.CodeForbidden, "expenses.manage capability required", nil)
+	return false
+}
+
+func (h *Handler) get(w http.ResponseWriter, r *http.Request) (*model.JournalEntry, bool) {
+	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "expense entry not found", nil)
-		return
+		return nil, false
 	}
-	if existing.SourceType != model.SourceExpense {
+	entry, err := h.Journals.Get(r.Context(), id)
+	if err != nil || entry.SourceType != model.SourceExpense {
 		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "expense entry not found", nil)
-		return
+		return nil, false
 	}
+	return entry, true
+}
 
-	if err := model.DeleteJournalEntryBySource(h.DB, id, model.SourceExpense); err != nil {
-		v1.WriteError(w, r, http.StatusConflict, v1.CodeConflict, err.Error(), nil)
-		return
-	}
-
-	amount, expenseAcct, paymentAcct := extractExpenseShape(existing)
-	audit.Log(r.Context(), h.DB, audit.Event{
-		Action:      "expense.delete",
-		TargetType:  "expense",
-		TargetID:    int64(id),
-		TargetLabel: existing.Description,
-		Metadata: map[string]any{
-			"before": map[string]any{
-				"entry_date":      existing.EntryDate,
-				"description":     existing.Description,
-				"amount":          amount,
-				"expense_account": expenseAcct,
-				"payment_account": paymentAcct,
-			},
-		},
-	})
-
-	w.WriteHeader(http.StatusNoContent)
+func writeModuleError(w http.ResponseWriter, r *http.Request, err error) bool {
+	return v1.WriteJournalError(w, r, err, v1.JournalErrorLabels{Capability: "expenses.manage", NotFound: "expense entry", Operation: "expense operation"})
 }

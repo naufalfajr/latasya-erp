@@ -2,375 +2,194 @@
 package income
 
 import (
-	"database/sql"
-	"errors"
 	"net/http"
 	"strconv"
 
 	v1 "github.com/naufal/latasya-erp/internal/api/v1"
-	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/auth"
+	"github.com/naufal/latasya-erp/internal/journal"
 	"github.com/naufal/latasya-erp/internal/model"
 )
 
-// Handler handles /api/v1/income endpoints.
-type Handler struct {
-	DB *sql.DB
-}
+type Handler struct{ Journals *journal.Module }
 
-// accountRef is a compact account reference returned in responses.
 type accountRef struct {
 	ID   int    `json:"id"`
 	Code string `json:"code"`
 	Name string `json:"name"`
 }
 
-// incomeEntry is the canonical JSON representation of an income record.
 type incomeEntry struct {
 	ID             int         `json:"id"`
 	Reference      string      `json:"reference"`
 	EntryDate      string      `json:"entry_date"`
 	Description    string      `json:"description"`
-	Amount         string      `json:"amount"` // IDR as integer string
+	Amount         string      `json:"amount"`
 	RevenueAccount *accountRef `json:"revenue_account,omitempty"`
 	DepositAccount *accountRef `json:"deposit_account,omitempty"`
 	CreatedAt      string      `json:"created_at"`
 }
 
-// incomeInput is the JSON request body for Create and Update.
 type incomeInput struct {
 	EntryDate      string `json:"entry_date"`
 	Description    string `json:"description"`
-	Amount         string `json:"amount"` // IDR as integer string
+	Amount         string `json:"amount"`
 	RevenueAccount int    `json:"revenue_account"`
 	DepositAccount int    `json:"deposit_account"`
 }
 
-// toIncomeEntry converts a JournalEntry to the API response shape.
-// For list entries (no Lines loaded), account refs will be nil.
-func toIncomeEntry(je *model.JournalEntry) incomeEntry {
-	e := incomeEntry{
-		ID:          je.ID,
-		Reference:   je.Reference,
-		EntryDate:   je.EntryDate,
-		Description: je.Description,
-		Amount:      strconv.Itoa(je.TotalDebit),
-		CreatedAt:   je.CreatedAt,
-	}
-	// Lines are only populated by GetJournalEntry (not ListJournalEntries).
-	for _, l := range je.Lines {
-		if l.Debit > 0 {
-			// Deposit account: asset that receives the payment (debit increases asset)
-			e.DepositAccount = &accountRef{ID: l.AccountID, Code: l.AccountCode, Name: l.AccountName}
+func toIncomeEntry(entry *model.JournalEntry) incomeEntry {
+	result := incomeEntry{ID: entry.ID, Reference: entry.Reference, EntryDate: entry.EntryDate,
+		Description: entry.Description, Amount: strconv.Itoa(entry.TotalDebit), CreatedAt: entry.CreatedAt}
+	for _, line := range entry.Lines {
+		if line.Debit > 0 {
+			result.DepositAccount = &accountRef{ID: line.AccountID, Code: line.AccountCode, Name: line.AccountName}
 		}
-		if l.Credit > 0 {
-			// Revenue account: credited when income is recorded
-			e.RevenueAccount = &accountRef{ID: l.AccountID, Code: l.AccountCode, Name: l.AccountName}
+		if line.Credit > 0 {
+			result.RevenueAccount = &accountRef{ID: line.AccountID, Code: line.AccountCode, Name: line.AccountName}
 		}
 	}
-	return e
+	return result
 }
 
-func validateIncomeInput(inp *incomeInput) map[string]string {
-	fields := make(map[string]string)
-	if inp.EntryDate == "" {
-		fields["entry_date"] = "required"
+func actor(r *http.Request) journal.Actor {
+	user := auth.UserFromContext(r.Context())
+	if user == nil {
+		return journal.Actor{}
 	}
-	if inp.Description == "" {
-		fields["description"] = "required"
-	}
-	if inp.Amount == "" {
-		fields["amount"] = "required"
-	} else {
-		amt, err := strconv.Atoi(inp.Amount)
-		if err != nil || amt <= 0 {
-			fields["amount"] = "must be a positive integer"
-		}
-	}
-	if inp.RevenueAccount == 0 {
-		fields["revenue_account"] = "required"
-	}
-	if inp.DepositAccount == 0 {
-		fields["deposit_account"] = "required"
-	}
-	if len(fields) == 0 {
-		return nil
-	}
-	return fields
+	return journal.Actor{UserID: user.ID, CanManageIncome: v1.HasEffectiveCapability(r.Context(), model.CapIncomeManage)}
 }
 
-// extractIncomeShape extracts amount + revenue + deposit account IDs from journal lines.
-func extractIncomeShape(je *model.JournalEntry) (amount, revenueAccount, depositAccount int) {
-	for _, l := range je.Lines {
-		if l.Debit > 0 {
-			depositAccount = l.AccountID
-			amount = l.Debit
-		}
-		if l.Credit > 0 {
-			revenueAccount = l.AccountID
-		}
+func draft(input incomeInput) (journal.IncomeDraft, map[string]string) {
+	amount := 0
+	var err error
+	if input.Amount != "" {
+		amount, err = strconv.Atoi(input.Amount)
 	}
-	return
+	if err != nil {
+		return journal.IncomeDraft{}, map[string]string{"amount": "must be a positive integer"}
+	}
+	return journal.IncomeDraft{EntryDate: input.EntryDate, Description: input.Description, Amount: amount,
+		RevenueAccount: input.RevenueAccount, DepositAccount: input.DepositAccount}, nil
 }
 
-// List handles GET /api/v1/income
-// Query params: ?from=, ?to=, ?search=, ?page=, ?per_page=
-// Auth: any authenticated user.
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	page := v1.ParsePage(r)
-	f := model.JournalFilter{
-		SourceType: model.SourceIncome,
-		DateFrom:   r.URL.Query().Get("from"),
-		DateTo:     r.URL.Query().Get("to"),
-		Search:     r.URL.Query().Get("search"),
-		Limit:      page.PerPage,
-		Offset:     page.Offset(),
-	}
-
-	total, err := model.CountJournalEntries(h.DB, f)
+	result, err := h.Journals.List(r.Context(), journal.Filter{SourceType: model.SourceIncome,
+		DateFrom: r.URL.Query().Get("from"), DateTo: r.URL.Query().Get("to"), Search: r.URL.Query().Get("search"),
+		Limit: page.PerPage, Offset: page.Offset()})
 	if err != nil {
 		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to list income entries", nil)
 		return
 	}
-
-	entries, err := model.ListJournalEntries(h.DB, f)
-	if err != nil {
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to list income entries", nil)
-		return
+	entries := make([]incomeEntry, 0, len(result.Entries))
+	for i := range result.Entries {
+		entries = append(entries, toIncomeEntry(&result.Entries[i]))
 	}
-
-	result := make([]incomeEntry, 0, len(entries))
-	for _, je := range entries {
-		result = append(result, toIncomeEntry(&je))
-	}
-
-	v1.WriteList(w, http.StatusOK, result, page, total)
+	v1.WriteList(w, http.StatusOK, entries, page, result.Total)
 }
 
-// Get handles GET /api/v1/income/{id}
-// Auth: any authenticated user.
 func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.Atoi(r.PathValue("id"))
-	if err != nil {
-		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "income entry not found", nil)
+	entry, ok := h.get(w, r)
+	if !ok {
 		return
 	}
-
-	je, err := model.GetJournalEntry(h.DB, id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "income entry not found", nil)
-			return
-		}
-		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "income entry not found", nil)
-		return
-	}
-
-	if je.SourceType != model.SourceIncome {
-		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "income entry not found", nil)
-		return
-	}
-
-	v1.WriteJSON(w, http.StatusOK, map[string]any{"data": toIncomeEntry(je)})
+	v1.WriteJSON(w, http.StatusOK, map[string]any{"data": toIncomeEntry(entry)})
 }
 
-// Create handles POST /api/v1/income
-// Requires: CapIncomeManage. Idempotency-Key supported.
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
-	if !v1.HasEffectiveCapability(r.Context(), model.CapIncomeManage) {
-		v1.WriteError(w, r, http.StatusForbidden, v1.CodeForbidden, "income.manage capability required", nil)
+	if !requireManage(w, r) {
 		return
 	}
-
-	var inp incomeInput
-	if err := v1.DecodeJSON(w, r, &inp); err != nil {
+	var input incomeInput
+	if err := v1.DecodeJSON(w, r, &input); err != nil {
 		v1.WriteError(w, r, http.StatusBadRequest, v1.CodeInvalidRequest, "invalid request body", nil)
 		return
 	}
-
-	if fields := validateIncomeInput(&inp); fields != nil {
+	command, fields := draft(input)
+	if fields != nil {
 		v1.WriteError(w, r, http.StatusUnprocessableEntity, v1.CodeValidationFailed, "validation failed", fields)
 		return
 	}
-
-	amount, _ := strconv.Atoi(inp.Amount)
-
-	user := auth.UserFromContext(r.Context())
-	je := &model.JournalEntry{
-		EntryDate:   inp.EntryDate,
-		Description: inp.Description,
-		SourceType:  model.SourceIncome,
-		IsPosted:    true,
-		CreatedBy:   user.ID,
-	}
-
-	lines := []model.JournalLine{
-		{AccountID: inp.DepositAccount, Debit: amount, Credit: 0},
-		{AccountID: inp.RevenueAccount, Debit: 0, Credit: amount},
-	}
-
-	entryID, err := model.CreateJournalEntry(h.DB, je, lines)
-	if err != nil {
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to create income entry", nil)
+	created, err := h.Journals.CreateIncome(r.Context(), actor(r), command)
+	if !writeModuleError(w, r, err) {
 		return
 	}
-
-	created, err := model.GetJournalEntry(h.DB, entryID)
-	if err != nil {
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to retrieve created income entry", nil)
-		return
-	}
-
-	audit.Log(r.Context(), h.DB, audit.Event{
-		Action:      "income.create",
-		TargetType:  "income",
-		TargetID:    int64(entryID),
-		TargetLabel: inp.Description,
-		Metadata: map[string]any{
-			"after": map[string]any{
-				"entry_date":      inp.EntryDate,
-				"description":     inp.Description,
-				"amount":          amount,
-				"revenue_account": inp.RevenueAccount,
-				"deposit_account": inp.DepositAccount,
-			},
-		},
-	})
-
 	v1.WriteJSON(w, http.StatusCreated, map[string]any{"data": toIncomeEntry(created)})
 }
 
-// Update handles PUT /api/v1/income/{id}
-// Requires: CapIncomeManage. Idempotency-Key supported.
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
-	if !v1.HasEffectiveCapability(r.Context(), model.CapIncomeManage) {
-		v1.WriteError(w, r, http.StatusForbidden, v1.CodeForbidden, "income.manage capability required", nil)
+	if !requireManage(w, r) {
 		return
 	}
-
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "income entry not found", nil)
 		return
 	}
-
-	existing, err := model.GetJournalEntry(h.DB, id)
-	if err != nil || existing.SourceType != model.SourceIncome {
+	if entry, err := h.Journals.Get(r.Context(), id); err != nil || entry.SourceType != model.SourceIncome {
 		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "income entry not found", nil)
 		return
 	}
-
-	var inp incomeInput
-	if err := v1.DecodeJSON(w, r, &inp); err != nil {
+	var input incomeInput
+	if err := v1.DecodeJSON(w, r, &input); err != nil {
 		v1.WriteError(w, r, http.StatusBadRequest, v1.CodeInvalidRequest, "invalid request body", nil)
 		return
 	}
-
-	if fields := validateIncomeInput(&inp); fields != nil {
+	command, fields := draft(input)
+	if fields != nil {
 		v1.WriteError(w, r, http.StatusUnprocessableEntity, v1.CodeValidationFailed, "validation failed", fields)
 		return
 	}
-
-	amount, _ := strconv.Atoi(inp.Amount)
-
-	je := &model.JournalEntry{
-		ID:          id,
-		EntryDate:   inp.EntryDate,
-		Description: inp.Description,
-		SourceType:  model.SourceIncome,
-		IsPosted:    true,
-	}
-
-	lines := []model.JournalLine{
-		{AccountID: inp.DepositAccount, Debit: amount, Credit: 0},
-		{AccountID: inp.RevenueAccount, Debit: 0, Credit: amount},
-	}
-
-	if err := model.UpdateJournalEntry(h.DB, je, lines); err != nil {
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to update income entry", nil)
+	updated, err := h.Journals.UpdateIncome(r.Context(), actor(r), id, command)
+	if !writeModuleError(w, r, err) {
 		return
 	}
-
-	updated, err := model.GetJournalEntry(h.DB, id)
-	if err != nil {
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to retrieve updated income entry", nil)
-		return
-	}
-
-	oldAmount, oldRevenueAcct, oldDepositAcct := extractIncomeShape(existing)
-	oldFields := map[string]any{
-		"entry_date":      existing.EntryDate,
-		"description":     existing.Description,
-		"amount":          oldAmount,
-		"revenue_account": oldRevenueAcct,
-		"deposit_account": oldDepositAcct,
-	}
-	newFields := map[string]any{
-		"entry_date":      inp.EntryDate,
-		"description":     inp.Description,
-		"amount":          amount,
-		"revenue_account": inp.RevenueAccount,
-		"deposit_account": inp.DepositAccount,
-	}
-	if metadata := audit.Diff(oldFields, newFields,
-		[]string{"entry_date", "description", "amount", "revenue_account", "deposit_account"}); metadata != nil {
-		audit.Log(r.Context(), h.DB, audit.Event{
-			Action:      "income.update",
-			TargetType:  "income",
-			TargetID:    int64(id),
-			TargetLabel: inp.Description,
-			Metadata:    metadata,
-		})
-	}
-
 	v1.WriteJSON(w, http.StatusOK, map[string]any{"data": toIncomeEntry(updated)})
 }
 
-// Delete handles DELETE /api/v1/income/{id}
-// Requires: CapIncomeManage. Returns 204.
 func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
-	if !v1.HasEffectiveCapability(r.Context(), model.CapIncomeManage) {
-		v1.WriteError(w, r, http.StatusForbidden, v1.CodeForbidden, "income.manage capability required", nil)
+	if !requireManage(w, r) {
 		return
 	}
-
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "income entry not found", nil)
 		return
 	}
+	if entry, err := h.Journals.Get(r.Context(), id); err != nil || entry.SourceType != model.SourceIncome {
+		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "income entry not found", nil)
+		return
+	}
+	_, err = h.Journals.DeleteIncome(r.Context(), actor(r), id)
+	if !writeModuleError(w, r, err) {
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
 
-	existing, err := model.GetJournalEntry(h.DB, id)
+func requireManage(w http.ResponseWriter, r *http.Request) bool {
+	if v1.HasEffectiveCapability(r.Context(), model.CapIncomeManage) {
+		return true
+	}
+	v1.WriteError(w, r, http.StatusForbidden, v1.CodeForbidden, "income.manage capability required", nil)
+	return false
+}
+
+func (h *Handler) get(w http.ResponseWriter, r *http.Request) (*model.JournalEntry, bool) {
+	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "income entry not found", nil)
-		return
+		return nil, false
 	}
-	if existing.SourceType != model.SourceIncome {
+	entry, err := h.Journals.Get(r.Context(), id)
+	if err != nil || entry.SourceType != model.SourceIncome {
 		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "income entry not found", nil)
-		return
+		return nil, false
 	}
+	return entry, true
+}
 
-	if err := model.DeleteJournalEntryBySource(h.DB, id, model.SourceIncome); err != nil {
-		v1.WriteError(w, r, http.StatusConflict, v1.CodeConflict, err.Error(), nil)
-		return
-	}
-
-	amount, revenueAcct, depositAcct := extractIncomeShape(existing)
-	audit.Log(r.Context(), h.DB, audit.Event{
-		Action:      "income.delete",
-		TargetType:  "income",
-		TargetID:    int64(id),
-		TargetLabel: existing.Description,
-		Metadata: map[string]any{
-			"before": map[string]any{
-				"entry_date":      existing.EntryDate,
-				"description":     existing.Description,
-				"amount":          amount,
-				"revenue_account": revenueAcct,
-				"deposit_account": depositAcct,
-			},
-		},
-	})
-
-	w.WriteHeader(http.StatusNoContent)
+func writeModuleError(w http.ResponseWriter, r *http.Request, err error) bool {
+	return v1.WriteJournalError(w, r, err, v1.JournalErrorLabels{Capability: "income.manage", NotFound: "income entry", Operation: "income operation"})
 }

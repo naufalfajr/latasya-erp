@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/naufal/latasya-erp/internal/model"
+	"github.com/naufal/latasya-erp/internal/testutil"
 )
 
 // Happy-path Update/Delete tests for the financial-mutation handlers.
@@ -117,6 +118,35 @@ func TestDeleteInvoice_Success(t *testing.T) {
 	db.QueryRow("SELECT COUNT(*) FROM invoices WHERE id = ?", invID).Scan(&n)
 	if n != 0 {
 		t.Errorf("invoice should be deleted, count = %d", n)
+	}
+}
+
+func TestDeleteInvoice_HTMXRedirectIncludesBasePath(t *testing.T) {
+	ts, db := testServer(t, "/dashboard")
+	cookies := loginAsAdmin(t, ts, "/dashboard")
+	db.Exec("INSERT INTO contacts (name, contact_type, is_active) VALUES ('BasePath Customer', 'customer', 1)")
+	var contactID, revenueID int
+	db.QueryRow("SELECT id FROM contacts WHERE name='BasePath Customer'").Scan(&contactID)
+	db.QueryRow("SELECT id FROM accounts WHERE code='4-1001'").Scan(&revenueID)
+	form := fmt.Sprintf("contact_id=%d&invoice_date=2026-04-04&due_date=2026-04-30&line_description=x&line_account_id=%d&line_quantity=1&line_unit_price=100000", contactID, revenueID)
+	req, _ := requestWithCookies(db, "POST", ts.URL+"/dashboard/invoices", cookies, form)
+	resp, err := noRedirectClient().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	var invoiceID int
+	db.QueryRow("SELECT id FROM invoices ORDER BY id DESC LIMIT 1").Scan(&invoiceID)
+
+	req, _ = requestWithCookies(db, "DELETE", ts.URL+"/dashboard/invoices/"+strconv.Itoa(invoiceID), cookies, "")
+	req.Header.Set("HX-Request", "true")
+	resp, err = noRedirectClient().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if redirect := resp.Header.Get("HX-Redirect"); redirect != "/dashboard/invoices" {
+		t.Fatalf("HX-Redirect=%q want /dashboard/invoices", redirect)
 	}
 }
 
@@ -588,7 +618,7 @@ func TestUpdateCreditNote_Success(t *testing.T) {
 	db.QueryRow("SELECT id FROM contacts WHERE name = 'CN Edit'").Scan(&contactID)
 	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
 
-	cnID, err := model.CreateCreditNote(db, &model.CreditNote{
+	cnID, err := testutil.CreateCreditNote(db, &model.CreditNote{
 		ContactID: contactID, CNDate: "2026-04-10",
 		Reason: model.CreditNoteReasonOther, CreatedBy: 1,
 	}, []model.CreditNoteLine{
@@ -630,7 +660,7 @@ func TestDeleteCreditNote_Success(t *testing.T) {
 	db.QueryRow("SELECT id FROM contacts WHERE name = 'CN Del'").Scan(&contactID)
 	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
 
-	cnID, _ := model.CreateCreditNote(db, &model.CreditNote{
+	cnID, _ := testutil.CreateCreditNote(db, &model.CreditNote{
 		ContactID: contactID, CNDate: "2026-04-10",
 		Reason: model.CreditNoteReasonOther, CreatedBy: 1,
 	}, []model.CreditNoteLine{
@@ -661,14 +691,14 @@ func TestIssueCreditNote_HTTP(t *testing.T) {
 	db.QueryRow("SELECT id FROM contacts WHERE name = 'CN Issue'").Scan(&contactID)
 	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
 
-	invID, _ := model.CreateInvoice(db, &model.Invoice{
+	invID, _ := testutil.CreateInvoice(db, &model.Invoice{
 		ContactID: contactID, InvoiceDate: "2026-04-04", DueDate: "2026-04-30", CreatedBy: 1,
 	}, []model.InvoiceLine{
 		{Description: "Service", Quantity: 100, UnitPrice: 1000000, AccountID: revenueID},
 	})
-	model.SendInvoice(db, invID, 1)
+	testutil.SendInvoice(db, invID, 1)
 
-	cnID, _ := model.CreateCreditNote(db, &model.CreditNote{
+	cnID, _ := testutil.CreateCreditNote(db, &model.CreditNote{
 		ContactID: contactID, InvoiceID: &invID, CNDate: "2026-04-10",
 		Reason: model.CreditNoteReasonCancellation, CreatedBy: 1,
 	}, []model.CreditNoteLine{
@@ -703,20 +733,20 @@ func TestVoidCreditNote_HTTP(t *testing.T) {
 	db.QueryRow("SELECT id FROM contacts WHERE name = 'CN Void'").Scan(&contactID)
 	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
 
-	invID, _ := model.CreateInvoice(db, &model.Invoice{
+	invID, _ := testutil.CreateInvoice(db, &model.Invoice{
 		ContactID: contactID, InvoiceDate: "2026-04-04", DueDate: "2026-04-30", CreatedBy: 1,
 	}, []model.InvoiceLine{
 		{Description: "Service", Quantity: 100, UnitPrice: 1000000, AccountID: revenueID},
 	})
-	model.SendInvoice(db, invID, 1)
+	testutil.SendInvoice(db, invID, 1)
 
-	cnID, _ := model.CreateCreditNote(db, &model.CreditNote{
+	cnID, _ := testutil.CreateCreditNote(db, &model.CreditNote{
 		ContactID: contactID, InvoiceID: &invID, CNDate: "2026-04-10",
 		Reason: model.CreditNoteReasonCancellation, CreatedBy: 1,
 	}, []model.CreditNoteLine{
 		{Description: "Cancel", Quantity: 100, UnitPrice: 1000000, AccountID: revenueID},
 	})
-	model.IssueCreditNote(db, cnID, 1)
+	testutil.IssueCreditNote(db, cnID, 1)
 
 	req, _ := requestWithCookies(db, "POST", ts.URL+"/credit-notes/"+strconv.Itoa(cnID)+"/void", cookies, "")
 	resp, err := noRedirectClient().Do(req)

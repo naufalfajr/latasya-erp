@@ -3,7 +3,6 @@
 package invoices
 
 import (
-	"database/sql"
 	"errors"
 	"fmt"
 	"net/http"
@@ -12,14 +11,14 @@ import (
 	"time"
 
 	v1 "github.com/naufal/latasya-erp/internal/api/v1"
-	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/auth"
+	invoiceModule "github.com/naufal/latasya-erp/internal/invoice"
 	"github.com/naufal/latasya-erp/internal/model"
 	"github.com/naufal/latasya-erp/internal/pdf"
 )
 
 type Handler struct {
-	DB *sql.DB
+	Invoices *invoiceModule.Module
 }
 
 type lineInput struct {
@@ -89,47 +88,25 @@ func parseQuantity(s string) (int, error) {
 	return whole*100 + frac, nil
 }
 
-func validateInvoiceInput(inp *invoiceInput) (map[string]string, []model.InvoiceLine, int) {
+func parseInvoiceInput(inp *invoiceInput) (map[string]string, invoiceModule.Draft) {
 	fields := map[string]string{}
-	if inp.ContactID <= 0 {
-		fields["contact_id"] = "required"
-	}
-	if strings.TrimSpace(inp.InvoiceDate) == "" {
-		fields["invoice_date"] = "required"
-	}
-	if strings.TrimSpace(inp.DueDate) == "" {
-		fields["due_date"] = "required"
-	}
-	if len(inp.Lines) == 0 {
-		fields["lines"] = "at least one line required"
-	}
-
 	tax, err := parseIDR(inp.TaxAmount)
 	if err != nil {
 		fields["tax_amount"] = "invalid amount"
 	}
 
-	lines := make([]model.InvoiceLine, 0, len(inp.Lines))
+	lines := make([]invoiceModule.DraftLine, 0, len(inp.Lines))
 	for i, l := range inp.Lines {
 		idx := strconv.Itoa(i)
-		if strings.TrimSpace(l.Description) == "" {
-			fields["lines["+idx+"].description"] = "required"
-		}
 		qty, err := parseQuantity(l.Quantity)
 		if err != nil || qty <= 0 {
 			fields["lines["+idx+"].quantity"] = "must be positive"
-			continue
 		}
 		price, err := parseIDR(l.UnitPrice)
-		if err != nil || price <= 0 {
+		if err != nil {
 			fields["lines["+idx+"].unit_price"] = "must be positive"
-			continue
 		}
-		if l.AccountID <= 0 {
-			fields["lines["+idx+"].account_id"] = "required"
-			continue
-		}
-		lines = append(lines, model.InvoiceLine{
+		lines = append(lines, invoiceModule.DraftLine{
 			Description: l.Description,
 			Quantity:    qty,
 			UnitPrice:   price,
@@ -137,10 +114,37 @@ func validateInvoiceInput(inp *invoiceInput) (map[string]string, []model.Invoice
 		})
 	}
 
-	if len(fields) > 0 {
-		return fields, nil, 0
+	draft := invoiceModule.Draft{
+		ContactID: inp.ContactID, InvoiceDate: inp.InvoiceDate, DueDate: inp.DueDate,
+		TaxAmount: tax, Notes: inp.Notes, Lines: lines,
 	}
-	return nil, lines, tax
+	var validation *invoiceModule.ValidationError
+	if errors.As(invoiceModule.ValidateDraft(draft), &validation) {
+		for name, message := range validation.Fields {
+			if fields[name] == "" {
+				fields[name] = apiInvoiceValidationMessage(name, message)
+			}
+		}
+	}
+	if len(fields) == 0 {
+		fields = nil
+	}
+	return fields, draft
+}
+
+func apiInvoiceValidationMessage(name, fallback string) string {
+	switch {
+	case name == "contact_id" || name == "invoice_date" || name == "due_date":
+		return "required"
+	case name == "lines":
+		return "at least one line required"
+	case strings.HasSuffix(name, ".description") || strings.HasSuffix(name, ".account_id"):
+		return "required"
+	case strings.HasSuffix(name, ".quantity") || strings.HasSuffix(name, ".unit_price"):
+		return "must be positive"
+	default:
+		return fallback
+	}
 }
 
 // invoiceResponse wraps the model invoice with credit-note summary used
@@ -153,29 +157,19 @@ type invoiceResponse struct {
 // List handles GET /api/v1/invoices.
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	page := v1.ParsePage(r)
-	filter := model.InvoiceFilter{
+	filter := invoiceModule.Filter{
 		Status: r.URL.Query().Get("status"),
 		Search: r.URL.Query().Get("search"),
 		Limit:  page.PerPage,
 		Offset: page.Offset(),
 	}
 
-	total, err := model.CountInvoices(h.DB, filter)
+	result, err := h.Invoices.List(r.Context(), filter)
 	if err != nil {
 		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to list invoices", nil)
 		return
 	}
-
-	invoices, err := model.ListInvoices(h.DB, filter)
-	if err != nil {
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to list invoices", nil)
-		return
-	}
-	if invoices == nil {
-		invoices = []model.Invoice{}
-	}
-
-	v1.WriteList(w, http.StatusOK, invoices, page, total)
+	v1.WriteList(w, http.StatusOK, result.Invoices, page, result.Total)
 }
 
 // Get handles GET /api/v1/invoices/{id}.
@@ -186,19 +180,18 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	inv, err := model.GetInvoice(h.DB, id)
+	detail, err := h.Invoices.Detail(r.Context(), id)
 	if err != nil {
-		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "invoice not found", nil)
+		if errors.Is(err, invoiceModule.ErrNotFound) {
+			v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "invoice not found", nil)
+		} else {
+			v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to retrieve invoice", nil)
+		}
 		return
 	}
 
-	creditNotes, _ := model.ListCreditNotesForInvoice(h.DB, id)
-	if creditNotes == nil {
-		creditNotes = []model.CreditNote{}
-	}
-
 	v1.WriteJSON(w, http.StatusOK, map[string]any{
-		"data": invoiceResponse{Invoice: inv, CreditNotes: creditNotes},
+		"data": invoiceResponse{Invoice: detail.Invoice, CreditNotes: detail.CreditNotes},
 	})
 }
 
@@ -216,48 +209,19 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fields, lines, tax := validateInvoiceInput(&inp)
+	fields, draft := parseInvoiceInput(&inp)
 	if fields != nil {
 		v1.WriteError(w, r, http.StatusUnprocessableEntity, v1.CodeValidationFailed, "validation failed", fields)
 		return
 	}
 
-	inv := &model.Invoice{
-		ContactID:   inp.ContactID,
-		InvoiceDate: inp.InvoiceDate,
-		DueDate:     inp.DueDate,
-		TaxAmount:   tax,
-		Notes:       inp.Notes,
-		CreatedBy:   user.ID,
-	}
-
-	id, err := model.CreateInvoice(h.DB, inv, lines)
+	created, err := h.Invoices.Create(r.Context(), invoiceModule.Actor{
+		UserID: user.ID, CanManage: v1.HasEffectiveCapability(r.Context(), model.CapInvoicesManage),
+	}, draft)
 	if err != nil {
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to create invoice", nil)
+		writeModuleError(w, r, err, "failed to create invoice")
 		return
 	}
-
-	created, err := model.GetInvoice(h.DB, id)
-	if err != nil {
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to retrieve created invoice", nil)
-		return
-	}
-
-	audit.Log(r.Context(), h.DB, audit.Event{
-		Action:      "invoice.create",
-		TargetType:  "invoice",
-		TargetID:    int64(id),
-		TargetLabel: created.InvoiceNumber,
-		Metadata: map[string]any{
-			"after": map[string]any{
-				"contact_id":   created.ContactID,
-				"invoice_date": created.InvoiceDate,
-				"due_date":     created.DueDate,
-				"total":        created.Total,
-				"line_count":   len(created.Lines),
-			},
-		},
-	})
 
 	v1.WriteJSON(w, http.StatusCreated, map[string]any{"data": created})
 }
@@ -268,21 +232,17 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		v1.WriteError(w, r, http.StatusForbidden, v1.CodeForbidden, "invoices.manage capability required", nil)
 		return
 	}
-
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "invoice not found", nil)
 		return
 	}
-
-	existing, err := model.GetInvoice(h.DB, id)
-	if err != nil {
-		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "invoice not found", nil)
-		return
+	user := auth.UserFromContext(r.Context())
+	actor := invoiceModule.Actor{
+		UserID: user.ID, CanManage: v1.HasEffectiveCapability(r.Context(), model.CapInvoicesManage),
 	}
-	if existing.Status != model.StatusDraft {
-		v1.WriteError(w, r, http.StatusConflict, v1.CodeConflict,
-			"can only edit draft invoices (current: "+existing.Status+")", nil)
+	if err := h.Invoices.CheckEditable(r.Context(), actor, id); err != nil {
+		writeModuleError(w, r, err, "failed to update invoice")
 		return
 	}
 
@@ -292,48 +252,36 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fields, lines, tax := validateInvoiceInput(&inp)
+	fields, draft := parseInvoiceInput(&inp)
 	if fields != nil {
 		v1.WriteError(w, r, http.StatusUnprocessableEntity, v1.CodeValidationFailed, "validation failed", fields)
 		return
 	}
 
-	inv := &model.Invoice{
-		ID:          id,
-		ContactID:   inp.ContactID,
-		InvoiceDate: inp.InvoiceDate,
-		DueDate:     inp.DueDate,
-		TaxAmount:   tax,
-		Notes:       inp.Notes,
-	}
-
-	if err := model.UpdateInvoice(h.DB, inv, lines); err != nil {
-		if strings.Contains(err.Error(), "can only edit") {
-			v1.WriteError(w, r, http.StatusConflict, v1.CodeConflict, err.Error(), nil)
-			return
-		}
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to update invoice", nil)
-		return
-	}
-
-	updated, err := model.GetInvoice(h.DB, id)
+	updated, err := h.Invoices.Update(r.Context(), actor, id, draft)
 	if err != nil {
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to retrieve updated invoice", nil)
+		writeModuleError(w, r, err, "failed to update invoice")
 		return
 	}
-
-	audit.Log(r.Context(), h.DB, audit.Event{
-		Action:      "invoice.update",
-		TargetType:  "invoice",
-		TargetID:    int64(id),
-		TargetLabel: updated.InvoiceNumber,
-		Metadata: map[string]any{
-			"before": map[string]any{"total": existing.Total},
-			"after":  map[string]any{"total": updated.Total},
-		},
-	})
 
 	v1.WriteJSON(w, http.StatusOK, map[string]any{"data": updated})
+}
+
+func writeModuleError(w http.ResponseWriter, r *http.Request, err error, fallback string) {
+	var validation *invoiceModule.ValidationError
+	var conflict *invoiceModule.ConflictError
+	switch {
+	case errors.Is(err, invoiceModule.ErrForbidden):
+		v1.WriteError(w, r, http.StatusForbidden, v1.CodeForbidden, err.Error(), nil)
+	case errors.Is(err, invoiceModule.ErrNotFound):
+		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, err.Error(), nil)
+	case errors.As(err, &validation):
+		v1.WriteError(w, r, http.StatusUnprocessableEntity, v1.CodeValidationFailed, validation.Error(), validation.Fields)
+	case errors.As(err, &conflict):
+		v1.WriteError(w, r, http.StatusConflict, v1.CodeConflict, conflict.Error(), nil)
+	default:
+		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, fallback, nil)
+	}
 }
 
 // Delete handles DELETE /api/v1/invoices/{id}. Only draft invoices may be deleted.
@@ -349,35 +297,11 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	existing, err := model.GetInvoice(h.DB, id)
-	if err != nil {
-		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "invoice not found", nil)
+	user := auth.UserFromContext(r.Context())
+	if _, err := h.Invoices.Delete(r.Context(), invoiceModule.Actor{UserID: user.ID, CanManage: v1.HasEffectiveCapability(r.Context(), model.CapInvoicesManage)}, id); err != nil {
+		writeModuleError(w, r, err, "failed to delete invoice")
 		return
 	}
-	if existing.Status != model.StatusDraft {
-		v1.WriteError(w, r, http.StatusConflict, v1.CodeConflict,
-			"can only delete draft invoices (current: "+existing.Status+")", nil)
-		return
-	}
-
-	if err := model.DeleteInvoice(h.DB, id); err != nil {
-		v1.WriteError(w, r, http.StatusConflict, v1.CodeConflict, err.Error(), nil)
-		return
-	}
-
-	audit.Log(r.Context(), h.DB, audit.Event{
-		Action:      "invoice.delete",
-		TargetType:  "invoice",
-		TargetID:    int64(id),
-		TargetLabel: existing.InvoiceNumber,
-		Metadata: map[string]any{
-			"before": map[string]any{
-				"contact_id":   existing.ContactID,
-				"invoice_date": existing.InvoiceDate,
-				"total":        existing.Total,
-			},
-		},
-	})
 
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -396,42 +320,11 @@ func (h *Handler) Send(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	existing, err := model.GetInvoice(h.DB, id)
+	updated, err := h.Invoices.Send(r.Context(), invoiceModule.Actor{UserID: user.ID, CanManage: v1.HasEffectiveCapability(r.Context(), model.CapInvoicesManage)}, id)
 	if err != nil {
-		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "invoice not found", nil)
+		writeModuleError(w, r, err, "failed to send invoice")
 		return
 	}
-	if existing.Status != model.StatusDraft {
-		v1.WriteError(w, r, http.StatusConflict, v1.CodeConflict,
-			"can only send draft invoices (current: "+existing.Status+")", nil)
-		return
-	}
-
-	if err := model.SendInvoice(h.DB, id, user.ID); err != nil {
-		if strings.Contains(err.Error(), "can only send") {
-			v1.WriteError(w, r, http.StatusConflict, v1.CodeConflict, err.Error(), nil)
-			return
-		}
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to send invoice", nil)
-		return
-	}
-
-	updated, err := model.GetInvoice(h.DB, id)
-	if err != nil {
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to retrieve invoice", nil)
-		return
-	}
-
-	audit.Log(r.Context(), h.DB, audit.Event{
-		Action:      "invoice.send",
-		TargetType:  "invoice",
-		TargetID:    int64(id),
-		TargetLabel: updated.InvoiceNumber,
-		Metadata: map[string]any{
-			"after":      map[string]any{"status": updated.Status},
-			"journal_id": updated.JournalID,
-		},
-	})
 
 	v1.WriteJSON(w, http.StatusOK, map[string]any{"data": updated})
 }
@@ -451,30 +344,15 @@ func (h *Handler) GenerateRecurring(w http.ResponseWriter, r *http.Request) {
 	invoiceDate := now.Format("2006-01-02")
 	dueDate := now.AddDate(0, 0, 10).Format("2006-01-02")
 
-	result, err := model.GenerateRecurringInvoices(h.DB, invoiceDate, dueDate, user.ID)
+	result, err := h.Invoices.GenerateRecurring(r.Context(), invoiceModule.Actor{UserID: user.ID, CanManage: v1.HasEffectiveCapability(r.Context(), model.CapInvoicesManage)}, invoiceDate, dueDate)
 	if err != nil {
-		if errors.Is(err, model.ErrNoDefaultRevenueAccount) {
+		if errors.Is(err, invoiceModule.ErrNoDefaultRevenueAccount) {
 			v1.WriteError(w, r, http.StatusUnprocessableEntity, v1.CodeValidationFailed, err.Error(), nil)
 			return
 		}
 		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to generate recurring invoices", nil)
 		return
 	}
-
-	audit.Log(r.Context(), h.DB, audit.Event{
-		Action:     "invoice.generate_recurring",
-		TargetType: "invoice",
-		Metadata: map[string]any{
-			"invoice_date":       invoiceDate,
-			"due_date":           dueDate,
-			"effective_days":     result.EffectiveDays,
-			"multiplier_percent": result.MultiplierPercent,
-			"created":            result.Created,
-			"skipped":            result.Skipped,
-			"failed":             result.Failed,
-			"created_invoices":   result.CreatedNumbers(),
-		},
-	})
 
 	v1.WriteJSON(w, http.StatusOK, map[string]any{"data": result})
 }
@@ -503,23 +381,18 @@ func (h *Handler) BulkDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	deleted, skipped, err := model.BulkDeleteDraftInvoices(h.DB, inp.IDs)
+	user := auth.UserFromContext(r.Context())
+	result, err := h.Invoices.BulkDelete(r.Context(), invoiceModule.Actor{UserID: user.ID, CanManage: v1.HasEffectiveCapability(r.Context(), model.CapInvoicesManage)}, inp.IDs)
 	if err != nil {
 		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to delete invoices", nil)
 		return
 	}
 
-	audit.Log(r.Context(), h.DB, audit.Event{
-		Action:     "invoice.bulk_delete",
-		TargetType: "invoice",
-		Metadata:   map[string]any{"deleted": deleted, "skipped": skipped},
-	})
-
 	v1.WriteJSON(w, http.StatusOK, map[string]any{
 		"data": map[string]any{
-			"deleted":          len(deleted),
-			"deleted_invoices": deleted,
-			"skipped":          skipped,
+			"deleted":          len(result.Deleted),
+			"deleted_invoices": result.Deleted,
+			"skipped":          result.Skipped,
 		},
 	})
 }
@@ -549,17 +422,11 @@ func (h *Handler) BulkSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res, err := model.BulkSendInvoices(h.DB, inp.IDs, user.ID)
+	res, err := h.Invoices.BulkSend(r.Context(), invoiceModule.Actor{UserID: user.ID, CanManage: v1.HasEffectiveCapability(r.Context(), model.CapInvoicesManage)}, inp.IDs)
 	if err != nil {
 		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to send invoices", nil)
 		return
 	}
-
-	audit.Log(r.Context(), h.DB, audit.Event{
-		Action:     "invoice.bulk_send",
-		TargetType: "invoice",
-		Metadata:   map[string]any{"sent": res.Sent, "skipped": res.Skipped, "failed": res.Failed},
-	})
 
 	v1.WriteJSON(w, http.StatusOK, map[string]any{
 		"data": map[string]any{
@@ -585,9 +452,9 @@ func (h *Handler) Payment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	existing, err := model.GetInvoice(h.DB, id)
-	if err != nil {
-		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "invoice not found", nil)
+	actor := invoiceModule.Actor{UserID: user.ID, CanManage: v1.HasEffectiveCapability(r.Context(), model.CapInvoicesManage)}
+	if err := h.Invoices.CheckExists(r.Context(), actor, id); err != nil {
+		writeModuleError(w, r, err, "failed to record payment")
 		return
 	}
 
@@ -613,44 +480,13 @@ func (h *Handler) Payment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if existing.Status == model.StatusDraft || existing.Status == "cancelled" || existing.Status == model.StatusPaid {
-		v1.WriteError(w, r, http.StatusConflict, v1.CodeConflict,
-			"cannot record payment for "+existing.Status+" invoice", nil)
-		return
-	}
-
-	if err := model.RecordInvoicePayment(h.DB, id, amount, inp.PaymentDate, inp.PaymentAccount, user.ID); err != nil {
-		if strings.Contains(err.Error(), "exceeds remaining") {
-			v1.WriteError(w, r, http.StatusUnprocessableEntity, v1.CodeValidationFailed, err.Error(),
-				map[string]string{"amount": "exceeds remaining balance"})
-			return
-		}
-		if strings.Contains(err.Error(), "cannot record payment") {
-			v1.WriteError(w, r, http.StatusConflict, v1.CodeConflict, err.Error(), nil)
-			return
-		}
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to record payment", nil)
-		return
-	}
-
-	updated, err := model.GetInvoice(h.DB, id)
-	if err != nil {
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to retrieve invoice", nil)
-		return
-	}
-
-	audit.Log(r.Context(), h.DB, audit.Event{
-		Action:      "invoice.payment",
-		TargetType:  "invoice",
-		TargetID:    int64(id),
-		TargetLabel: updated.InvoiceNumber,
-		Metadata: map[string]any{
-			"amount":             amount,
-			"payment_date":       inp.PaymentDate,
-			"payment_account_id": inp.PaymentAccount,
-			"status_after":       updated.Status,
-		},
+	updated, err := h.Invoices.RecordPayment(r.Context(), actor, id, invoiceModule.Payment{
+		Amount: amount, Date: inp.PaymentDate, AccountID: inp.PaymentAccount,
 	})
+	if err != nil {
+		writeModuleError(w, r, err, "failed to record payment")
+		return
+	}
 
 	v1.WriteJSON(w, http.StatusOK, map[string]any{"data": updated})
 }
@@ -667,26 +503,24 @@ func (h *Handler) PDF(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	inv, err := model.GetInvoice(h.DB, id)
+	document, err := h.Invoices.Document(r.Context(), id)
 	if err != nil {
-		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "invoice not found", nil)
+		if errors.Is(err, invoiceModule.ErrNotFound) {
+			v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "invoice not found", nil)
+		} else {
+			v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to load company profile", nil)
+		}
 		return
 	}
 
-	company, err := model.GetCompanyProfile(h.DB)
-	if err != nil {
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to load company profile", nil)
-		return
-	}
-
-	data, err := pdf.InvoicePDF(inv, company)
+	data, err := pdf.InvoicePDF(document.Invoice, document.Company)
 	if err != nil {
 		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to generate pdf", nil)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/pdf")
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", inv.InvoiceNumber+".pdf"))
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", document.Invoice.InvoiceNumber+".pdf"))
 	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
 	w.Write(data)
 }

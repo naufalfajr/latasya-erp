@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/naufal/latasya-erp/internal/access"
 	"github.com/naufal/latasya-erp/internal/auth"
 	"github.com/naufal/latasya-erp/internal/model"
 	"github.com/naufal/latasya-erp/internal/testutil"
@@ -33,109 +34,12 @@ func testServer(t *testing.T, basePath ...string) (*httptest.Server, *sql.DB) {
 
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("GET "+bp+"/login", h.LoginPage)
-	mux.HandleFunc("POST "+bp+"/login", h.Login)
-	mux.HandleFunc("POST "+bp+"/logout", h.Logout)
+	h.RegisterAuthRoutes(mux, func(next http.Handler) http.Handler { return next })
 
 	protected := http.NewServeMux()
-	protected.HandleFunc("GET /{$}", h.Dashboard)
-	protected.HandleFunc("GET /accounts", h.ListAccounts)
-	protected.HandleFunc("GET /accounts/new", h.NewAccount)
-	protected.HandleFunc("POST /accounts", auth.CapabilityOnly("accounts.manage", h.CreateAccount))
-	protected.HandleFunc("GET /accounts/{id}/edit", h.EditAccount)
-	protected.HandleFunc("POST /accounts/{id}", auth.CapabilityOnly("accounts.manage", h.UpdateAccount))
-	protected.HandleFunc("DELETE /accounts/{id}", auth.CapabilityOnly("accounts.manage", h.DeleteAccount))
-	protected.HandleFunc("GET /contacts", h.ListContacts)
-	protected.HandleFunc("GET /contacts/new", h.NewContact)
-	protected.HandleFunc("POST /contacts", auth.CapabilityOnly("contacts.manage", h.CreateContact))
-	protected.HandleFunc("GET /contacts/{id}/edit", h.EditContact)
-	protected.HandleFunc("POST /contacts/{id}", auth.CapabilityOnly("contacts.manage", h.UpdateContact))
-	protected.HandleFunc("DELETE /contacts/{id}", auth.CapabilityOnly("contacts.manage", h.DeleteContact))
-	protected.HandleFunc("POST /contacts/{id}/portal-code", auth.AdminOnly(h.SaveContactPortalCode))
-	protected.HandleFunc("GET /journals", h.ListJournals)
-	protected.HandleFunc("GET /journals/new", h.NewJournal)
-	protected.HandleFunc("POST /journals", auth.CapabilityOnly("journals.manage", h.CreateJournal))
-	protected.HandleFunc("GET /journals/{id}", h.ViewJournal)
-	protected.HandleFunc("GET /journals/{id}/edit", h.EditJournal)
-	protected.HandleFunc("POST /journals/{id}", auth.CapabilityOnly("journals.manage", h.UpdateJournal))
-	protected.HandleFunc("DELETE /journals/{id}", auth.CapabilityOnly("journals.manage", h.DeleteJournal))
-	protected.HandleFunc("GET /htmx/journal-line", h.JournalLinePartial)
-	protected.HandleFunc("GET /income", h.ListIncome)
-	protected.HandleFunc("GET /income/new", h.NewIncome)
-	protected.HandleFunc("POST /income", auth.CapabilityOnly("income.manage", h.CreateIncome))
-	protected.HandleFunc("GET /income/{id}/edit", h.EditIncome)
-	protected.HandleFunc("POST /income/{id}", auth.CapabilityOnly("income.manage", h.UpdateIncome))
-	protected.HandleFunc("DELETE /income/{id}", auth.CapabilityOnly("income.manage", h.DeleteIncome))
-	protected.HandleFunc("GET /expenses", h.ListExpenses)
-	protected.HandleFunc("GET /expenses/new", h.NewExpense)
-	protected.HandleFunc("POST /expenses", auth.CapabilityOnly("expenses.manage", h.CreateExpense))
-	protected.HandleFunc("GET /expenses/{id}/edit", h.EditExpense)
-	protected.HandleFunc("POST /expenses/{id}", auth.CapabilityOnly("expenses.manage", h.UpdateExpense))
-	protected.HandleFunc("DELETE /expenses/{id}", auth.CapabilityOnly("expenses.manage", h.DeleteExpense))
-	protected.HandleFunc("GET /invoices", h.ListInvoices)
-	protected.HandleFunc("GET /invoices/new", h.NewInvoice)
-	protected.HandleFunc("POST /invoices", auth.CapabilityOnly("invoices.manage", h.CreateInvoice))
-	protected.HandleFunc("GET /invoices/{id}", h.ViewInvoice)
-	protected.HandleFunc("GET /invoices/{id}/edit", h.EditInvoice)
-	protected.HandleFunc("POST /invoices/{id}", auth.CapabilityOnly("invoices.manage", h.UpdateInvoice))
-	protected.HandleFunc("DELETE /invoices/{id}", auth.CapabilityOnly("invoices.manage", h.DeleteInvoice))
-	protected.HandleFunc("POST /invoices/{id}/send", auth.CapabilityOnly("invoices.manage", h.SendInvoice))
-	protected.HandleFunc("POST /invoices/{id}/payment", auth.CapabilityOnly("invoices.manage", h.InvoicePayment))
-	protected.HandleFunc("GET /invoices/{id}/print", h.PrintInvoice)
-	protected.HandleFunc("GET /invoices/{id}/pdf", h.InvoicePDF)
-	protected.HandleFunc("GET /invoices/{id}/whatsapp", auth.CapabilityOnly("invoices.manage", h.InvoiceWhatsApp))
-	protected.HandleFunc("GET /credit-notes", h.ListCreditNotes)
-	protected.HandleFunc("GET /credit-notes/new", h.NewCreditNote)
-	protected.HandleFunc("POST /credit-notes", auth.CapabilityOnly("invoices.manage", h.CreateCreditNote))
-	protected.HandleFunc("GET /credit-notes/{id}", h.ViewCreditNote)
-	protected.HandleFunc("GET /credit-notes/{id}/edit", h.EditCreditNote)
-	protected.HandleFunc("POST /credit-notes/{id}", auth.CapabilityOnly("invoices.manage", h.UpdateCreditNote))
-	protected.HandleFunc("DELETE /credit-notes/{id}", auth.CapabilityOnly("invoices.manage", h.DeleteCreditNote))
-	protected.HandleFunc("POST /credit-notes/{id}/issue", auth.CapabilityOnly("invoices.manage", h.IssueCreditNote))
-	protected.HandleFunc("POST /credit-notes/{id}/void", auth.CapabilityOnly("invoices.manage", h.VoidCreditNote))
-	protected.HandleFunc("GET /htmx/credit-note-line", h.CreditNoteLinePartial)
-	protected.HandleFunc("GET /htmx/invoice-line", h.InvoiceLinePartial)
-	protected.HandleFunc("GET /bills", h.ListBills)
-	protected.HandleFunc("GET /bills/new", h.NewBill)
-	protected.HandleFunc("POST /bills", auth.CapabilityOnly("bills.manage", h.CreateBill))
-	protected.HandleFunc("GET /bills/{id}", h.ViewBill)
-	protected.HandleFunc("GET /bills/{id}/edit", h.EditBill)
-	protected.HandleFunc("POST /bills/{id}", auth.CapabilityOnly("bills.manage", h.UpdateBill))
-	protected.HandleFunc("DELETE /bills/{id}", auth.CapabilityOnly("bills.manage", h.DeleteBill))
-	protected.HandleFunc("POST /bills/{id}/receive", auth.CapabilityOnly("bills.manage", h.ReceiveBill))
-	protected.HandleFunc("POST /bills/{id}/payment", auth.CapabilityOnly("bills.manage", h.BillPayment))
-	protected.HandleFunc("GET /htmx/bill-line", h.BillLinePartial)
-	protected.HandleFunc("GET /reports/trial-balance", h.TrialBalance)
-	protected.HandleFunc("GET /reports/profit-loss", h.ProfitLoss)
-	protected.HandleFunc("GET /reports/balance-sheet", h.BalanceSheet)
-	protected.HandleFunc("GET /reports/cash-flow", h.CashFlowReport)
-	protected.HandleFunc("GET /reports/general-ledger", h.GeneralLedger)
-	adminMux := http.NewServeMux()
-	adminMux.HandleFunc("GET /users", h.ListUsers)
-	adminMux.HandleFunc("GET /users/new", h.NewUser)
-	adminMux.HandleFunc("POST /users", h.CreateUser)
-	adminMux.HandleFunc("GET /users/{id}/edit", h.EditUser)
-	adminMux.HandleFunc("POST /users/{id}", h.UpdateUser)
-	adminMux.HandleFunc("DELETE /users/{id}", h.DeleteUser)
-	protected.Handle("/users", auth.RequireCapability("users.manage")(adminMux))
-	protected.Handle("/users/", auth.RequireCapability("users.manage")(adminMux))
+	h.RegisterProtectedRoutes(protected)
 
-	roleMux := http.NewServeMux()
-	roleMux.HandleFunc("GET /roles", h.ListRoles)
-	roleMux.HandleFunc("GET /roles/new", h.NewRole)
-	roleMux.HandleFunc("POST /roles", h.CreateRole)
-	roleMux.HandleFunc("GET /roles/{name}/edit", h.EditRole)
-	roleMux.HandleFunc("POST /roles/{name}", h.UpdateRole)
-	roleMux.HandleFunc("DELETE /roles/{name}", h.DeleteRole)
-	protected.Handle("/roles", auth.RequireCapability("roles.manage")(roleMux))
-	protected.Handle("/roles/", auth.RequireCapability("roles.manage")(roleMux))
-
-	protected.HandleFunc("GET /password/change", h.PasswordChangePage)
-	protected.HandleFunc("POST /password/change", h.PasswordChange)
-
-	protected.HandleFunc("GET /audit", auth.CapabilityOnly("audit.view", h.AuditList))
-
-	authChain := auth.RequireAuth(db, auth.CSRFProtect(h.EnforcePasswordChange(protected)))
+	authChain := auth.RequireAuth(db, access.New(db, nil), auth.CSRFProtect(h.EnforcePasswordChange(protected)))
 	if bp == "" {
 		mux.Handle("/", authChain)
 	} else {
@@ -528,7 +432,7 @@ func TestListContacts_TableColumnsAndRouteSort(t *testing.T) {
 	if err := db.QueryRow("SELECT id FROM routes WHERE name = 'East'").Scan(&routeID); err != nil {
 		t.Fatalf("get route: %v", err)
 	}
-	if err := model.CreateContact(db, &model.Contact{
+	if err := testutil.CreateContact(db, &model.Contact{
 		Name:        "Mapped Customer",
 		ContactType: "customer",
 		MapsLink:    "https://maps.example/pickup",
@@ -846,7 +750,7 @@ func TestListIncome(t *testing.T) {
 	var cashID, revenueID int
 	db.QueryRow("SELECT id FROM accounts WHERE code = '1-1001'").Scan(&cashID)
 	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
-	if _, err := model.CreateJournalEntry(db,
+	if _, err := testutil.CreateJournalEntry(db,
 		&model.JournalEntry{EntryDate: "2026-04-04", Description: "Bus fare", SourceType: model.SourceIncome, IsPosted: true, CreatedBy: 1},
 		[]model.JournalLine{{AccountID: cashID, Debit: 500000}, {AccountID: revenueID, Credit: 500000}},
 	); err != nil {
@@ -952,7 +856,7 @@ func TestListExpenses(t *testing.T) {
 	var cashID, fuelID int
 	db.QueryRow("SELECT id FROM accounts WHERE code = '1-1001'").Scan(&cashID)
 	db.QueryRow("SELECT id FROM accounts WHERE code = '5-1001'").Scan(&fuelID)
-	if _, err := model.CreateJournalEntry(db,
+	if _, err := testutil.CreateJournalEntry(db,
 		&model.JournalEntry{EntryDate: "2026-04-05", Description: "Fuel", SourceType: model.SourceExpense, IsPosted: true, CreatedBy: 1},
 		[]model.JournalLine{{AccountID: fuelID, Debit: 400000}, {AccountID: cashID, Credit: 400000}},
 	); err != nil {
@@ -1146,6 +1050,47 @@ func TestListBills_Handler(t *testing.T) {
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+}
+
+func TestReceivablesPayablesListsClampHighPage(t *testing.T) {
+	t.Parallel()
+	ts, db := testServer(t)
+	cookies := loginAsAdmin(t, ts)
+	db.Exec("INSERT INTO contacts (name,contact_type,is_active) VALUES ('Page Supplier','supplier',1),('Page Customer','customer',1)")
+	var supplier, customer, expense, revenue int
+	db.QueryRow("SELECT id FROM contacts WHERE name='Page Supplier'").Scan(&supplier)
+	db.QueryRow("SELECT id FROM contacts WHERE name='Page Customer'").Scan(&customer)
+	db.QueryRow("SELECT id FROM accounts WHERE code='5-1001'").Scan(&expense)
+	db.QueryRow("SELECT id FROM accounts WHERE code='4-1001'").Scan(&revenue)
+	billID, err := testutil.CreateBill(db, &model.Bill{ContactID: supplier, BillDate: "2026-08-01", DueDate: "2026-08-31", CreatedBy: 1}, []model.BillLine{{Description: "Page bill", Quantity: 100, UnitPrice: 100_000, AccountID: expense}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := testutil.GetBill(db, billID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cnID, err := testutil.CreateCreditNote(db, &model.CreditNote{ContactID: customer, CNDate: "2026-08-01", Reason: model.CreditNoteReasonOther, CreatedBy: 1}, []model.CreditNoteLine{{Description: "Page credit", Quantity: 100, UnitPrice: 100_000, AccountID: revenue}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cnNumber string
+	db.QueryRow("SELECT cn_number FROM credit_notes WHERE id=?", cnID).Scan(&cnNumber)
+	for _, tc := range []struct{ path, want string }{{"/bills?page=999", b.BillNumber}, {"/credit-notes?page=999", cnNumber}} {
+		req, _ := requestWithCookies(db, "GET", ts.URL+tc.path, cookies, "")
+		resp, err := ts.Client().Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resp.StatusCode != http.StatusOK || !strings.Contains(string(body), tc.want) {
+			t.Fatalf("%s status=%d missing %q", tc.path, resp.StatusCode, tc.want)
+		}
 	}
 }
 

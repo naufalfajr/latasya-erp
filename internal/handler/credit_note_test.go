@@ -2,6 +2,7 @@ package handler_test
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -183,6 +184,32 @@ func TestCreateCreditNote_ValidationError_InvalidReason(t *testing.T) {
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("expected 200 (validation error), got %d", resp.StatusCode)
+	}
+}
+
+func TestCreateCreditNote_LineValidationError(t *testing.T) {
+	t.Parallel()
+	ts, db := testServer(t)
+	cookies := loginAsAdmin(t, ts)
+	db.Exec("INSERT INTO contacts (name,contact_type,is_active) VALUES ('CN Line Error','customer',1)")
+	var contact int
+	db.QueryRow("SELECT id FROM contacts WHERE name='CN Line Error'").Scan(&contact)
+	form := fmt.Sprintf("contact_id=%d&cn_date=2026-08-01&reason=other&line_description=Credit&line_quantity=1&line_unit_price=0&line_account_id=0", contact)
+	req, _ := requestWithCookies(db, "POST", ts.URL+"/credit-notes", cookies, form)
+	resp, err := noRedirectClient().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status=%d", resp.StatusCode)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), "must be positive") || !strings.Contains(string(body), "input-error") {
+		t.Fatalf("missing row validation feedback: %s", body)
 	}
 }
 

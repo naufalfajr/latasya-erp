@@ -1,20 +1,21 @@
 package handler
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
-	"unicode/utf8"
 
-	"github.com/naufal/latasya-erp/internal/audit"
+	"github.com/naufal/latasya-erp/internal/auth"
+	contactModule "github.com/naufal/latasya-erp/internal/contact"
 	"github.com/naufal/latasya-erp/internal/model"
 )
 
 type contactPageData struct {
 	Contacts      []model.Contact
-	RouteCapacity []model.RouteCapacity
+	RouteCapacity []contactModule.RouteCapacity
 	Filter        string
 	Search        string
 	Sort          string
@@ -23,34 +24,19 @@ type contactPageData struct {
 }
 
 func (h *Handler) ListContacts(w http.ResponseWriter, r *http.Request) {
-	filterType := r.URL.Query().Get("type")
-	search := r.URL.Query().Get("search")
-	sort := r.URL.Query().Get("sort")
-	order := r.URL.Query().Get("order")
-
-	// Show both active and inactive contacts so the status column is meaningful
-	// and inactive contacts remain reachable for reactivation via the edit page.
-	contacts, err := model.ListContacts(h.DB, model.ContactFilter{
-		Type:   filterType,
-		Search: search,
-		Sort:   sort,
-		Order:  order,
-	})
+	f := contactModule.Filter{Type: r.URL.Query().Get("type"), Search: r.URL.Query().Get("search"), Sort: r.URL.Query().Get("sort"), Order: r.URL.Query().Get("order")}
+	result, err := h.Contacts.List(r.Context(), f)
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
-
-	capacity, _ := model.ListRouteCapacity(h.DB)
-	h.render(w, r, "templates/contacts/index.html", "Contacts", contactPageData{
-		Contacts:      contacts,
-		RouteCapacity: capacity,
-		Filter:        filterType,
-		Search:        search,
-		Sort:          sort,
-		Order:         order,
-		SortURLs:      h.contactSortURLs(r, sort, order),
-	})
+	capacity, _ := h.Contacts.ListRouteCapacity(r.Context())
+	data := contactPageData{Contacts: result.Contacts, RouteCapacity: capacity, Filter: f.Type, Search: f.Search, Sort: f.Sort, Order: f.Order, SortURLs: h.contactSortURLs(r, f.Sort, f.Order)}
+	if r.Header.Get("HX-Request") == "true" {
+		h.renderFragment(w, r, "templates/contacts/index.html", "contact-table", data)
+		return
+	}
+	h.render(w, r, "templates/contacts/index.html", "Contacts", data)
 }
 
 func (h *Handler) contactSortURLs(r *http.Request, sort, order string) map[string]string {
@@ -70,73 +56,64 @@ func (h *Handler) contactSortURLs(r *http.Request, sort, order string) map[strin
 
 type contactFormData struct {
 	Contact   *model.Contact
-	Routes    []model.Route
+	Routes    []contactModule.Route
 	Errors    map[string]string
 	IsEdit    bool
 	PortalURL string
 }
 
 func (h *Handler) NewContact(w http.ResponseWriter, r *http.Request) {
-	h.render(w, r, "templates/contacts/form.html", "New Contact", contactFormData{
-		Contact: &model.Contact{IsActive: true},
-		Routes:  h.contactRoutes(),
-	})
+	h.render(w, r, "templates/contacts/form.html", "New Contact", contactFormData{Contact: &model.Contact{IsActive: true}, Routes: h.contactRoutes(r.Context())})
+}
+
+func contactDraft(r *http.Request) contactModule.Draft {
+	return contactModule.Draft{Name: r.FormValue("name"), ContactType: r.FormValue("contact_type"), Phone: r.FormValue("phone"), Email: r.FormValue("email"), Address: r.FormValue("address"), Notes: r.FormValue("notes"), MapsLink: strings.TrimSpace(r.FormValue("maps_link")), Class: strings.TrimSpace(r.FormValue("class")), DistanceKm: parseOptionalFloat(r.FormValue("distance_km")), HasSiblingDiscount: r.FormValue("has_sibling_discount") == "on", IsReturnOnly: r.FormValue("is_return_only") == "on", RouteID: parseOptionalInt(r.FormValue("route_id")), IsActive: r.FormValue("is_active") == "on"}
+}
+
+func contactView(id int, d contactModule.Draft) *model.Contact {
+	return &model.Contact{ID: id, Name: d.Name, ContactType: d.ContactType, Phone: d.Phone, Email: d.Email, Address: d.Address, Notes: d.Notes, MapsLink: d.MapsLink, Class: d.Class, DistanceKm: d.DistanceKm, HasSiblingDiscount: d.HasSiblingDiscount, IsReturnOnly: d.IsReturnOnly, RouteID: d.RouteID, IsActive: d.IsActive}
+}
+
+func contactActor(r *http.Request) contactModule.Actor {
+	u := auth.UserFromContext(r.Context())
+	if u == nil {
+		return contactModule.Actor{}
+	}
+	return contactModule.Actor{UserID: u.ID, CanManage: u.HasCapability(model.CapContactsManage), CanManagePortal: u.Role == model.RoleAdmin}
+}
+
+func contactFormErrors(err error) map[string]string {
+	var validation *contactModule.ValidationError
+	if !errors.As(err, &validation) {
+		return nil
+	}
+	fields := map[string]string{}
+	for field, message := range validation.Fields {
+		switch {
+		case field == "name" && message == "required":
+			message = "Name is required"
+		case field == "contact_type" && message == "required":
+			message = "Contact type is required"
+		case field == "class":
+			message = "Class must be 5 characters or fewer"
+		case field == "distance_km":
+			message = "Distance must be 0 or greater"
+		}
+		fields[field] = message
+	}
+	return fields
 }
 
 func (h *Handler) CreateContact(w http.ResponseWriter, r *http.Request) {
-	c := &model.Contact{
-		Name:               r.FormValue("name"),
-		ContactType:        r.FormValue("contact_type"),
-		Phone:              r.FormValue("phone"),
-		Email:              r.FormValue("email"),
-		Address:            r.FormValue("address"),
-		Notes:              r.FormValue("notes"),
-		MapsLink:           strings.TrimSpace(r.FormValue("maps_link")),
-		Class:              strings.TrimSpace(r.FormValue("class")),
-		DistanceKm:         parseOptionalFloat(r.FormValue("distance_km")),
-		HasSiblingDiscount: r.FormValue("has_sibling_discount") == "on",
-		IsReturnOnly:       r.FormValue("is_return_only") == "on",
-		RouteID:            parseOptionalInt(r.FormValue("route_id")),
-		IsActive:           r.FormValue("is_active") == "on",
-	}
-
-	errors := validateContact(c)
-	if len(errors) > 0 {
-		h.render(w, r, "templates/contacts/form.html", "New Contact", contactFormData{
-			Contact: c,
-			Routes:  h.contactRoutes(),
-			Errors:  errors,
-		})
-		return
-	}
-
-	if err := model.CreateContact(h.DB, c); err != nil {
+	draft := contactDraft(r)
+	if _, err := h.Contacts.Create(r.Context(), contactActor(r), draft); err != nil {
+		if fields := contactFormErrors(err); fields != nil {
+			h.render(w, r, "templates/contacts/form.html", "New Contact", contactFormData{Contact: contactView(0, draft), Routes: h.contactRoutes(r.Context()), Errors: fields})
+			return
+		}
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
-
-	var createdID int64
-	h.DB.QueryRow("SELECT last_insert_rowid()").Scan(&createdID)
-	audit.Log(r.Context(), h.DB, audit.Event{
-		Action:      "contact.create",
-		TargetType:  "contact",
-		TargetID:    createdID,
-		TargetLabel: c.Name,
-		Metadata: map[string]any{
-			"after": map[string]any{
-				"name":                 c.Name,
-				"contact_type":         c.ContactType,
-				"email":                c.Email,
-				"phone":                c.Phone,
-				"class":                c.Class,
-				"distance_km":          c.DistanceKm,
-				"has_sibling_discount": c.HasSiblingDiscount,
-				"is_return_only":       c.IsReturnOnly,
-				"is_active":            c.IsActive,
-			},
-		},
-	})
-
 	h.setFlash(w, "Contact created successfully")
 	http.Redirect(w, r, h.BasePath+"/contacts", http.StatusSeeOther)
 }
@@ -147,24 +124,16 @@ func (h *Handler) EditContact(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-
-	contact, err := model.GetContact(h.DB, id)
+	c, err := h.Contacts.Get(r.Context(), id)
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
-
-	var portalURL string
-	if contact.PortalCode != "" {
-		portalURL = h.publicOrigin(r) + "/p/" + contact.PortalCode
+	portalURL := ""
+	if c.PortalCode != "" {
+		portalURL = h.publicOrigin(r) + "/p/" + c.PortalCode
 	}
-
-	h.render(w, r, "templates/contacts/form.html", "Edit Contact", contactFormData{
-		Contact:   contact,
-		Routes:    h.contactRoutes(),
-		IsEdit:    true,
-		PortalURL: portalURL,
-	})
+	h.render(w, r, "templates/contacts/form.html", "Edit Contact", contactFormData{Contact: c, Routes: h.contactRoutes(r.Context()), IsEdit: true, PortalURL: portalURL})
 }
 
 func (h *Handler) UpdateContact(w http.ResponseWriter, r *http.Request) {
@@ -173,122 +142,39 @@ func (h *Handler) UpdateContact(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-
-	existing, err := model.GetContact(h.DB, id)
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-
-	c := &model.Contact{
-		ID:                 id,
-		Name:               r.FormValue("name"),
-		ContactType:        r.FormValue("contact_type"),
-		Phone:              r.FormValue("phone"),
-		Email:              r.FormValue("email"),
-		Address:            r.FormValue("address"),
-		Notes:              r.FormValue("notes"),
-		MapsLink:           strings.TrimSpace(r.FormValue("maps_link")),
-		Class:              strings.TrimSpace(r.FormValue("class")),
-		DistanceKm:         parseOptionalFloat(r.FormValue("distance_km")),
-		HasSiblingDiscount: r.FormValue("has_sibling_discount") == "on",
-		IsReturnOnly:       r.FormValue("is_return_only") == "on",
-		RouteID:            parseOptionalInt(r.FormValue("route_id")),
-		IsActive:           r.FormValue("is_active") == "on",
-	}
-
-	errors := validateContact(c)
-	if len(errors) > 0 {
-		h.render(w, r, "templates/contacts/form.html", "Edit Contact", contactFormData{
-			Contact: c,
-			Routes:  h.contactRoutes(),
-			Errors:  errors,
-			IsEdit:  true,
-		})
-		return
-	}
-
-	if err := model.UpdateContact(h.DB, c); err != nil {
+	draft := contactDraft(r)
+	if _, err := h.Contacts.Update(r.Context(), contactActor(r), id, draft); err != nil {
+		if errors.Is(err, contactModule.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		if fields := contactFormErrors(err); fields != nil {
+			h.render(w, r, "templates/contacts/form.html", "Edit Contact", contactFormData{Contact: contactView(id, draft), Routes: h.contactRoutes(r.Context()), Errors: fields, IsEdit: true})
+			return
+		}
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
-
-	oldFields := map[string]any{
-		"name":                 existing.Name,
-		"contact_type":         existing.ContactType,
-		"email":                existing.Email,
-		"phone":                existing.Phone,
-		"address":              existing.Address,
-		"notes":                existing.Notes,
-		"maps_link":            existing.MapsLink,
-		"class":                existing.Class,
-		"distance_km":          existing.DistanceKm,
-		"has_sibling_discount": existing.HasSiblingDiscount,
-		"is_return_only":       existing.IsReturnOnly,
-		"route_id":             existing.RouteID,
-		"is_active":            existing.IsActive,
-	}
-	newFields := map[string]any{
-		"name":                 c.Name,
-		"contact_type":         c.ContactType,
-		"email":                c.Email,
-		"phone":                c.Phone,
-		"address":              c.Address,
-		"notes":                c.Notes,
-		"maps_link":            c.MapsLink,
-		"class":                c.Class,
-		"distance_km":          c.DistanceKm,
-		"has_sibling_discount": c.HasSiblingDiscount,
-		"is_return_only":       c.IsReturnOnly,
-		"route_id":             c.RouteID,
-		"is_active":            c.IsActive,
-	}
-	metadata := audit.Diff(oldFields, newFields,
-		[]string{"name", "contact_type", "email", "phone", "address", "notes", "maps_link", "class", "distance_km", "has_sibling_discount", "is_return_only", "route_id", "is_active"})
-	if metadata != nil {
-		audit.Log(r.Context(), h.DB, audit.Event{
-			Action:      "contact.update",
-			TargetType:  "contact",
-			TargetID:    int64(id),
-			TargetLabel: existing.Name,
-			Metadata:    metadata,
-		})
-	}
-
 	h.setFlash(w, "Contact updated successfully")
 	http.Redirect(w, r, h.BasePath+"/contacts", http.StatusSeeOther)
 }
 
-// SaveContactPortalCode stores a staff-edited portal code, or generates one
-// when the field is left blank. Either way the previous link stops working.
 func (h *Handler) SaveContactPortalCode(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
-
-	contact, err := model.GetContact(h.DB, id)
-	if err != nil {
+	code, err := h.Contacts.SetPortalCode(r.Context(), contactActor(r), id, r.FormValue("portal_code"))
+	switch {
+	case errors.Is(err, contactModule.ErrNotFound):
 		http.NotFound(w, r)
 		return
-	}
-
-	code, err := model.SetPortalCode(h.DB, id, r.FormValue("portal_code"))
-	switch {
-	case errors.Is(err, model.ErrPortalCodeTaken):
+	case errors.Is(err, contactModule.ErrPortalCodeTaken):
 		h.setFlash(w, "Link itu sudah dipakai kontak lain. Coba yang lain.")
 	case err != nil:
 		h.setFlash(w, "Error: "+err.Error())
 	default:
-		audit.Log(r.Context(), h.DB, audit.Event{
-			// Name predates codes; kept so old audit rows stay queryable.
-			Action:      "contact.portal_token_reset",
-			TargetType:  "contact",
-			TargetID:    int64(id),
-			TargetLabel: contact.Name,
-			Metadata:    map[string]any{"before": contact.PortalCode, "after": code},
-		})
 		h.setFlash(w, "Link portal berhasil disimpan: "+code)
 	}
 	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/contacts/%d/edit", id), http.StatusSeeOther)
@@ -300,57 +186,33 @@ func (h *Handler) DeleteContact(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-
-	existing, _ := model.GetContact(h.DB, id)
-
-	if err := model.DeleteContact(h.DB, id); err != nil {
+	if _, err := h.Contacts.Delete(r.Context(), contactActor(r), id); err != nil {
+		if errors.Is(err, contactModule.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
-
-	if existing != nil {
-		audit.Log(r.Context(), h.DB, audit.Event{
-			Action:      "contact.delete",
-			TargetType:  "contact",
-			TargetID:    int64(id),
-			TargetLabel: existing.Name,
-			Metadata: map[string]any{
-				"before": map[string]any{
-					"name":         existing.Name,
-					"contact_type": existing.ContactType,
-					"email":        existing.Email,
-				},
-			},
-		})
-	}
-
 	if r.Header.Get("HX-Request") == "true" {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-
 	h.setFlash(w, "Contact deleted successfully")
 	http.Redirect(w, r, h.BasePath+"/contacts", http.StatusSeeOther)
 }
 
-func (h *Handler) contactRoutes() []model.Route {
-	routes, _ := model.ListRoutes(h.DB)
+func (h *Handler) contactRoutes(ctx context.Context) []contactModule.Route {
+	routes, _ := h.Contacts.ListRoutes(ctx)
 	return routes
 }
 
-func validateContact(c *model.Contact) map[string]string {
-	errors := make(map[string]string)
-	if c.Name == "" {
-		errors["name"] = "Name is required"
-	}
-	if c.ContactType == "" {
-		errors["contact_type"] = "Contact type is required"
-	}
-	if utf8.RuneCountInString(c.Class) > 5 {
-		errors["class"] = "Class must be 5 characters or fewer"
-	}
-	if c.DistanceKm < 0 {
-		errors["distance_km"] = "Distance must be 0 or greater"
-	}
-	return errors
+func (h *Handler) RegisterContactRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /contacts", h.ListContacts)
+	mux.HandleFunc("GET /contacts/new", h.NewContact)
+	mux.HandleFunc("POST /contacts", auth.CapabilityOnly(model.CapContactsManage, h.CreateContact))
+	mux.HandleFunc("GET /contacts/{id}/edit", h.EditContact)
+	mux.HandleFunc("POST /contacts/{id}", auth.CapabilityOnly(model.CapContactsManage, h.UpdateContact))
+	mux.HandleFunc("DELETE /contacts/{id}", auth.CapabilityOnly(model.CapContactsManage, h.DeleteContact))
+	mux.HandleFunc("POST /contacts/{id}/portal-code", auth.AdminOnly(h.SaveContactPortalCode))
 }

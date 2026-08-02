@@ -1,0 +1,334 @@
+package account_test
+
+import (
+	"context"
+	"testing"
+
+	accountModule "github.com/naufal/latasya-erp/internal/account"
+	"github.com/naufal/latasya-erp/internal/model"
+	"github.com/naufal/latasya-erp/internal/testutil"
+)
+
+var accountManager = accountModule.Actor{UserID: 1, CanManage: true}
+
+func listAccounts(m *accountModule.Module, filter accountModule.Filter) ([]model.Account, error) {
+	result, err := m.List(context.Background(), filter)
+	return result.Accounts, err
+}
+
+func accountDraft(a *model.Account) accountModule.Draft {
+	return accountModule.Draft{Code: a.Code, Name: a.Name, AccountType: a.AccountType, NormalBalance: a.NormalBalance, Description: a.Description, IsActive: a.IsActive, IsCash: a.IsCash}
+}
+
+func createAccount(m *accountModule.Module, a *model.Account) error {
+	created, err := m.Create(context.Background(), accountManager, accountDraft(a))
+	if err == nil {
+		*a = *created
+	}
+	return err
+}
+
+func updateAccount(m *accountModule.Module, a *model.Account) error {
+	updated, err := m.Update(context.Background(), accountManager, a.ID, accountDraft(a))
+	if err == nil {
+		*a = *updated
+	}
+	return err
+}
+
+func TestListAccounts_All(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	m := accountModule.New(db)
+
+	accounts, err := listAccounts(m, accountModule.Filter{})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(accounts) == 0 {
+		t.Fatal("expected seeded accounts, got 0")
+	}
+	// Should have at least the seeded accounts (45)
+	if len(accounts) < 40 {
+		t.Errorf("expected at least 40 seeded accounts, got %d", len(accounts))
+	}
+}
+
+func TestListAccounts_FilterByType(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	m := accountModule.New(db)
+
+	types := []string{"asset", "liability", "equity", "revenue", "expense"}
+	for _, typ := range types {
+		accounts, err := listAccounts(m, accountModule.Filter{Type: typ})
+		if err != nil {
+			t.Fatalf("filter by %s: %v", typ, err)
+		}
+		if len(accounts) == 0 {
+			t.Errorf("expected accounts for type %s, got 0", typ)
+		}
+		for _, a := range accounts {
+			if a.AccountType != typ {
+				t.Errorf("expected type %s, got %s for account %s", typ, a.AccountType, a.Code)
+			}
+		}
+	}
+}
+
+func TestListAccounts_FilterByActive(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	m := accountModule.New(db)
+
+	active := true
+	accounts, err := listAccounts(m, accountModule.Filter{IsActive: &active})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	for _, a := range accounts {
+		if !a.IsActive {
+			t.Errorf("expected active account, got inactive: %s", a.Code)
+		}
+	}
+}
+
+func TestListAccounts_Search(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	m := accountModule.New(db)
+
+	accounts, err := listAccounts(m, accountModule.Filter{Search: "fuel"})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(accounts) == 0 {
+		t.Fatal("expected to find fuel accounts")
+	}
+}
+
+func TestCreateAccount(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	m := accountModule.New(db)
+
+	a := &model.Account{
+		Code:          "9-0001",
+		Name:          "Test Account",
+		AccountType:   "asset",
+		NormalBalance: "debit",
+		IsActive:      true,
+		Description:   "A test account",
+	}
+
+	if err := createAccount(m, a); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	// Verify it was created
+	accounts, _ := listAccounts(m, accountModule.Filter{Search: "Test Account"})
+	if len(accounts) != 1 {
+		t.Fatalf("expected 1 account, got %d", len(accounts))
+	}
+	if accounts[0].Code != "9-0001" {
+		t.Errorf("expected code '9-0001', got %q", accounts[0].Code)
+	}
+}
+
+func TestCashAccountClassificationValidation(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	m := accountModule.New(db)
+
+	valid := &model.Account{
+		Code: "9-CASH", Name: "Petty Cash", AccountType: "asset",
+		NormalBalance: "debit", IsCash: true, IsActive: true,
+	}
+	if err := createAccount(m, valid); err != nil {
+		t.Fatalf("create valid cash account: %v", err)
+	}
+	got, err := m.Get(context.Background(), valid.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.IsCash {
+		t.Fatal("created account should retain is_cash")
+	}
+
+	for _, tc := range []struct {
+		name, accountType, normalBalance string
+	}{
+		{"liability", "liability", "credit"},
+		{"credit normal asset", "asset", "credit"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			a := &model.Account{
+				Code: "9-BAD-" + tc.name, Name: tc.name, AccountType: tc.accountType,
+				NormalBalance: tc.normalBalance, IsCash: true, IsActive: true,
+			}
+			if err := createAccount(m, a); err == nil {
+				t.Fatal("expected cash classification validation error")
+			}
+		})
+	}
+
+	got.AccountType = "revenue"
+	if err := updateAccount(m, got); err == nil {
+		t.Fatal("expected update to reject conflicting cash classification")
+	}
+}
+
+func TestCreateAccount_DuplicateCode(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	m := accountModule.New(db)
+
+	a := &model.Account{
+		Code:          "1-1001", // Already exists (Cash on Hand)
+		Name:          "Duplicate",
+		AccountType:   "asset",
+		NormalBalance: "debit",
+		IsActive:      true,
+	}
+
+	err := createAccount(m, a)
+	if err == nil {
+		t.Fatal("expected error for duplicate code")
+	}
+}
+
+func TestGetAccount(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	m := accountModule.New(db)
+
+	// Get first account
+	accounts, _ := listAccounts(m, accountModule.Filter{})
+	if len(accounts) == 0 {
+		t.Fatal("no accounts found")
+	}
+
+	account, err := m.Get(context.Background(), accounts[0].ID)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if account.Code != accounts[0].Code {
+		t.Errorf("expected code %q, got %q", accounts[0].Code, account.Code)
+	}
+}
+
+func TestUpdateAccount(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	m := accountModule.New(db)
+
+	// Create a test account
+	a := &model.Account{
+		Code: "9-0002", Name: "Original", AccountType: "asset",
+		NormalBalance: "debit", IsActive: true,
+	}
+	createAccount(m, a)
+
+	accounts, _ := listAccounts(m, accountModule.Filter{Search: "Original"})
+	if len(accounts) == 0 {
+		t.Fatal("test account not found")
+	}
+
+	// Update it
+	accounts[0].Name = "Updated"
+	if err := updateAccount(m, &accounts[0]); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	updated, _ := m.Get(context.Background(), accounts[0].ID)
+	if updated.Name != "Updated" {
+		t.Errorf("expected name 'Updated', got %q", updated.Name)
+	}
+}
+
+func TestDeleteAccount_NonSystem(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	m := accountModule.New(db)
+
+	// Create a non-system account
+	a := &model.Account{
+		Code: "9-0003", Name: "To Delete", AccountType: "asset",
+		NormalBalance: "debit", IsActive: true,
+	}
+	createAccount(m, a)
+
+	accounts, _ := listAccounts(m, accountModule.Filter{Search: "To Delete"})
+	if len(accounts) == 0 {
+		t.Fatal("test account not found")
+	}
+
+	if _, err := m.Delete(context.Background(), accountManager, accounts[0].ID); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	// Verify deleted
+	_, err := m.Get(context.Background(), accounts[0].ID)
+	if err == nil {
+		t.Error("expected error for deleted account")
+	}
+}
+
+func TestDeleteAccount_SystemProtected(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	m := accountModule.New(db)
+
+	// Find a system account (Cash on Hand)
+	accounts, _ := listAccounts(m, accountModule.Filter{Search: "Cash on Hand"})
+	if len(accounts) == 0 {
+		t.Fatal("Cash on Hand not found")
+	}
+
+	// Try to delete — should not actually delete (WHERE is_system = 0)
+	m.Delete(context.Background(), accountManager, accounts[0].ID)
+
+	// Should still exist
+	_, err := m.Get(context.Background(), accounts[0].ID)
+	if err != nil {
+		t.Error("system account should not be deleted")
+	}
+}
+
+func TestListAccounts_OrderedByCode(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	m := accountModule.New(db)
+
+	accounts, err := listAccounts(m, accountModule.Filter{})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	for i := 1; i < len(accounts); i++ {
+		if accounts[i].Code < accounts[i-1].Code {
+			t.Errorf("accounts not ordered by code: %s before %s", accounts[i-1].Code, accounts[i].Code)
+			break
+		}
+	}
+}
+
+func TestAccountTypeLabel(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		accountType string
+		want        string
+	}{
+		{"asset", "Asset"},
+		{"liability", "Liability"},
+		{"equity", "Equity"},
+		{"revenue", "Revenue"},
+		{"expense", "Expense"},
+		{"unknown", "unknown"},
+		{"", ""},
+	}
+	for _, c := range cases {
+		if got := model.AccountTypeLabel(c.accountType); got != c.want {
+			t.Errorf("AccountTypeLabel(%q) = %q, want %q", c.accountType, got, c.want)
+		}
+	}
+}

@@ -7,6 +7,7 @@ import (
 
 	"github.com/naufal/latasya-erp/internal/handler"
 	"github.com/naufal/latasya-erp/internal/model"
+	"github.com/naufal/latasya-erp/internal/testutil"
 )
 
 // TestPageNav_PrevURL is a direct unit test of the PageNav.PrevURL method
@@ -33,7 +34,7 @@ func TestListJournals_Pagination(t *testing.T) {
 	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
 
 	for i := 0; i < 51; i++ {
-		if _, err := model.CreateJournalEntry(db,
+		if _, err := testutil.CreateJournalEntry(db,
 			&model.JournalEntry{EntryDate: "2026-04-04", Description: "E", SourceType: "manual", IsPosted: true, CreatedBy: 1},
 			[]model.JournalLine{{AccountID: cashID, Debit: 1000}, {AccountID: revenueID, Credit: 1000}}); err != nil {
 			t.Fatalf("seed entry %d: %v", i, err)
@@ -85,7 +86,7 @@ func TestListIncome_PaginationPartial(t *testing.T) {
 	db.QueryRow("SELECT id FROM accounts WHERE code = '1-1001'").Scan(&cashID)
 	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
 	for i := 0; i < 51; i++ {
-		if _, err := model.CreateJournalEntry(db,
+		if _, err := testutil.CreateJournalEntry(db,
 			&model.JournalEntry{EntryDate: "2026-04-04", Description: "I", SourceType: model.SourceIncome, IsPosted: true, CreatedBy: 1},
 			[]model.JournalLine{{AccountID: cashID, Debit: 1000}, {AccountID: revenueID, Credit: 1000}}); err != nil {
 			t.Fatalf("seed %d: %v", i, err)

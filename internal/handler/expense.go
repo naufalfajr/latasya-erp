@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/auth"
+	"github.com/naufal/latasya-erp/internal/journal"
 	"github.com/naufal/latasya-erp/internal/model"
 )
 
@@ -24,152 +24,54 @@ type expenseFormData struct {
 }
 
 func (h *Handler) ListExpenses(w http.ResponseWriter, r *http.Request) {
-	f := model.JournalFilter{
-		SourceType: model.SourceExpense,
-		DateFrom:   r.URL.Query().Get("from"),
-		DateTo:     r.URL.Query().Get("to"),
-		Search:     r.URL.Query().Get("search"),
-	}
-
-	total, err := model.CountJournalEntries(h.DB, f)
+	filter := journal.Filter{SourceType: model.SourceExpense, DateFrom: r.URL.Query().Get("from"),
+		DateTo: r.URL.Query().Get("to"), Search: r.URL.Query().Get("search")}
+	page := parsePage(r)
+	filter.Limit, filter.Offset = listPageSize, (page-1)*listPageSize
+	result, err := h.Journals.List(r.Context(), filter)
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
-	pg := newPagination(parsePage(r), total)
-	f.Limit, f.Offset = pg.PageSize, pg.Offset()
-
-	entries, err := model.ListJournalEntries(h.DB, f)
-	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-
+	pg := newPagination(page, result.Total)
 	h.render(w, r, "templates/expenses/index.html", "Expenses", map[string]any{
-		"Entries":    entries,
-		"Pagination": newPageNav(pg, map[string]string{"from": f.DateFrom, "to": f.DateTo, "search": f.Search}),
+		"Entries": result.Entries, "Pagination": newPageNav(pg, map[string]string{"from": filter.DateFrom, "to": filter.DateTo, "search": filter.Search}),
 	})
 }
 
 func (h *Handler) NewExpense(w http.ResponseWriter, r *http.Request) {
-	h.render(w, r, "templates/expenses/form.html", "Record Expense", h.newExpenseFormData())
+	form, err := h.newExpenseFormData(r)
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	h.render(w, r, "templates/expenses/form.html", "Record Expense", form)
 }
 
 func (h *Handler) CreateExpense(w http.ResponseWriter, r *http.Request) {
-	user := auth.UserFromContext(r.Context())
-
-	amount := parseIDR(r.FormValue("amount"))
-	expenseAccountID, _ := strconv.Atoi(r.FormValue("expense_account"))
-	paymentAccountID, _ := strconv.Atoi(r.FormValue("payment_account"))
-	vehicleID := parseOptionalInt(r.FormValue("vehicle_id"))
-
-	je := &model.JournalEntry{
-		EntryDate:   r.FormValue("entry_date"),
-		Description: r.FormValue("description"),
-		SourceType:  "expense",
-		VehicleID:   vehicleID,
-		IsPosted:    true,
-		CreatedBy:   user.ID,
-	}
-
-	errors := make(map[string]string)
-	if je.EntryDate == "" {
-		errors["entry_date"] = "Date is required"
-	}
-	if je.Description == "" {
-		errors["description"] = "Description is required"
-	}
-	if amount <= 0 {
-		errors["amount"] = "Amount must be greater than 0"
-	}
-	if expenseAccountID == 0 {
-		errors["expense_account"] = "Expense account is required"
-	}
-	if paymentAccountID == 0 {
-		errors["payment_account"] = "Payment account is required"
-	}
-
-	if len(errors) > 0 {
-		fd := h.newExpenseFormData()
-		fd.Entry = je
-		fd.Amount = amount
-		fd.ExpenseAccount = expenseAccountID
-		fd.PaymentAccount = paymentAccountID
-		fd.VehicleID = vehicleID
-		fd.Errors = errors
-		h.render(w, r, "templates/expenses/form.html", "Record Expense", fd)
-		return
-	}
-
-	// Debit expense (increases expense), Credit asset (decreases cash/bank)
-	lines := []model.JournalLine{
-		{AccountID: expenseAccountID, Debit: amount, Credit: 0},
-		{AccountID: paymentAccountID, Debit: 0, Credit: amount},
-	}
-
-	entryID, err := model.CreateJournalEntry(h.DB, je, lines)
+	draft := expenseDraftFromForm(r)
+	created, err := h.Journals.CreateExpense(r.Context(), expenseActor(r), draft)
 	if err != nil {
-		fd := h.newExpenseFormData()
-		fd.Entry = je
-		fd.Amount = amount
-		fd.ExpenseAccount = expenseAccountID
-		fd.PaymentAccount = paymentAccountID
-		fd.VehicleID = vehicleID
-		fd.Errors = map[string]string{"general": err.Error()}
-		h.render(w, r, "templates/expenses/form.html", "Record Expense", fd)
+		h.renderExpenseError(w, r, "Record Expense", draft, false, err)
 		return
 	}
-
-	audit.Log(r.Context(), h.DB, audit.Event{
-		Action:      "expense.create",
-		TargetType:  "expense",
-		TargetID:    int64(entryID),
-		TargetLabel: je.Description,
-		Metadata: map[string]any{
-			"after": map[string]any{
-				"entry_date":      je.EntryDate,
-				"description":     je.Description,
-				"amount":          amount,
-				"expense_account": expenseAccountID,
-				"payment_account": paymentAccountID,
-				"vehicle_id":      vehicleID,
-			},
-		},
-	})
-
 	h.setFlash(w, "Expense recorded successfully")
-	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/journals/%d", entryID), http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/journals/%d", created.ID), http.StatusSeeOther)
 }
 
 func (h *Handler) EditExpense(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.Atoi(r.PathValue("id"))
+	entry, ok := h.expenseEntry(w, r)
+	if !ok {
+		return
+	}
+	form, err := h.newExpenseFormData(r)
 	if err != nil {
-		http.NotFound(w, r)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
-
-	je, err := model.GetJournalEntry(h.DB, id)
-	if err != nil || je.SourceType != model.SourceExpense {
-		http.NotFound(w, r)
-		return
-	}
-
-	fd := h.newExpenseFormData()
-	fd.Entry = je
-	fd.VehicleID = je.VehicleID
-	fd.IsEdit = true
-
-	for _, l := range je.Lines {
-		if l.Debit > 0 {
-			fd.ExpenseAccount = l.AccountID
-			fd.Amount = l.Debit
-		}
-		if l.Credit > 0 {
-			fd.PaymentAccount = l.AccountID
-		}
-	}
-
-	h.render(w, r, "templates/expenses/form.html", "Edit Expense", fd)
+	form.Entry, form.VehicleID, form.IsEdit = entry, entry.VehicleID, true
+	form.Amount, form.ExpenseAccount, form.PaymentAccount = extractExpenseShape(entry)
+	h.render(w, r, "templates/expenses/form.html", "Edit Expense", form)
 }
 
 func (h *Handler) UpdateExpense(w http.ResponseWriter, r *http.Request) {
@@ -178,106 +80,15 @@ func (h *Handler) UpdateExpense(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-
-	oldJE, err := model.GetJournalEntry(h.DB, id)
-	if err != nil || oldJE.SourceType != model.SourceExpense {
+	if entry, err := h.Journals.Get(r.Context(), id); err != nil || entry.SourceType != model.SourceExpense {
 		http.NotFound(w, r)
 		return
 	}
-
-	user := auth.UserFromContext(r.Context())
-	amount := parseIDR(r.FormValue("amount"))
-	expenseAccountID, _ := strconv.Atoi(r.FormValue("expense_account"))
-	paymentAccountID, _ := strconv.Atoi(r.FormValue("payment_account"))
-	vehicleID := parseOptionalInt(r.FormValue("vehicle_id"))
-
-	je := &model.JournalEntry{
-		ID:          id,
-		EntryDate:   r.FormValue("entry_date"),
-		Description: r.FormValue("description"),
-		SourceType:  "expense",
-		VehicleID:   vehicleID,
-		IsPosted:    true,
-		CreatedBy:   user.ID,
-	}
-
-	errors := make(map[string]string)
-	if je.EntryDate == "" {
-		errors["entry_date"] = "Date is required"
-	}
-	if je.Description == "" {
-		errors["description"] = "Description is required"
-	}
-	if amount <= 0 {
-		errors["amount"] = "Amount must be greater than 0"
-	}
-	if expenseAccountID == 0 {
-		errors["expense_account"] = "Expense account is required"
-	}
-	if paymentAccountID == 0 {
-		errors["payment_account"] = "Payment account is required"
-	}
-
-	if len(errors) > 0 {
-		fd := h.newExpenseFormData()
-		fd.Entry = je
-		fd.Amount = amount
-		fd.ExpenseAccount = expenseAccountID
-		fd.PaymentAccount = paymentAccountID
-		fd.VehicleID = vehicleID
-		fd.Errors = errors
-		fd.IsEdit = true
-		h.render(w, r, "templates/expenses/form.html", "Edit Expense", fd)
+	draft := expenseDraftFromForm(r)
+	if _, err := h.Journals.UpdateExpense(r.Context(), expenseActor(r), id, draft); err != nil {
+		h.renderExpenseError(w, r, "Edit Expense", draft, true, err)
 		return
 	}
-
-	lines := []model.JournalLine{
-		{AccountID: expenseAccountID, Debit: amount, Credit: 0},
-		{AccountID: paymentAccountID, Debit: 0, Credit: amount},
-	}
-
-	if err := model.UpdateJournalEntry(h.DB, je, lines); err != nil {
-		fd := h.newExpenseFormData()
-		fd.Entry = je
-		fd.Amount = amount
-		fd.ExpenseAccount = expenseAccountID
-		fd.PaymentAccount = paymentAccountID
-		fd.VehicleID = vehicleID
-		fd.Errors = map[string]string{"general": err.Error()}
-		fd.IsEdit = true
-		h.render(w, r, "templates/expenses/form.html", "Edit Expense", fd)
-		return
-	}
-
-	oldAmount, oldExpenseAcct, oldPaymentAcct := extractExpenseShape(oldJE)
-	oldFields := map[string]any{
-		"entry_date":      oldJE.EntryDate,
-		"description":     oldJE.Description,
-		"amount":          oldAmount,
-		"expense_account": oldExpenseAcct,
-		"payment_account": oldPaymentAcct,
-		"vehicle_id":      oldJE.VehicleID,
-	}
-	newFields := map[string]any{
-		"entry_date":      je.EntryDate,
-		"description":     je.Description,
-		"amount":          amount,
-		"expense_account": expenseAccountID,
-		"payment_account": paymentAccountID,
-		"vehicle_id":      vehicleID,
-	}
-	metadata := audit.Diff(oldFields, newFields,
-		[]string{"entry_date", "description", "amount", "expense_account", "payment_account", "vehicle_id"})
-	if metadata != nil {
-		audit.Log(r.Context(), h.DB, audit.Event{
-			Action:      "expense.update",
-			TargetType:  "expense",
-			TargetID:    int64(id),
-			TargetLabel: je.Description,
-			Metadata:    metadata,
-		})
-	}
-
 	h.setFlash(w, "Expense updated successfully")
 	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/journals/%d", id), http.StatusSeeOther)
 }
@@ -288,70 +99,84 @@ func (h *Handler) DeleteExpense(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-
-	existing, _ := model.GetJournalEntry(h.DB, id)
-
-	if err := model.DeleteJournalEntryBySource(h.DB, id, model.SourceExpense); err != nil {
+	if _, err := h.Journals.DeleteExpense(r.Context(), expenseActor(r), id); err != nil {
 		h.setFlash(w, "Error: "+err.Error())
 		http.Redirect(w, r, h.BasePath+"/expenses", http.StatusSeeOther)
 		return
 	}
-
-	if existing != nil {
-		amount, expenseAcct, paymentAcct := extractExpenseShape(existing)
-		audit.Log(r.Context(), h.DB, audit.Event{
-			Action:      "expense.delete",
-			TargetType:  "expense",
-			TargetID:    int64(id),
-			TargetLabel: existing.Description,
-			Metadata: map[string]any{
-				"before": map[string]any{
-					"entry_date":      existing.EntryDate,
-					"description":     existing.Description,
-					"amount":          amount,
-					"expense_account": expenseAcct,
-					"payment_account": paymentAcct,
-					"vehicle_id":      existing.VehicleID,
-				},
-			},
-		})
-	}
-
 	if r.Header.Get("HX-Request") == "true" {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-
 	h.setFlash(w, "Expense deleted successfully")
 	http.Redirect(w, r, h.BasePath+"/expenses", http.StatusSeeOther)
 }
 
-func (h *Handler) newExpenseFormData() expenseFormData {
-	active := true
-	expenseAccounts, _ := model.ListAccounts(h.DB, model.AccountFilter{Type: model.AccountTypeExpense, IsActive: &active})
-	paymentAccounts, _ := model.ListAccounts(h.DB, model.AccountFilter{Type: "asset", IsActive: &active})
-	vehicles, _ := model.ListVehicles(h.DB)
-
-	return expenseFormData{
-		Entry:           &model.JournalEntry{},
-		ExpenseAccounts: expenseAccounts,
-		PaymentAccounts: paymentAccounts,
-		Vehicles:        vehicles,
-		Errors:          make(map[string]string),
-	}
+func expenseDraftFromForm(r *http.Request) journal.ExpenseDraft {
+	expense, _ := strconv.Atoi(r.FormValue("expense_account"))
+	payment, _ := strconv.Atoi(r.FormValue("payment_account"))
+	return journal.ExpenseDraft{EntryDate: r.FormValue("entry_date"), Description: r.FormValue("description"), Amount: parseIDR(r.FormValue("amount")),
+		ExpenseAccount: expense, PaymentAccount: payment, VehicleID: parseOptionalInt(r.FormValue("vehicle_id"))}
 }
 
-// extractExpenseShape pulls "amount + expense + payment account" out of the
-// journal lines that expense.create wrote (debit on expense, credit on the
-// asset paying it out).
-func extractExpenseShape(je *model.JournalEntry) (amount, expenseAccount, paymentAccount int) {
-	for _, l := range je.Lines {
-		if l.Debit > 0 {
-			expenseAccount = l.AccountID
-			amount = l.Debit
+func (h *Handler) newExpenseFormData(r *http.Request) (expenseFormData, error) {
+	expense, err := h.Journals.Options(r.Context(), model.AccountTypeExpense, false)
+	if err != nil {
+		return expenseFormData{}, err
+	}
+	payment, err := h.Journals.Options(r.Context(), model.AccountTypeAsset, true)
+	if err != nil {
+		return expenseFormData{}, err
+	}
+	return expenseFormData{Entry: &model.JournalEntry{}, ExpenseAccounts: expense.Accounts, PaymentAccounts: payment.Accounts,
+		Vehicles: payment.Vehicles, Errors: map[string]string{}}, nil
+}
+
+func (h *Handler) renderExpenseError(w http.ResponseWriter, r *http.Request, title string, draft journal.ExpenseDraft, edit bool, err error) {
+	form, optionErr := h.newExpenseFormData(r)
+	if optionErr != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	form.Entry = &model.JournalEntry{ID: parsePathID(r), EntryDate: draft.EntryDate, Description: draft.Description,
+		SourceType: model.SourceExpense, VehicleID: draft.VehicleID, IsPosted: true}
+	form.Amount, form.ExpenseAccount, form.PaymentAccount, form.VehicleID = draft.Amount, draft.ExpenseAccount, draft.PaymentAccount, draft.VehicleID
+	form.Errors, form.IsEdit = moduleFields(err), edit
+	if len(form.Errors) == 0 {
+		form.Errors["general"] = err.Error()
+	}
+	h.render(w, r, "templates/expenses/form.html", title, form)
+}
+
+func (h *Handler) expenseEntry(w http.ResponseWriter, r *http.Request) (*model.JournalEntry, bool) {
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.NotFound(w, r)
+		return nil, false
+	}
+	entry, err := h.Journals.Get(r.Context(), id)
+	if err != nil || entry.SourceType != model.SourceExpense {
+		http.NotFound(w, r)
+		return nil, false
+	}
+	return entry, true
+}
+
+func expenseActor(r *http.Request) journal.Actor {
+	user := auth.UserFromContext(r.Context())
+	if user == nil {
+		return journal.Actor{}
+	}
+	return journal.Actor{UserID: user.ID, CanManageExpenses: user.HasCapability(model.CapExpensesManage)}
+}
+
+func extractExpenseShape(entry *model.JournalEntry) (amount, expenseAccount, paymentAccount int) {
+	for _, line := range entry.Lines {
+		if line.Debit > 0 {
+			expenseAccount, amount = line.AccountID, line.Debit
 		}
-		if l.Credit > 0 {
-			paymentAccount = l.AccountID
+		if line.Credit > 0 {
+			paymentAccount = line.AccountID
 		}
 	}
 	return

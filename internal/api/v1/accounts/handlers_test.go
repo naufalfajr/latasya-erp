@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	accountModule "github.com/naufal/latasya-erp/internal/account"
 	v1 "github.com/naufal/latasya-erp/internal/api/v1"
 	"github.com/naufal/latasya-erp/internal/api/v1/accounts"
 	"github.com/naufal/latasya-erp/internal/model"
@@ -19,13 +20,9 @@ import (
 
 func newTestServer(t *testing.T, db *sql.DB) *httptest.Server {
 	t.Helper()
-	h := &accounts.Handler{DB: db}
+	h := &accounts.Handler{Accounts: accountModule.New(db)}
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/v1/accounts", h.List)
-	mux.HandleFunc("GET /api/v1/accounts/{id}", h.Get)
-	mux.HandleFunc("POST /api/v1/accounts", h.Create)
-	mux.HandleFunc("PUT /api/v1/accounts/{id}", h.Update)
-	mux.HandleFunc("DELETE /api/v1/accounts/{id}", h.Delete)
+	h.RegisterRoutes(mux)
 	ts := httptest.NewServer(v1.BearerOrCookie(db)(mux))
 	t.Cleanup(ts.Close)
 	return ts
@@ -37,7 +34,7 @@ func adminBearerToken(t *testing.T, db *sql.DB) string {
 	if err := db.QueryRow("SELECT id FROM users WHERE username = 'admin'").Scan(&adminID); err != nil {
 		t.Fatalf("get admin user: %v", err)
 	}
-	_, plaintext, err := model.CreateAPIToken(db, adminID,
+	_, plaintext, err := testutil.CreateAPIToken(db, adminID,
 		fmt.Sprintf("test-admin-%d", time.Now().UnixNano()),
 		[]string{model.CapAccountsManage}, nil)
 	if err != nil {
@@ -428,6 +425,27 @@ func TestUpdateAccount(t *testing.T) {
 			t.Fatalf("expected 422, got %d", resp.StatusCode)
 		}
 	})
+
+	t.Run("system account structure is immutable", func(t *testing.T) {
+		var id int
+		var code, name, accountType, normalBalance string
+		if err := db.QueryRow("SELECT id,code,name,account_type,normal_balance FROM accounts WHERE is_system=1 LIMIT 1").Scan(&id, &code, &name, &accountType, &normalBalance); err != nil {
+			t.Fatal(err)
+		}
+		body := map[string]any{"code": code + "-CHANGED", "name": name, "account_type": accountType, "normal_balance": normalBalance}
+		resp := doRequest(t, ts, http.MethodPut, fmt.Sprintf("/api/v1/accounts/%d", id), token, body)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusUnprocessableEntity {
+			t.Fatalf("expected 422, got %d", resp.StatusCode)
+		}
+		var errEnv v1.ErrorEnvelope
+		if err := json.NewDecoder(resp.Body).Decode(&errEnv); err != nil {
+			t.Fatal(err)
+		}
+		if errEnv.Fields["code"] == "" {
+			t.Fatal("expected system code validation error")
+		}
+	})
 }
 
 func TestDeleteAccount(t *testing.T) {
@@ -492,6 +510,22 @@ func TestDeleteAccount(t *testing.T) {
 		}
 		if errEnv.Code != v1.CodeConflict {
 			t.Errorf("expected code %q, got %q", v1.CodeConflict, errEnv.Code)
+		}
+	})
+
+	t.Run("referenced account returns 409", func(t *testing.T) {
+		result, err := db.Exec("INSERT INTO accounts (code,name,account_type,normal_balance,is_active) VALUES ('DEL-REF','Referenced','revenue','credit',1)")
+		if err != nil {
+			t.Fatal(err)
+		}
+		id, _ := result.LastInsertId()
+		if _, err := db.Exec("UPDATE company_profile SET default_revenue_account_id=? WHERE id=1", id); err != nil {
+			t.Fatal(err)
+		}
+		resp := doRequest(t, ts, http.MethodDelete, fmt.Sprintf("/api/v1/accounts/%d", id), token, nil)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusConflict {
+			t.Fatalf("expected 409, got %d", resp.StatusCode)
 		}
 	})
 }

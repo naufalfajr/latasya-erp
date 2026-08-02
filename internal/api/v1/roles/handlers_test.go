@@ -8,6 +8,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/naufal/latasya-erp/internal/access"
+	"github.com/naufal/latasya-erp/internal/auth"
 	"time"
 
 	v1 "github.com/naufal/latasya-erp/internal/api/v1"
@@ -18,14 +21,9 @@ import (
 
 func newTestServer(t *testing.T, db *sql.DB) *httptest.Server {
 	t.Helper()
-	h := &roles.Handler{DB: db}
+	h := &roles.Handler{Access: access.New(db, auth.HashPassword)}
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/v1/roles", h.List)
-	mux.HandleFunc("GET /api/v1/roles/capabilities", h.Capabilities)
-	mux.HandleFunc("GET /api/v1/roles/{name}", h.Get)
-	mux.HandleFunc("POST /api/v1/roles", h.Create)
-	mux.HandleFunc("PUT /api/v1/roles/{name}", h.Update)
-	mux.HandleFunc("DELETE /api/v1/roles/{name}", h.Delete)
+	h.RegisterRoutes(mux)
 	ts := httptest.NewServer(v1.BearerOrCookie(db)(mux))
 	t.Cleanup(ts.Close)
 	return ts
@@ -37,7 +35,7 @@ func adminToken(t *testing.T, db *sql.DB) string {
 	if err := db.QueryRow("SELECT id FROM users WHERE username = 'admin'").Scan(&adminID); err != nil {
 		t.Fatalf("get admin: %v", err)
 	}
-	_, tok, err := model.CreateAPIToken(db, adminID,
+	_, tok, err := testutil.CreateAPIToken(db, adminID,
 		fmt.Sprintf("test-roles-%d", time.Now().UnixNano()),
 		[]string{model.CapRolesManage}, nil)
 	if err != nil {
@@ -109,7 +107,7 @@ func TestGetCapabilities(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	ts := newTestServer(t, db)
 	viewerID := testutil.CreateTestUser(t, db, "viewer-caps", "pw", "viewer")
-	_, viewerTok, err := model.CreateAPIToken(db, viewerID, "viewer-caps-tok", []string{}, nil)
+	_, viewerTok, err := testutil.CreateAPIToken(db, viewerID, "viewer-caps-tok", []string{}, nil)
 	if err != nil {
 		t.Fatalf("create token: %v", err)
 	}
@@ -160,7 +158,7 @@ func TestCreateRole(t *testing.T) {
 	})
 
 	t.Run("duplicate name returns 422", func(t *testing.T) {
-		body := map[string]any{"name": "admin", "capabilities": []string{}}
+		body := map[string]any{"name": "testrole1", "capabilities": []string{}}
 		resp := doReq(t, ts, http.MethodPost, "/api/v1/roles", tok, body)
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusUnprocessableEntity {
@@ -170,7 +168,7 @@ func TestCreateRole(t *testing.T) {
 
 	t.Run("forbidden returns 403", func(t *testing.T) {
 		viewerID := testutil.CreateTestUser(t, db, "viewer-create-role", "pw", "viewer")
-		_, noCapTok, err := model.CreateAPIToken(db, viewerID, "no-cap-create-role", []string{}, nil)
+		_, noCapTok, err := testutil.CreateAPIToken(db, viewerID, "no-cap-create-role", []string{}, nil)
 		if err != nil {
 			t.Fatalf("create token: %v", err)
 		}
@@ -231,7 +229,7 @@ func TestGetRole(t *testing.T) {
 
 	t.Run("forbidden returns 403", func(t *testing.T) {
 		viewerID := testutil.CreateTestUser(t, db, "viewer-get-role", "pw", "viewer")
-		_, noCapTok, err := model.CreateAPIToken(db, viewerID, "no-cap-get-role", []string{}, nil)
+		_, noCapTok, err := testutil.CreateAPIToken(db, viewerID, "no-cap-get-role", []string{}, nil)
 		if err != nil {
 			t.Fatalf("create token: %v", err)
 		}
@@ -273,13 +271,13 @@ func TestUpdateRole(t *testing.T) {
 	ts := newTestServer(t, db)
 	tok := adminToken(t, db)
 
-	if err := model.CreateRole(db, &model.Role{Name: "editable-role", Description: "original", Capabilities: []string{model.CapReportsView}}); err != nil {
+	if err := testutil.CreateRole(db, &model.Role{Name: "editable-role", Description: "original", Capabilities: []string{model.CapReportsView}}); err != nil {
 		t.Fatalf("create role: %v", err)
 	}
 
 	t.Run("forbidden returns 403", func(t *testing.T) {
 		viewerID := testutil.CreateTestUser(t, db, "viewer-update-role", "pw", "viewer")
-		_, noCapTok, err := model.CreateAPIToken(db, viewerID, "no-cap-update-role", []string{}, nil)
+		_, noCapTok, err := testutil.CreateAPIToken(db, viewerID, "no-cap-update-role", []string{}, nil)
 		if err != nil {
 			t.Fatalf("create token: %v", err)
 		}
@@ -351,11 +349,11 @@ func TestDeleteRole(t *testing.T) {
 	tok := adminToken(t, db)
 
 	t.Run("forbidden returns 403", func(t *testing.T) {
-		if err := model.CreateRole(db, &model.Role{Name: "forbidden-del-role", Capabilities: []string{}}); err != nil {
+		if err := testutil.CreateRole(db, &model.Role{Name: "forbidden-del-role", Capabilities: []string{}}); err != nil {
 			t.Fatalf("create role: %v", err)
 		}
 		viewerID := testutil.CreateTestUser(t, db, "viewer-delete-role", "pw", "viewer")
-		_, noCapTok, err := model.CreateAPIToken(db, viewerID, "no-cap-delete-role", []string{}, nil)
+		_, noCapTok, err := testutil.CreateAPIToken(db, viewerID, "no-cap-delete-role", []string{}, nil)
 		if err != nil {
 			t.Fatalf("create token: %v", err)
 		}
@@ -375,7 +373,7 @@ func TestDeleteRole(t *testing.T) {
 	})
 
 	t.Run("unused role deletes successfully returns 204", func(t *testing.T) {
-		if err := model.CreateRole(db, &model.Role{Name: "deleteme-role", Capabilities: []string{}}); err != nil {
+		if err := testutil.CreateRole(db, &model.Role{Name: "deleteme-role", Capabilities: []string{}}); err != nil {
 			t.Fatalf("create role: %v", err)
 		}
 		resp := doReq(t, ts, http.MethodDelete, "/api/v1/roles/deleteme-role", tok, nil)
@@ -397,7 +395,7 @@ func TestCapabilityEnforcement(t *testing.T) {
 	ts := newTestServer(t, db)
 
 	viewerID := testutil.CreateTestUser(t, db, "viewer-roles", "pw", "viewer")
-	_, noCapTok, err := model.CreateAPIToken(db, viewerID, "no-cap-roles", []string{}, nil)
+	_, noCapTok, err := testutil.CreateAPIToken(db, viewerID, "no-cap-roles", []string{}, nil)
 	if err != nil {
 		t.Fatalf("create token: %v", err)
 	}
@@ -440,7 +438,7 @@ func TestAdminRoleProtection(t *testing.T) {
 	})
 
 	t.Run("cannot delete role with users returns 409", func(t *testing.T) {
-		if err := model.CreateRole(db, &model.Role{Name: "inuse", Capabilities: []string{}}); err != nil {
+		if err := testutil.CreateRole(db, &model.Role{Name: "inuse", Capabilities: []string{}}); err != nil {
 			t.Fatalf("create role: %v", err)
 		}
 		testutil.CreateTestUser(t, db, "userinuse", "pw", "inuse")

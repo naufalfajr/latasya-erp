@@ -33,7 +33,12 @@ func WithUser(ctx context.Context, u *model.User) context.Context {
 	return context.WithValue(ctx, userContextKey, u)
 }
 
-func RequireAuth(db *sql.DB, next http.Handler) http.Handler {
+type UserDirectory interface {
+	LookupUserByIDForAuth(context.Context, int) (*model.User, error)
+	LookupRoleForAuth(context.Context, string) (*model.Role, error)
+}
+
+func RequireAuth(db *sql.DB, directory UserDirectory, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie("session_id")
 		if err != nil {
@@ -53,7 +58,7 @@ func RequireAuth(db *sql.DB, next http.Handler) http.Handler {
 			return
 		}
 
-		user, err := model.GetUserByID(db, session.UserID)
+		user, err := directory.LookupUserByIDForAuth(r.Context(), session.UserID)
 		if err != nil || !user.IsActive {
 			http.Redirect(w, r, loginPath, http.StatusSeeOther)
 			return
@@ -66,7 +71,7 @@ func RequireAuth(db *sql.DB, next http.Handler) http.Handler {
 		// Load role capabilities for non-admin users; admin's HasCapability
 		// short-circuits so we skip the query.
 		if user.Role != model.RoleAdmin {
-			if role, err := model.GetRoleByName(db, user.Role); err == nil {
+			if role, err := directory.LookupRoleForAuth(r.Context(), user.Role); err == nil {
 				user.Capabilities = role.Capabilities
 			}
 		}

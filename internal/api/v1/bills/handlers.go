@@ -1,34 +1,25 @@
-// Package bills implements the /api/v1/bills endpoints with full bill
-// lifecycle support (draft → received → partial → paid).
+// Package bills implements the /api/v1/bills endpoints.
 package bills
 
 import (
-	"database/sql"
 	"errors"
 	"net/http"
 	"strconv"
-	"strings"
 
 	v1 "github.com/naufal/latasya-erp/internal/api/v1"
-	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/auth"
+	billModule "github.com/naufal/latasya-erp/internal/bill"
 	"github.com/naufal/latasya-erp/internal/model"
 )
 
-// Handler holds shared dependencies for the bills API.
-type Handler struct {
-	DB *sql.DB
-}
+type Handler struct{ Bills *billModule.Module }
 
-// lineInput is the JSON request body for a single bill line.
 type lineInput struct {
 	Description string `json:"description"`
 	Quantity    string `json:"quantity"`
 	UnitPrice   string `json:"unit_price"`
 	AccountID   int    `json:"account_id"`
 }
-
-// billInput is the JSON request body for Create and Update.
 type billInput struct {
 	ContactID int         `json:"contact_id"`
 	BillDate  string      `json:"bill_date"`
@@ -37,468 +28,238 @@ type billInput struct {
 	Notes     string      `json:"notes"`
 	Lines     []lineInput `json:"lines"`
 }
-
 type paymentInput struct {
 	Amount         string `json:"amount"`
 	PaymentDate    string `json:"payment_date"`
 	PaymentAccount int    `json:"payment_account"`
 }
 
-// parseIDR parses a non-negative integer-IDR string. Empty → 0.
-func parseIDR(s string) (int, error) {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return 0, nil
-	}
-	n, err := strconv.Atoi(s)
-	if err != nil {
-		return 0, err
-	}
-	if n < 0 {
-		return 0, errors.New("must be non-negative")
-	}
-	return n, nil
-}
-
-// parseQuantity parses a decimal quantity string into ×100 fixed-point.
-// "1" → 100, "1.5" → 150, "1.25" → 125.
-func parseQuantity(s string) (int, error) {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return 0, nil
-	}
-	parts := strings.SplitN(s, ".", 2)
-	whole, err := strconv.Atoi(parts[0])
-	if err != nil || whole < 0 {
-		return 0, errors.New("invalid quantity")
-	}
-	frac := 0
-	if len(parts) == 2 {
-		fp := parts[1]
-		if len(fp) == 0 || len(fp) > 2 {
-			return 0, errors.New("invalid quantity")
-		}
-		if len(fp) == 1 {
-			fp += "0"
-		}
-		frac, err = strconv.Atoi(fp)
-		if err != nil || frac < 0 {
-			return 0, errors.New("invalid quantity")
-		}
-	}
-	return whole*100 + frac, nil
-}
-
-func validateBillInput(inp *billInput) (map[string]string, []model.BillLine, int) {
-	fields := make(map[string]string)
-	if inp.ContactID == 0 {
-		fields["contact_id"] = "required"
-	}
-	if strings.TrimSpace(inp.BillDate) == "" {
-		fields["bill_date"] = "required"
-	}
-	if strings.TrimSpace(inp.DueDate) == "" {
-		fields["due_date"] = "required"
-	}
-	taxAmount, err := parseIDR(inp.TaxAmount)
+func validate(inp *billInput) (map[string]string, billModule.Draft) {
+	fields := map[string]string{}
+	draft := billModule.Draft{ContactID: inp.ContactID, BillDate: inp.BillDate, DueDate: inp.DueDate, Notes: inp.Notes}
+	tax, err := v1.ParseIDR(inp.TaxAmount)
 	if err != nil {
 		fields["tax_amount"] = "invalid amount"
 	}
-	if len(inp.Lines) == 0 {
-		fields["lines"] = "at least one line required"
-	}
-
-	lines := make([]model.BillLine, 0, len(inp.Lines))
+	draft.TaxAmount = tax
 	for i, l := range inp.Lines {
-		qty, qerr := parseQuantity(l.Quantity)
+		key := "lines[" + strconv.Itoa(i) + "]"
+		qty, qerr := v1.ParseQuantity(l.Quantity)
 		if qerr != nil {
-			fields["lines["+strconv.Itoa(i)+"].quantity"] = "invalid quantity"
+			fields[key+".quantity"] = "invalid quantity"
 			continue
 		}
 		if qty == 0 {
 			qty = 100
 		}
-		price, perr := parseIDR(l.UnitPrice)
+		price, perr := v1.ParseIDR(l.UnitPrice)
 		if perr != nil {
-			fields["lines["+strconv.Itoa(i)+"].unit_price"] = "invalid amount"
+			fields[key+".unit_price"] = "invalid amount"
 			continue
 		}
-		if strings.TrimSpace(l.Description) == "" {
-			fields["lines["+strconv.Itoa(i)+"].description"] = "required"
-			continue
-		}
-		if price <= 0 {
-			fields["lines["+strconv.Itoa(i)+"].unit_price"] = "must be positive"
-			continue
-		}
-		if l.AccountID == 0 {
-			fields["lines["+strconv.Itoa(i)+"].account_id"] = "required"
-			continue
-		}
-		lines = append(lines, model.BillLine{
-			Description: l.Description,
-			Quantity:    qty,
-			UnitPrice:   price,
-			AccountID:   l.AccountID,
-			Amount:      qty * price / 100,
-		})
+		draft.Lines = append(draft.Lines, billModule.Line{Description: l.Description, Quantity: qty, UnitPrice: price, AccountID: l.AccountID})
 	}
-
 	if len(fields) > 0 {
-		return fields, nil, 0
+		return fields, billModule.Draft{}
 	}
-	return nil, lines, taxAmount
+	return nil, draft
+}
+func actor(r *http.Request) billModule.Actor {
+	u := auth.UserFromContext(r.Context())
+	if u == nil {
+		return billModule.Actor{}
+	}
+	return billModule.Actor{UserID: u.ID, CanManage: v1.HasEffectiveCapability(r.Context(), model.CapBillsManage)}
 }
 
-// List handles GET /api/v1/bills
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	page := v1.ParsePage(r)
-	filter := model.BillFilter{
-		Status: r.URL.Query().Get("status"),
-		Search: r.URL.Query().Get("search"),
-		Limit:  page.PerPage,
-		Offset: page.Offset(),
-	}
-
-	total, err := model.CountBills(h.DB, filter)
+	result, err := h.Bills.List(r.Context(), billModule.Filter{Status: r.URL.Query().Get("status"), Search: r.URL.Query().Get("search"), Limit: page.PerPage, Offset: page.Offset()})
 	if err != nil {
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to list bills", nil)
+		v1.WriteError(w, r, 500, v1.CodeInternal, "failed to list bills", nil)
 		return
 	}
-
-	bills, err := model.ListBills(h.DB, filter)
-	if err != nil {
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to list bills", nil)
-		return
-	}
-	if bills == nil {
-		bills = []model.Bill{}
-	}
-
-	v1.WriteList(w, http.StatusOK, bills, page, total)
+	v1.WriteList(w, 200, result.Bills, page, result.Total)
 }
-
-// Get handles GET /api/v1/bills/{id}
 func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
-		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "bill not found", nil)
+		notFound(w, r)
 		return
 	}
-	b, err := model.GetBill(h.DB, id)
+	b, err := h.Bills.Get(r.Context(), id)
 	if err != nil {
-		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "bill not found", nil)
+		notFound(w, r)
 		return
 	}
-	v1.WriteJSON(w, http.StatusOK, b)
+	v1.WriteJSON(w, 200, b)
 }
-
-// Create handles POST /api/v1/bills
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	if !v1.HasEffectiveCapability(r.Context(), model.CapBillsManage) {
-		v1.WriteError(w, r, http.StatusForbidden, v1.CodeForbidden, "bills.manage capability required", nil)
+		forbidden(w, r)
 		return
 	}
-	user := auth.UserFromContext(r.Context())
-	if user == nil {
-		v1.WriteError(w, r, http.StatusUnauthorized, v1.CodeUnauthorized, "authentication required", nil)
+	if auth.UserFromContext(r.Context()) == nil {
+		unauthorized(w, r)
 		return
 	}
-
 	var inp billInput
 	if err := v1.DecodeJSON(w, r, &inp); err != nil {
-		v1.WriteError(w, r, http.StatusBadRequest, v1.CodeInvalidRequest, "invalid request body", nil)
+		v1.WriteError(w, r, 400, v1.CodeInvalidRequest, "invalid request body", nil)
 		return
 	}
-
-	fields, lines, taxAmount := validateBillInput(&inp)
+	fields, d := validate(&inp)
 	if fields != nil {
-		v1.WriteError(w, r, http.StatusUnprocessableEntity, v1.CodeValidationFailed, "validation failed", fields)
+		v1.WriteError(w, r, 422, v1.CodeValidationFailed, "validation failed", fields)
 		return
 	}
-
-	b := &model.Bill{
-		ContactID: inp.ContactID,
-		BillDate:  inp.BillDate,
-		DueDate:   inp.DueDate,
-		TaxAmount: taxAmount,
-		Notes:     inp.Notes,
-		CreatedBy: user.ID,
-	}
-
-	billID, err := model.CreateBill(h.DB, b, lines)
+	created, err := h.Bills.Create(r.Context(), actor(r), d)
 	if err != nil {
-		v1.WriteError(w, r, http.StatusUnprocessableEntity, v1.CodeValidationFailed, err.Error(), nil)
+		writeModuleError(w, r, err)
 		return
 	}
-
-	created, err := model.GetBill(h.DB, billID)
-	if err != nil {
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to load created bill", nil)
-		return
-	}
-
-	audit.Log(r.Context(), h.DB, audit.Event{
-		Action:      "bill.create",
-		TargetType:  "bill",
-		TargetID:    int64(billID),
-		TargetLabel: created.BillNumber,
-		Metadata: map[string]any{
-			"after": map[string]any{
-				"contact_id": created.ContactID,
-				"bill_date":  created.BillDate,
-				"due_date":   created.DueDate,
-				"tax_amount": created.TaxAmount,
-				"total":      created.Total,
-				"line_count": len(created.Lines),
-			},
-		},
-	})
-
-	v1.WriteJSON(w, http.StatusCreated, created)
+	v1.WriteJSON(w, 201, created)
 }
-
-// Update handles PUT /api/v1/bills/{id}
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	if !v1.HasEffectiveCapability(r.Context(), model.CapBillsManage) {
-		v1.WriteError(w, r, http.StatusForbidden, v1.CodeForbidden, "bills.manage capability required", nil)
+		forbidden(w, r)
 		return
 	}
-
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
-		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "bill not found", nil)
+		notFound(w, r)
 		return
 	}
-
-	existing, err := model.GetBill(h.DB, id)
-	if err != nil {
-		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "bill not found", nil)
+	if _, err = h.Bills.Get(r.Context(), id); err != nil {
+		notFound(w, r)
 		return
 	}
-	if existing.Status != "draft" {
-		v1.WriteError(w, r, http.StatusConflict, v1.CodeConflict,
-			"can only edit draft bills (current: "+existing.Status+")", nil)
-		return
-	}
-
 	var inp billInput
-	if err := v1.DecodeJSON(w, r, &inp); err != nil {
-		v1.WriteError(w, r, http.StatusBadRequest, v1.CodeInvalidRequest, "invalid request body", nil)
+	if err = v1.DecodeJSON(w, r, &inp); err != nil {
+		v1.WriteError(w, r, 400, v1.CodeInvalidRequest, "invalid request body", nil)
 		return
 	}
-
-	fields, lines, taxAmount := validateBillInput(&inp)
+	fields, d := validate(&inp)
 	if fields != nil {
-		v1.WriteError(w, r, http.StatusUnprocessableEntity, v1.CodeValidationFailed, "validation failed", fields)
+		v1.WriteError(w, r, 422, v1.CodeValidationFailed, "validation failed", fields)
 		return
 	}
-
-	b := &model.Bill{
-		ID:        id,
-		ContactID: inp.ContactID,
-		BillDate:  inp.BillDate,
-		DueDate:   inp.DueDate,
-		TaxAmount: taxAmount,
-		Notes:     inp.Notes,
-	}
-
-	if err := model.UpdateBill(h.DB, b, lines); err != nil {
-		if strings.Contains(err.Error(), "draft") {
-			v1.WriteError(w, r, http.StatusConflict, v1.CodeConflict, err.Error(), nil)
-			return
-		}
-		v1.WriteError(w, r, http.StatusUnprocessableEntity, v1.CodeValidationFailed, err.Error(), nil)
-		return
-	}
-
-	updated, err := model.GetBill(h.DB, id)
+	updated, err := h.Bills.Update(r.Context(), actor(r), id, d)
 	if err != nil {
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to load updated bill", nil)
+		writeModuleError(w, r, err)
 		return
 	}
-
-	audit.Log(r.Context(), h.DB, audit.Event{
-		Action:      "bill.update",
-		TargetType:  "bill",
-		TargetID:    int64(id),
-		TargetLabel: updated.BillNumber,
-		Metadata: map[string]any{
-			"before": map[string]any{
-				"contact_id": existing.ContactID,
-				"bill_date":  existing.BillDate,
-				"due_date":   existing.DueDate,
-				"tax_amount": existing.TaxAmount,
-				"total":      existing.Total,
-			},
-			"after": map[string]any{
-				"contact_id": updated.ContactID,
-				"bill_date":  updated.BillDate,
-				"due_date":   updated.DueDate,
-				"tax_amount": updated.TaxAmount,
-				"total":      updated.Total,
-			},
-		},
-	})
-
-	v1.WriteJSON(w, http.StatusOK, updated)
+	v1.WriteJSON(w, 200, updated)
 }
-
-// Delete handles DELETE /api/v1/bills/{id}
 func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	if !v1.HasEffectiveCapability(r.Context(), model.CapBillsManage) {
-		v1.WriteError(w, r, http.StatusForbidden, v1.CodeForbidden, "bills.manage capability required", nil)
+		forbidden(w, r)
 		return
 	}
-
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
-		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "bill not found", nil)
+		notFound(w, r)
 		return
 	}
-
-	existing, err := model.GetBill(h.DB, id)
-	if err != nil {
-		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "bill not found", nil)
+	if _, err = h.Bills.Delete(r.Context(), actor(r), id); err != nil {
+		writeModuleError(w, r, err)
 		return
 	}
-
-	if err := model.DeleteBill(h.DB, id); err != nil {
-		v1.WriteError(w, r, http.StatusConflict, v1.CodeConflict, err.Error(), nil)
-		return
-	}
-
-	audit.Log(r.Context(), h.DB, audit.Event{
-		Action:      "bill.delete",
-		TargetType:  "bill",
-		TargetID:    int64(id),
-		TargetLabel: existing.BillNumber,
-		Metadata: map[string]any{
-			"before": map[string]any{
-				"contact_id": existing.ContactID,
-				"status":     existing.Status,
-				"total":      existing.Total,
-			},
-		},
-	})
-
 	w.WriteHeader(http.StatusNoContent)
 }
-
-// Receive handles POST /api/v1/bills/{id}/receive — creates the AP journal entry.
 func (h *Handler) Receive(w http.ResponseWriter, r *http.Request) {
 	if !v1.HasEffectiveCapability(r.Context(), model.CapBillsManage) {
-		v1.WriteError(w, r, http.StatusForbidden, v1.CodeForbidden, "bills.manage capability required", nil)
+		forbidden(w, r)
 		return
 	}
-	user := auth.UserFromContext(r.Context())
-	if user == nil {
-		v1.WriteError(w, r, http.StatusUnauthorized, v1.CodeUnauthorized, "authentication required", nil)
+	if auth.UserFromContext(r.Context()) == nil {
+		unauthorized(w, r)
 		return
 	}
-
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
-		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "bill not found", nil)
+		notFound(w, r)
 		return
 	}
-	if _, err := model.GetBill(h.DB, id); err != nil {
-		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "bill not found", nil)
-		return
-	}
-
-	if err := model.ReceiveBill(h.DB, id, user.ID); err != nil {
-		v1.WriteError(w, r, http.StatusConflict, v1.CodeConflict, err.Error(), nil)
-		return
-	}
-
-	updated, err := model.GetBill(h.DB, id)
+	updated, err := h.Bills.Receive(r.Context(), actor(r), id)
 	if err != nil {
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to load bill", nil)
+		writeModuleError(w, r, err)
 		return
 	}
-
-	audit.Log(r.Context(), h.DB, audit.Event{
-		Action:      "bill.receive",
-		TargetType:  "bill",
-		TargetID:    int64(id),
-		TargetLabel: updated.BillNumber,
-		Metadata: map[string]any{
-			"after":      map[string]any{"status": updated.Status},
-			"journal_id": updated.JournalID,
-		},
-	})
-
-	v1.WriteJSON(w, http.StatusOK, updated)
+	v1.WriteJSON(w, 200, updated)
 }
-
-// Payment handles POST /api/v1/bills/{id}/payment
 func (h *Handler) Payment(w http.ResponseWriter, r *http.Request) {
 	if !v1.HasEffectiveCapability(r.Context(), model.CapBillsManage) {
-		v1.WriteError(w, r, http.StatusForbidden, v1.CodeForbidden, "bills.manage capability required", nil)
+		forbidden(w, r)
 		return
 	}
-	user := auth.UserFromContext(r.Context())
-	if user == nil {
-		v1.WriteError(w, r, http.StatusUnauthorized, v1.CodeUnauthorized, "authentication required", nil)
+	if auth.UserFromContext(r.Context()) == nil {
+		unauthorized(w, r)
 		return
 	}
-
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
-		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "bill not found", nil)
+		notFound(w, r)
 		return
 	}
-	if _, err := model.GetBill(h.DB, id); err != nil {
-		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "bill not found", nil)
+	if _, err = h.Bills.Get(r.Context(), id); err != nil {
+		notFound(w, r)
 		return
 	}
-
 	var inp paymentInput
-	if err := v1.DecodeJSON(w, r, &inp); err != nil {
-		v1.WriteError(w, r, http.StatusBadRequest, v1.CodeInvalidRequest, "invalid request body", nil)
+	if err = v1.DecodeJSON(w, r, &inp); err != nil {
+		v1.WriteError(w, r, 400, v1.CodeInvalidRequest, "invalid request body", nil)
 		return
 	}
-
 	fields := map[string]string{}
-	amount, err := parseIDR(inp.Amount)
-	if err != nil || amount <= 0 {
-		fields["amount"] = "must be a positive integer-IDR string"
-	}
-	if strings.TrimSpace(inp.PaymentDate) == "" {
-		fields["payment_date"] = "required"
-	}
-	if inp.PaymentAccount == 0 {
-		fields["payment_account"] = "required"
+	amount, err := v1.ParseIDR(inp.Amount)
+	if err != nil {
+		fields["amount"] = "must be an integer-IDR string"
 	}
 	if len(fields) > 0 {
-		v1.WriteError(w, r, http.StatusUnprocessableEntity, v1.CodeValidationFailed, "validation failed", fields)
+		v1.WriteError(w, r, 422, v1.CodeValidationFailed, "validation failed", fields)
 		return
 	}
-
-	if err := model.RecordBillPayment(h.DB, id, amount, inp.PaymentDate, inp.PaymentAccount, user.ID); err != nil {
-		v1.WriteError(w, r, http.StatusConflict, v1.CodeConflict, err.Error(), nil)
-		return
-	}
-
-	updated, err := model.GetBill(h.DB, id)
+	updated, err := h.Bills.RecordPayment(r.Context(), actor(r), id, billModule.Payment{Amount: amount, PaymentDate: inp.PaymentDate, PaymentAccount: inp.PaymentAccount})
 	if err != nil {
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to load bill", nil)
+		writeModuleError(w, r, err)
 		return
 	}
+	v1.WriteJSON(w, 200, updated)
+}
 
-	audit.Log(r.Context(), h.DB, audit.Event{
-		Action:      "bill.payment",
-		TargetType:  "bill",
-		TargetID:    int64(id),
-		TargetLabel: updated.BillNumber,
-		Metadata: map[string]any{
-			"amount":             amount,
-			"payment_date":       inp.PaymentDate,
-			"payment_account_id": inp.PaymentAccount,
-			"status_after":       updated.Status,
-		},
-	})
+func forbidden(w http.ResponseWriter, r *http.Request) {
+	v1.WriteError(w, r, 403, v1.CodeForbidden, "bills.manage capability required", nil)
+}
+func unauthorized(w http.ResponseWriter, r *http.Request) {
+	v1.WriteError(w, r, 401, v1.CodeUnauthorized, "authentication required", nil)
+}
+func notFound(w http.ResponseWriter, r *http.Request) {
+	v1.WriteError(w, r, 404, v1.CodeNotFound, "bill not found", nil)
+}
+func writeModuleError(w http.ResponseWriter, r *http.Request, err error) {
+	var validation *billModule.ValidationError
+	var conflict *billModule.ConflictError
+	switch {
+	case errors.Is(err, billModule.ErrNotFound):
+		notFound(w, r)
+	case errors.Is(err, billModule.ErrForbidden):
+		forbidden(w, r)
+	case errors.As(err, &validation):
+		v1.WriteError(w, r, 422, v1.CodeValidationFailed, validation.Error(), validation.Fields)
+	case errors.As(err, &conflict):
+		v1.WriteError(w, r, 409, v1.CodeConflict, conflict.Error(), nil)
+	default:
+		v1.WriteError(w, r, 500, v1.CodeInternal, "internal server error", nil)
+	}
+}
 
-	v1.WriteJSON(w, http.StatusOK, updated)
+func (h *Handler) RegisterRoutes(mux *http.ServeMux, idem func(http.Handler) http.Handler) {
+	mux.HandleFunc("GET /api/v1/bills", h.List)
+	mux.HandleFunc("GET /api/v1/bills/{id}", h.Get)
+	mux.Handle("POST /api/v1/bills", idem(http.HandlerFunc(h.Create)))
+	mux.Handle("PUT /api/v1/bills/{id}", idem(http.HandlerFunc(h.Update)))
+	mux.HandleFunc("DELETE /api/v1/bills/{id}", h.Delete)
+	mux.Handle("POST /api/v1/bills/{id}/receive", idem(http.HandlerFunc(h.Receive)))
+	mux.Handle("POST /api/v1/bills/{id}/payment", idem(http.HandlerFunc(h.Payment)))
 }

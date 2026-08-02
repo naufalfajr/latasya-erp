@@ -12,6 +12,8 @@ import (
 
 	v1 "github.com/naufal/latasya-erp/internal/api/v1"
 	v1expenses "github.com/naufal/latasya-erp/internal/api/v1/expenses"
+	"github.com/naufal/latasya-erp/internal/idempotency"
+	"github.com/naufal/latasya-erp/internal/journal"
 	"github.com/naufal/latasya-erp/internal/model"
 	"github.com/naufal/latasya-erp/internal/testutil"
 )
@@ -20,15 +22,11 @@ func setupServer(t *testing.T) (*httptest.Server, *sql.DB) {
 	t.Helper()
 	db := testutil.SetupTestDB(t)
 
-	h := &v1expenses.Handler{DB: db}
-	idem := v1.Idempotency(db)
+	h := &v1expenses.Handler{Journals: journal.New(db)}
+	idem := v1.Idempotency(idempotency.New(db))
 
 	apiMux := http.NewServeMux()
-	apiMux.HandleFunc("GET /api/v1/expenses", h.List)
-	apiMux.HandleFunc("GET /api/v1/expenses/{id}", h.Get)
-	apiMux.Handle("POST /api/v1/expenses", idem(http.HandlerFunc(h.Create)))
-	apiMux.Handle("PUT /api/v1/expenses/{id}", idem(http.HandlerFunc(h.Update)))
-	apiMux.HandleFunc("DELETE /api/v1/expenses/{id}", h.Delete)
+	h.RegisterRoutes(apiMux, idem)
 
 	mux := http.NewServeMux()
 	mux.Handle("/api/v1/", v1.BearerOrCookie(db)(apiMux))
@@ -44,7 +42,7 @@ func adminToken(t *testing.T, db *sql.DB) string {
 	if err := db.QueryRow("SELECT id FROM users WHERE username = 'admin'").Scan(&adminID); err != nil {
 		t.Fatalf("get admin: %v", err)
 	}
-	_, plaintext, err := model.CreateAPIToken(db, adminID,
+	_, plaintext, err := testutil.CreateAPIToken(db, adminID,
 		fmt.Sprintf("test-expenses-%d", time.Now().UnixNano()),
 		[]string{model.CapExpensesManage}, nil)
 	if err != nil {
@@ -56,7 +54,7 @@ func adminToken(t *testing.T, db *sql.DB) string {
 func noScopeToken(t *testing.T, db *sql.DB) string {
 	t.Helper()
 	userID := testutil.CreateTestUser(t, db, fmt.Sprintf("noscope-%d", time.Now().UnixNano()), "pw", model.RoleViewer)
-	_, plaintext, err := model.CreateAPIToken(db, userID, "noscope", []string{}, nil)
+	_, plaintext, err := testutil.CreateAPIToken(db, userID, "noscope", []string{}, nil)
 	if err != nil {
 		t.Fatalf("create no-scope token: %v", err)
 	}
@@ -564,7 +562,7 @@ func TestUpdateExpense(t *testing.T) {
 			{AccountID: payID, Debit: 10000, Credit: 0},
 			{AccountID: revID, Debit: 0, Credit: 10000},
 		}
-		id, err := model.CreateJournalEntry(db, je, lines)
+		id, err := testutil.CreateJournalEntry(db, je, lines)
 		if err != nil {
 			t.Fatalf("create income entry: %v", err)
 		}

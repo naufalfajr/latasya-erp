@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/naufal/latasya-erp/internal/model"
+	"github.com/naufal/latasya-erp/internal/testutil"
 )
 
 // TestAdminFormActions_RespectBasePath guards against the exact bug class
@@ -71,7 +72,7 @@ func TestDashboard_RecentTransactionRow_RespectsBasePath(t *testing.T) {
 	var contactID int
 	db.QueryRow("SELECT id FROM contacts WHERE name = 'BP Dash'").Scan(&contactID)
 	invID := mustInvoice(t, db, contactID)
-	if err := model.SendInvoice(db, invID, 1); err != nil {
+	if err := testutil.SendInvoice(db, invID, 1); err != nil {
 		t.Fatalf("send invoice: %v", err)
 	}
 
@@ -100,7 +101,7 @@ func mustInvoice(t *testing.T, db *sql.DB, contactID int) int {
 	t.Helper()
 	var revenueID int
 	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
-	invID, err := model.CreateInvoice(db, &model.Invoice{
+	invID, err := testutil.CreateInvoice(db, &model.Invoice{
 		ContactID: contactID, InvoiceDate: "2026-06-01", DueDate: "2026-06-11", CreatedBy: 1,
 	}, []model.InvoiceLine{{Description: "x", Quantity: 100, UnitPrice: 100000, AccountID: revenueID}})
 	if err != nil {

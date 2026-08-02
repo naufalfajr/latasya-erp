@@ -9,6 +9,7 @@ import (
 	"database/sql"
 	"net/http"
 
+	"github.com/naufal/latasya-erp/internal/access"
 	"github.com/naufal/latasya-erp/internal/api/v1"
 	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/auth"
@@ -19,11 +20,26 @@ import (
 type Handler struct {
 	DB      *sql.DB
 	DevMode bool
+	Access  *access.Module
 }
 
 // New constructs a Handler.
 func New(db *sql.DB, devMode bool) *Handler {
-	return &Handler{DB: db, DevMode: devMode}
+	return &Handler{DB: db, DevMode: devMode, Access: access.New(db, auth.HashPassword)}
+}
+
+// RegisterRoutes installs authenticated auth endpoints. Login is intentionally
+// registered on the outer mux because it must bypass authentication middleware.
+func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("POST /api/v1/auth/logout", h.Logout)
+	mux.HandleFunc("GET /api/v1/auth/me", h.Me)
+	mux.HandleFunc("GET /api/v1/auth/csrf", h.CSRF)
+	mux.HandleFunc("POST /api/v1/auth/password/change", h.PasswordChange)
+}
+
+// RegisterLoginRoute installs the unauthenticated login endpoint.
+func (h *Handler) RegisterLoginRoute(mux *http.ServeMux, middleware func(http.Handler) http.Handler) {
+	mux.Handle("POST /api/v1/auth/login", middleware(http.HandlerFunc(h.Login)))
 }
 
 const sessionCookieMaxAgeSeconds = 48 * 60 * 60
@@ -87,7 +103,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := model.GetUserByUsername(h.DB, req.Username)
+	user, err := h.Access.LookupUserForAuth(r.Context(), req.Username)
 	if err != nil {
 		audit.Log(r.Context(), h.DB, audit.Event{
 			Action:        "auth.login_failed",
@@ -124,7 +140,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	// Mirror the HTML handler's catch for the seeded admin/admin default so
 	// JSON-only clients can't sidestep the forced rotation.
 	if req.Username == "admin" && req.Password == "admin" && !user.MustChangePassword {
-		_ = model.SetMustChangePassword(h.DB, user.ID, true)
+		_ = h.Access.SetPasswordChangeRequired(r.Context(), user.ID, true)
 		user.MustChangePassword = true
 	}
 
@@ -146,7 +162,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	// Re-load capabilities for non-admins so the response payload reflects
 	// what the new session actually carries (admin short-circuits).
 	if user.Role != model.RoleAdmin {
-		if role, err := model.GetRoleByName(h.DB, user.Role); err == nil {
+		if role, err := h.Access.LookupRoleForAuth(r.Context(), user.Role); err == nil {
 			user.Capabilities = role.Capabilities
 		}
 	}
@@ -185,7 +201,7 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 		// Resolve the actor before deleting the session so the audit row
 		// has username attribution.
 		if userID, err := auth.GetSessionUserID(h.DB, cookie.Value); err == nil {
-			if user, err := model.GetUserByID(h.DB, userID); err == nil {
+			if user, err := h.Access.LookupUserByID(r.Context(), userID); err == nil {
 				audit.Log(r.Context(), h.DB, audit.Event{
 					Action:        "auth.logout",
 					ActorID:       int64(user.ID),
@@ -308,11 +324,7 @@ func (h *Handler) PasswordChange(w http.ResponseWriter, r *http.Request) {
 		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to hash password", nil)
 		return
 	}
-	if err := model.UpdateUserPassword(h.DB, user.ID, hash); err != nil {
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to update password", nil)
-		return
-	}
-	if err := model.SetMustChangePassword(h.DB, user.ID, false); err != nil {
+	if err := h.Access.StorePasswordHash(r.Context(), user.ID, hash, false); err != nil {
 		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to clear must_change_password", nil)
 		return
 	}

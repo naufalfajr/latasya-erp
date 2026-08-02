@@ -1,10 +1,12 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
-	"github.com/naufal/latasya-erp/internal/audit"
+	"github.com/naufal/latasya-erp/internal/account"
+	"github.com/naufal/latasya-erp/internal/auth"
 	"github.com/naufal/latasya-erp/internal/model"
 )
 
@@ -16,38 +18,22 @@ type accountPageData struct {
 }
 
 func (h *Handler) ListAccounts(w http.ResponseWriter, r *http.Request) {
-	filterType := r.URL.Query().Get("type")
-	search := r.URL.Query().Get("search")
-
 	active := true
-	accounts, err := model.ListAccounts(h.DB, model.AccountFilter{
-		Type:     filterType,
-		IsActive: &active,
-		Search:   search,
-	})
+	result, err := h.Accounts.List(r.Context(), account.Filter{Type: r.URL.Query().Get("type"), IsActive: &active, Search: r.URL.Query().Get("search")})
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
-
-	// Count by type for filter tabs
-	allAccounts, err := model.ListAccounts(h.DB, model.AccountFilter{IsActive: &active})
+	counts, err := h.Accounts.TypeCounts(r.Context(), true)
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
-	typeCounts := map[string]int{"all": len(allAccounts)}
-	for _, a := range allAccounts {
-		typeCounts[a.AccountType]++
+	data := accountPageData{Accounts: result.Accounts, Filter: r.URL.Query().Get("type"), Search: r.URL.Query().Get("search"), TypeCounts: counts}
+	if r.Header.Get("HX-Request") == "true" {
+		h.renderFragment(w, r, "templates/accounts/index.html", "account-table", data)
+		return
 	}
-
-	data := accountPageData{
-		Accounts:   accounts,
-		Filter:     filterType,
-		Search:     search,
-		TypeCounts: typeCounts,
-	}
-
 	h.render(w, r, "templates/accounts/index.html", "Chart of Accounts", data)
 }
 
@@ -58,61 +44,55 @@ type accountFormData struct {
 }
 
 func (h *Handler) NewAccount(w http.ResponseWriter, r *http.Request) {
-	h.render(w, r, "templates/accounts/form.html", "New Account", accountFormData{
-		Account: &model.Account{IsActive: true},
-	})
+	h.render(w, r, "templates/accounts/form.html", "New Account", accountFormData{Account: &model.Account{IsActive: true}})
+}
+
+func accountDraft(r *http.Request) account.Draft {
+	return account.Draft{Code: r.FormValue("code"), Name: r.FormValue("name"), AccountType: r.FormValue("account_type"), NormalBalance: r.FormValue("normal_balance"), Description: r.FormValue("description"), IsActive: r.FormValue("is_active") == "on", IsCash: r.FormValue("is_cash") == "on"}
+}
+
+func accountView(id int, d account.Draft) *model.Account {
+	return &model.Account{ID: id, Code: d.Code, Name: d.Name, AccountType: d.AccountType, NormalBalance: d.NormalBalance, Description: d.Description, IsActive: d.IsActive, IsCash: d.IsCash}
+}
+
+func accountActor(r *http.Request) account.Actor {
+	u := auth.UserFromContext(r.Context())
+	if u == nil {
+		return account.Actor{}
+	}
+	return account.Actor{UserID: u.ID, CanManage: u.HasCapability(model.CapAccountsManage)}
+}
+
+func accountFormErrors(err error) map[string]string {
+	var validation *account.ValidationError
+	if errors.As(err, &validation) {
+		fields := map[string]string{}
+		for field, message := range validation.Fields {
+			if message == "required" {
+				message = map[string]string{"code": "Code is required", "name": "Name is required", "account_type": "Account type is required", "normal_balance": "Normal balance is required"}[field]
+			}
+			fields[field] = message
+		}
+		return fields
+	}
+	var conflict *account.ConflictError
+	if errors.As(err, &conflict) {
+		return map[string]string{"code": "Account code already exists"}
+	}
+	return nil
 }
 
 func (h *Handler) CreateAccount(w http.ResponseWriter, r *http.Request) {
-	a := &model.Account{
-		Code:          r.FormValue("code"),
-		Name:          r.FormValue("name"),
-		AccountType:   r.FormValue("account_type"),
-		NormalBalance: r.FormValue("normal_balance"),
-		Description:   r.FormValue("description"),
-		IsActive:      r.FormValue("is_active") == "on",
-		IsCash:        r.FormValue("is_cash") == "on",
-	}
-
-	errors := validateAccount(a)
-	if len(errors) > 0 {
-		h.render(w, r, "templates/accounts/form.html", "New Account", accountFormData{
-			Account: a,
-			Errors:  errors,
-		})
+	draft := accountDraft(r)
+	_, err := h.Accounts.Create(r.Context(), accountActor(r), draft)
+	if err != nil {
+		if fields := accountFormErrors(err); fields != nil {
+			h.render(w, r, "templates/accounts/form.html", "New Account", accountFormData{Account: accountView(0, draft), Errors: fields})
+			return
+		}
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
-
-	if err := model.CreateAccount(h.DB, a); err != nil {
-		errors["code"] = "Account code already exists"
-		h.render(w, r, "templates/accounts/form.html", "New Account", accountFormData{
-			Account: a,
-			Errors:  errors,
-		})
-		return
-	}
-
-	// Recover the generated ID via the session's last insert rowid — safe
-	// here because SetMaxOpenConns(1) guarantees a single connection.
-	var createdID int64
-	h.DB.QueryRow("SELECT last_insert_rowid()").Scan(&createdID)
-	audit.Log(r.Context(), h.DB, audit.Event{
-		Action:      "account.create",
-		TargetType:  "account",
-		TargetID:    createdID,
-		TargetLabel: a.Code,
-		Metadata: map[string]any{
-			"after": map[string]any{
-				"code":           a.Code,
-				"name":           a.Name,
-				"account_type":   a.AccountType,
-				"normal_balance": a.NormalBalance,
-				"is_active":      a.IsActive,
-				"is_cash":        a.IsCash,
-			},
-		},
-	})
-
 	h.setFlash(w, "Account created successfully")
 	http.Redirect(w, r, h.BasePath+"/accounts", http.StatusSeeOther)
 }
@@ -123,17 +103,12 @@ func (h *Handler) EditAccount(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-
-	account, err := model.GetAccount(h.DB, id)
+	a, err := h.Accounts.Get(r.Context(), id)
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
-
-	h.render(w, r, "templates/accounts/form.html", "Edit Account", accountFormData{
-		Account: account,
-		IsEdit:  true,
-	})
+	h.render(w, r, "templates/accounts/form.html", "Edit Account", accountFormData{Account: a, IsEdit: true})
 }
 
 func (h *Handler) UpdateAccount(w http.ResponseWriter, r *http.Request) {
@@ -142,75 +117,20 @@ func (h *Handler) UpdateAccount(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-
-	existing, err := model.GetAccount(h.DB, id)
+	draft := accountDraft(r)
+	_, err = h.Accounts.Update(r.Context(), accountActor(r), id, draft)
 	if err != nil {
-		http.NotFound(w, r)
+		if errors.Is(err, account.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		if fields := accountFormErrors(err); fields != nil {
+			h.render(w, r, "templates/accounts/form.html", "Edit Account", accountFormData{Account: accountView(id, draft), Errors: fields, IsEdit: true})
+			return
+		}
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
-
-	a := &model.Account{
-		ID:            id,
-		Code:          r.FormValue("code"),
-		Name:          r.FormValue("name"),
-		AccountType:   r.FormValue("account_type"),
-		NormalBalance: r.FormValue("normal_balance"),
-		Description:   r.FormValue("description"),
-		IsActive:      r.FormValue("is_active") == "on",
-		IsCash:        r.FormValue("is_cash") == "on",
-		IsSystem:      existing.IsSystem,
-	}
-
-	errors := validateAccount(a)
-	if len(errors) > 0 {
-		h.render(w, r, "templates/accounts/form.html", "Edit Account", accountFormData{
-			Account: a,
-			Errors:  errors,
-			IsEdit:  true,
-		})
-		return
-	}
-
-	if err := model.UpdateAccount(h.DB, a); err != nil {
-		errors["code"] = "Account code already exists"
-		h.render(w, r, "templates/accounts/form.html", "Edit Account", accountFormData{
-			Account: a,
-			Errors:  errors,
-			IsEdit:  true,
-		})
-		return
-	}
-
-	oldFields := map[string]any{
-		"code":           existing.Code,
-		"name":           existing.Name,
-		"account_type":   existing.AccountType,
-		"normal_balance": existing.NormalBalance,
-		"description":    existing.Description,
-		"is_active":      existing.IsActive,
-		"is_cash":        existing.IsCash,
-	}
-	newFields := map[string]any{
-		"code":           a.Code,
-		"name":           a.Name,
-		"account_type":   a.AccountType,
-		"normal_balance": a.NormalBalance,
-		"description":    a.Description,
-		"is_active":      a.IsActive,
-		"is_cash":        a.IsCash,
-	}
-	metadata := audit.Diff(oldFields, newFields,
-		[]string{"code", "name", "account_type", "normal_balance", "description", "is_active", "is_cash"})
-	if metadata != nil {
-		audit.Log(r.Context(), h.DB, audit.Event{
-			Action:      "account.update",
-			TargetType:  "account",
-			TargetID:    int64(id),
-			TargetLabel: existing.Code,
-			Metadata:    metadata,
-		})
-	}
-
 	h.setFlash(w, "Account updated successfully")
 	http.Redirect(w, r, h.BasePath+"/accounts", http.StatusSeeOther)
 }
@@ -221,65 +141,34 @@ func (h *Handler) DeleteAccount(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-
-	account, err := model.GetAccount(h.DB, id)
+	_, err = h.Accounts.Delete(r.Context(), accountActor(r), id)
 	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-
-	if account.IsSystem {
-		http.Error(w, "Cannot delete system account", http.StatusForbidden)
-		return
-	}
-
-	if err := model.DeleteAccount(h.DB, id); err != nil {
+		if errors.Is(err, account.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		var conflict *account.ConflictError
+		if errors.As(err, &conflict) && conflict.Message == "cannot delete system account" {
+			http.Error(w, "Cannot delete system account", http.StatusForbidden)
+			return
+		}
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
-
-	audit.Log(r.Context(), h.DB, audit.Event{
-		Action:      "account.delete",
-		TargetType:  "account",
-		TargetID:    int64(id),
-		TargetLabel: account.Code,
-		Metadata: map[string]any{
-			"before": map[string]any{
-				"code":           account.Code,
-				"name":           account.Name,
-				"account_type":   account.AccountType,
-				"normal_balance": account.NormalBalance,
-				"is_cash":        account.IsCash,
-			},
-		},
-	})
-
-	// For HTMX requests, return empty (row removed)
 	if r.Header.Get("HX-Request") == "true" {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-
 	h.setFlash(w, "Account deleted successfully")
 	http.Redirect(w, r, h.BasePath+"/accounts", http.StatusSeeOther)
 }
 
-func validateAccount(a *model.Account) map[string]string {
-	errors := make(map[string]string)
-	if a.Code == "" {
-		errors["code"] = "Code is required"
-	}
-	if a.Name == "" {
-		errors["name"] = "Name is required"
-	}
-	if a.AccountType == "" {
-		errors["account_type"] = "Account type is required"
-	}
-	if a.NormalBalance == "" {
-		errors["normal_balance"] = "Normal balance is required"
-	}
-	if err := model.ValidateCashAccount(a); err != nil {
-		errors["is_cash"] = err.Error()
-	}
-	return errors
+// RegisterAccountRoutes installs chart-of-accounts HTML endpoints.
+func (h *Handler) RegisterAccountRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /accounts", h.ListAccounts)
+	mux.HandleFunc("GET /accounts/new", h.NewAccount)
+	mux.HandleFunc("POST /accounts", auth.CapabilityOnly(model.CapAccountsManage, h.CreateAccount))
+	mux.HandleFunc("GET /accounts/{id}/edit", h.EditAccount)
+	mux.HandleFunc("POST /accounts/{id}", auth.CapabilityOnly(model.CapAccountsManage, h.UpdateAccount))
+	mux.HandleFunc("DELETE /accounts/{id}", auth.CapabilityOnly(model.CapAccountsManage, h.DeleteAccount))
 }

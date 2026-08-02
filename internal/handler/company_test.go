@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/naufal/latasya-erp/internal/access"
 	"github.com/naufal/latasya-erp/internal/auth"
 	"github.com/naufal/latasya-erp/internal/model"
 	"github.com/naufal/latasya-erp/internal/testutil"
@@ -22,16 +23,13 @@ func testServerWithCompany(t *testing.T) (*httptest.Server, *sql.DB) {
 	h := testutil.SetupTestHandler(t, db)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /login", h.LoginPage)
-	mux.HandleFunc("POST /login", h.Login)
+	h.RegisterAuthRoutes(mux, func(next http.Handler) http.Handler { return next })
 
 	protected := http.NewServeMux()
-	protected.HandleFunc("GET /settings/company", auth.AdminOnly(h.CompanyProfilePage))
-	protected.HandleFunc("POST /settings/company", auth.AdminOnly(h.UpdateCompanyProfile))
-	protected.HandleFunc("GET /password/change", h.PasswordChangePage)
-	protected.HandleFunc("POST /password/change", h.PasswordChange)
+	h.RegisterAccessRoutes(protected)
+	h.RegisterSettingsRoutes(protected)
 
-	mux.Handle("/", auth.RequireAuth(db, auth.CSRFProtect(h.EnforcePasswordChange(protected))))
+	mux.Handle("/", auth.RequireAuth(db, access.New(db, nil), auth.CSRFProtect(h.EnforcePasswordChange(protected))))
 
 	hash, err := auth.HashPassword(adminTestPassword)
 	if err != nil {
@@ -165,7 +163,7 @@ func TestUpdateCompanyProfile_HTTP(t *testing.T) {
 		t.Fatalf("expected 303, got %d", resp.StatusCode)
 	}
 
-	co, err := model.GetCompanyProfile(db)
+	co, err := testutil.GetCompanyProfile(db)
 	if err != nil {
 		t.Fatalf("GetCompanyProfile: %v", err)
 	}
@@ -187,7 +185,7 @@ func TestInvoicePDF_HTTP(t *testing.T) {
 	db.QueryRow("SELECT id FROM contacts WHERE name = 'PDF Cust'").Scan(&contactID)
 	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
 
-	invID, _ := model.CreateInvoice(db, &model.Invoice{
+	invID, _ := testutil.CreateInvoice(db, &model.Invoice{
 		ContactID: contactID, InvoiceDate: "2026-04-04", DueDate: "2026-04-30", CreatedBy: 1,
 	}, []model.InvoiceLine{
 		{Description: "Sewa bus", Quantity: 100, UnitPrice: 1500000, AccountID: revenueID},

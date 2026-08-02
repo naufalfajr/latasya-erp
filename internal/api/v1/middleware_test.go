@@ -78,7 +78,7 @@ func TestBearerOrCookie_ValidBearer(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	userID := testutil.CreateTestUser(t, db, "alice", "pw", model.RoleBookkeeper)
 
-	tok, plaintext, err := model.CreateAPIToken(db, userID, "t", []string{model.CapReportsView}, nil)
+	tok, plaintext, err := testutil.CreateAPIToken(db, userID, "t", []string{model.CapReportsView}, nil)
 	if err != nil {
 		t.Fatalf("CreateAPIToken: %v", err)
 	}
@@ -112,7 +112,7 @@ func TestBearerOrCookie_ExpiredBearer(t *testing.T) {
 	userID := testutil.CreateTestUser(t, db, "exp", "pw", model.RoleBookkeeper)
 
 	past := time.Now().Add(-1 * time.Hour)
-	_, plaintext, err := model.CreateAPIToken(db, userID, "expired", []string{model.CapReportsView}, &past)
+	_, plaintext, err := testutil.CreateAPIToken(db, userID, "expired", []string{model.CapReportsView}, &past)
 	if err != nil {
 		t.Fatalf("CreateAPIToken: %v", err)
 	}
@@ -136,11 +136,11 @@ func TestBearerOrCookie_RevokedBearer(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	userID := testutil.CreateTestUser(t, db, "rev", "pw", model.RoleBookkeeper)
 
-	tok, plaintext, err := model.CreateAPIToken(db, userID, "revoke", []string{model.CapReportsView}, nil)
+	tok, plaintext, err := testutil.CreateAPIToken(db, userID, "revoke", []string{model.CapReportsView}, nil)
 	if err != nil {
 		t.Fatalf("CreateAPIToken: %v", err)
 	}
-	if err := model.RevokeAPIToken(db, userID, tok.ID); err != nil {
+	if err := testutil.RevokeAPIToken(db, userID, tok.ID); err != nil {
 		t.Fatalf("RevokeAPIToken: %v", err)
 	}
 
@@ -183,7 +183,7 @@ func TestBearerOrCookie_BothPresent(t *testing.T) {
 	bearerUserID := testutil.CreateTestUser(t, db, "bearer-user", "pw", model.RoleBookkeeper)
 	cookieUserID := testutil.CreateTestUser(t, db, "cookie-user", "pw", model.RoleBookkeeper)
 
-	_, plaintext, err := model.CreateAPIToken(db, bearerUserID, "t", []string{model.CapReportsView}, nil)
+	_, plaintext, err := testutil.CreateAPIToken(db, bearerUserID, "t", []string{model.CapReportsView}, nil)
 	if err != nil {
 		t.Fatalf("CreateAPIToken: %v", err)
 	}
@@ -215,7 +215,7 @@ func TestBearerOrCookie_ScopeIntersection(t *testing.T) {
 
 	// Token requests both reports.view (granted by role) and accounts.manage (NOT granted).
 	tokenScopes := []string{model.CapReportsView, model.CapAccountsManage}
-	_, plaintext, err := model.CreateAPIToken(db, userID, "t", tokenScopes, nil)
+	_, plaintext, err := testutil.CreateAPIToken(db, userID, "t", tokenScopes, nil)
 	if err != nil {
 		t.Fatalf("CreateAPIToken: %v", err)
 	}
@@ -242,11 +242,11 @@ func TestBearerOrCookie_ScopeIntersection(t *testing.T) {
 func TestBearerOrCookie_MustChangePassword(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	userID := testutil.CreateTestUser(t, db, "mcp-user", "pw", model.RoleBookkeeper)
-	if err := model.SetMustChangePassword(db, userID, true); err != nil {
+	if err := testutil.SetMustChangePassword(db, userID, true); err != nil {
 		t.Fatalf("SetMustChangePassword: %v", err)
 	}
 
-	_, plaintext, err := model.CreateAPIToken(db, userID, "t", []string{model.CapReportsView}, nil)
+	_, plaintext, err := testutil.CreateAPIToken(db, userID, "t", []string{model.CapReportsView}, nil)
 	if err != nil {
 		t.Fatalf("CreateAPIToken: %v", err)
 	}

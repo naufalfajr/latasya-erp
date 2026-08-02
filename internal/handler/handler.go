@@ -8,9 +8,21 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/naufal/latasya-erp/internal/access"
+	"github.com/naufal/latasya-erp/internal/account"
+	"github.com/naufal/latasya-erp/internal/apitoken"
+	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/auth"
+	"github.com/naufal/latasya-erp/internal/bill"
+	"github.com/naufal/latasya-erp/internal/company"
+	"github.com/naufal/latasya-erp/internal/contact"
+	"github.com/naufal/latasya-erp/internal/creditnote"
 	"github.com/naufal/latasya-erp/internal/googlecalendar"
+	"github.com/naufal/latasya-erp/internal/invoice"
+	"github.com/naufal/latasya-erp/internal/journal"
 	"github.com/naufal/latasya-erp/internal/model"
+	"github.com/naufal/latasya-erp/internal/reporting"
+	"github.com/naufal/latasya-erp/internal/schoolcalendar"
 )
 
 type Handler struct {
@@ -26,6 +38,18 @@ type Handler struct {
 	BasePath string
 
 	GoogleCalendarConfig googlecalendar.Config
+	Invoices             *invoice.Module
+	Journals             *journal.Module
+	Bills                *bill.Module
+	CreditNotes          *creditnote.Module
+	Accounts             *account.Module
+	Access               *access.Module
+	APITokens            *apitoken.Module
+	Audit                *audit.Module
+	SchoolCalendar       *schoolcalendar.Module
+	Contacts             *contact.Module
+	Company              *company.Module
+	Reporting            *reporting.Module
 
 	mu    sync.RWMutex
 	cache map[string]*template.Template
@@ -113,6 +137,19 @@ func (h *Handler) render(w http.ResponseWriter, r *http.Request, page string, ti
 
 	if err := t.ExecuteTemplate(w, "base", pd); err != nil {
 		slog.Error("render template", "page", page, "error", err)
+	}
+}
+
+func (h *Handler) renderFragment(w http.ResponseWriter, r *http.Request, page, name string, data any) {
+	t, err := h.getTemplate(page)
+	if err != nil {
+		slog.Error("parse fragment template", "page", page, "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	pd := PageData{User: auth.UserFromContext(r.Context()), Path: r.URL.Path, CSRFToken: auth.CSRFFromContext(r.Context()), BasePath: h.BasePath, Data: data}
+	if err := t.ExecuteTemplate(w, name, pd); err != nil {
+		slog.Error("render fragment", "page", page, "fragment", name, "error", err)
 	}
 }
 

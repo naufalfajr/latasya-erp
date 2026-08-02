@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/naufal/latasya-erp/internal/model"
+	"github.com/naufal/latasya-erp/internal/testutil"
 )
 
 // auditRow captures the key columns we assert against in event tests.
@@ -550,6 +551,9 @@ func TestAudit_IncomeCreateAndDelete(t *testing.T) {
 	if !strings.Contains(createRow.Metadata, "2000000") {
 		t.Errorf("income.create should contain amount, got %q", createRow.Metadata)
 	}
+	if !strings.Contains(createRow.Metadata, `"amount"`) {
+		t.Errorf("income.create should use the amount field, got %q", createRow.Metadata)
+	}
 
 	var entryID int
 	db.QueryRow("SELECT id FROM journal_entries WHERE source_type = 'income' ORDER BY id DESC LIMIT 1").Scan(&entryID)
@@ -595,6 +599,9 @@ func TestAudit_ExpenseUpdate_DiffsAmount(t *testing.T) {
 	row := latestAuditFor(t, db, "expense.update")
 	if !strings.Contains(row.Metadata, "300000") || !strings.Contains(row.Metadata, "500000") {
 		t.Errorf("expense.update should contain before/after amounts, got %q", row.Metadata)
+	}
+	if !strings.Contains(row.Metadata, `"amount"`) {
+		t.Errorf("expense.update should diff the amount field, got %q", row.Metadata)
 	}
 	if strings.Contains(row.Metadata, "entry_date") {
 		t.Errorf("expense.update should not include unchanged entry_date, got %q", row.Metadata)
@@ -802,12 +809,12 @@ func TestAudit_CreditNoteIssue(t *testing.T) {
 	db.QueryRow("SELECT id FROM contacts WHERE name = 'CN Issue Audit'").Scan(&contactID)
 	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
 
-	invID, _ := model.CreateInvoice(db, &model.Invoice{
+	invID, _ := testutil.CreateInvoice(db, &model.Invoice{
 		ContactID: contactID, InvoiceDate: "2026-04-04", DueDate: "2026-04-30", CreatedBy: 1,
 	}, []model.InvoiceLine{
 		{Description: "Service", Quantity: 100, UnitPrice: 1000000, AccountID: revenueID},
 	})
-	model.SendInvoice(db, invID, 1)
+	testutil.SendInvoice(db, invID, 1)
 
 	form := fmt.Sprintf(
 		"contact_id=%d&invoice_id=%d&cn_date=2026-04-10&reason=cancellation&line_description=Refund&line_account_id=%d&line_quantity=1&line_unit_price=1000000",

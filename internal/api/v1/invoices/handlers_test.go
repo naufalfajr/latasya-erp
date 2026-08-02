@@ -5,35 +5,67 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 
+	"github.com/getkin/kin-openapi/openapi3"
 	v1 "github.com/naufal/latasya-erp/internal/api/v1"
 	v1invoices "github.com/naufal/latasya-erp/internal/api/v1/invoices"
+	"github.com/naufal/latasya-erp/internal/idempotency"
+	invoiceModule "github.com/naufal/latasya-erp/internal/invoice"
 	"github.com/naufal/latasya-erp/internal/model"
 	"github.com/naufal/latasya-erp/internal/testutil"
 )
+
+func validateOpenAPIJSON(t *testing.T, doc *openapi3.T, method, path string, status int, body []byte) {
+	t.Helper()
+	item := doc.Paths.Find(path)
+	if item == nil {
+		t.Fatalf("OpenAPI path %s not found", path)
+	}
+	var operation *openapi3.Operation
+	switch method {
+	case http.MethodGet:
+		operation = item.Get
+	case http.MethodPost:
+		operation = item.Post
+	case http.MethodPut:
+		operation = item.Put
+	case http.MethodDelete:
+		operation = item.Delete
+	}
+	if operation == nil {
+		t.Fatalf("OpenAPI operation %s %s not found", method, path)
+	}
+	response := operation.Responses.Value(strconv.Itoa(status))
+	if response == nil || response.Value == nil {
+		t.Fatalf("OpenAPI response %s %s status %d not found", method, path, status)
+	}
+	media := response.Value.Content.Get("application/json")
+	if media == nil || media.Schema == nil || media.Schema.Value == nil {
+		t.Fatalf("OpenAPI JSON schema %s %s status %d not found", method, path, status)
+	}
+	var value any
+	if err := json.Unmarshal(body, &value); err != nil {
+		t.Fatalf("decode response JSON: %v\n%s", err, body)
+	}
+	if err := media.Schema.Value.VisitJSON(value); err != nil {
+		t.Fatalf("response violates OpenAPI schema for %s %s status %d: %v\n%s", method, path, status, err, body)
+	}
+}
 
 func setupServer(t *testing.T) (*httptest.Server, *sql.DB) {
 	t.Helper()
 	db := testutil.SetupTestDB(t)
 
 	apiMux := http.NewServeMux()
-	h := &v1invoices.Handler{DB: db}
-	idem := v1.Idempotency(db)
-	apiMux.HandleFunc("GET /api/v1/invoices", h.List)
-	apiMux.HandleFunc("GET /api/v1/invoices/{id}", h.Get)
-	apiMux.HandleFunc("GET /api/v1/invoices/{id}/pdf", h.PDF)
-	apiMux.Handle("POST /api/v1/invoices", idem(http.HandlerFunc(h.Create)))
-	apiMux.Handle("PUT /api/v1/invoices/{id}", idem(http.HandlerFunc(h.Update)))
-	apiMux.HandleFunc("DELETE /api/v1/invoices/{id}", h.Delete)
-	apiMux.Handle("POST /api/v1/invoices/{id}/send", idem(http.HandlerFunc(h.Send)))
-	apiMux.Handle("POST /api/v1/invoices/{id}/payment", idem(http.HandlerFunc(h.Payment)))
-	apiMux.Handle("POST /api/v1/invoices/generate-recurring", idem(http.HandlerFunc(h.GenerateRecurring)))
-	apiMux.HandleFunc("POST /api/v1/invoices/bulk-delete", h.BulkDelete)
-	apiMux.HandleFunc("POST /api/v1/invoices/bulk-send", h.BulkSend)
+	h := &v1invoices.Handler{Invoices: invoiceModule.New(db)}
+	idem := v1.Idempotency(idempotency.New(db))
+	h.RegisterRoutes(apiMux, idem)
 
 	mux := http.NewServeMux()
 	mux.Handle("/api/v1/", v1.BearerOrCookie(db)(apiMux))
@@ -49,7 +81,7 @@ func adminToken(t *testing.T, db *sql.DB) string {
 	if err := db.QueryRow("SELECT id FROM users WHERE username = 'admin'").Scan(&adminID); err != nil {
 		t.Fatalf("get admin: %v", err)
 	}
-	_, plaintext, err := model.CreateAPIToken(db, adminID, fmt.Sprintf("test-%d", time.Now().UnixNano()),
+	_, plaintext, err := testutil.CreateAPIToken(db, adminID, fmt.Sprintf("test-%d", time.Now().UnixNano()),
 		[]string{model.CapInvoicesManage}, nil)
 	if err != nil {
 		t.Fatalf("create token: %v", err)
@@ -60,7 +92,7 @@ func adminToken(t *testing.T, db *sql.DB) string {
 func noScopeToken(t *testing.T, db *sql.DB) string {
 	t.Helper()
 	userID := testutil.CreateTestUser(t, db, fmt.Sprintf("noscope-%d", time.Now().UnixNano()), "pw", model.RoleViewer)
-	_, plaintext, err := model.CreateAPIToken(db, userID, "noscope", []string{}, nil)
+	_, plaintext, err := testutil.CreateAPIToken(db, userID, "noscope", []string{}, nil)
 	if err != nil {
 		t.Fatalf("create no-scope token: %v", err)
 	}
@@ -137,6 +169,21 @@ func doRequest(t *testing.T, ts *httptest.Server, method, path, token string, bo
 	return resp
 }
 
+func doRawJSONRequest(t *testing.T, ts *httptest.Server, method, path, token, body string) *http.Response {
+	t.Helper()
+	req, err := http.NewRequest(method, ts.URL+path, bytes.NewBufferString(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := ts.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return resp
+}
+
 func createInvoice(t *testing.T, ts *httptest.Server, token string, body any) (int, string) {
 	t.Helper()
 	resp := doRequest(t, ts, http.MethodPost, "/api/v1/invoices", token, body, nil)
@@ -154,6 +201,49 @@ func createInvoice(t *testing.T, ts *httptest.Server, token string, body any) (i
 		t.Fatalf("decode: %v", err)
 	}
 	return env.Data.ID, env.Data.InvoiceNumber
+}
+
+func TestInvoiceResponsesMatchOpenAPI(t *testing.T) {
+	doc, err := openapi3.NewLoader().LoadFromFile("../../../../api/openapi.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+	contactID := seedContact(t, db)
+	revenueID := accountID(t, db, "4-1001")
+
+	check := func(method, requestPath, specPath string, status int, body any) []byte {
+		t.Helper()
+		resp := doRequest(t, ts, method, requestPath, token, body, nil)
+		defer resp.Body.Close()
+		payload, err := io.ReadAll(resp.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resp.StatusCode != status {
+			t.Fatalf("%s %s status=%d want %d: %s", method, requestPath, resp.StatusCode, status, payload)
+		}
+		validateOpenAPIJSON(t, doc, method, specPath, status, payload)
+		return payload
+	}
+
+	createdBody := check(http.MethodPost, "/api/v1/invoices", "/invoices", http.StatusCreated, defaultInvoiceBody(contactID, revenueID))
+	var created struct {
+		Data struct {
+			ID int `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(createdBody, &created); err != nil {
+		t.Fatal(err)
+	}
+	idPath := fmt.Sprintf("/api/v1/invoices/%d", created.Data.ID)
+	check(http.MethodGet, "/api/v1/invoices", "/invoices", http.StatusOK, nil)
+	check(http.MethodGet, idPath, "/invoices/{id}", http.StatusOK, nil)
+	check(http.MethodPost, idPath+"/send", "/invoices/{id}/send", http.StatusOK, nil)
+	check(http.MethodPost, idPath+"/payment", "/invoices/{id}/payment", http.StatusOK, map[string]any{
+		"amount": "500000", "payment_date": "2026-05-20", "payment_account": accountID(t, db, "1-1001"),
+	})
 }
 
 func TestListInvoices(t *testing.T) {
@@ -312,6 +402,63 @@ func TestCreateInvoice_Idempotency(t *testing.T) {
 	db.QueryRow("SELECT COUNT(*) FROM invoices").Scan(&count)
 	if count != 1 {
 		t.Errorf("invoices count: got %d, want 1", count)
+	}
+}
+
+func TestUpdateInvoiceChecksTargetBeforeDecodingBody(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+	cid := seedContact(t, db)
+	rev := accountID(t, db, "4-1001")
+	id, _ := createInvoice(t, ts, token, defaultInvoiceBody(cid, rev))
+	if _, err := db.Exec("UPDATE invoices SET status=? WHERE id=?", model.StatusSent, id); err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name string
+		path string
+		want int
+	}{
+		{name: "missing", path: "/api/v1/invoices/999999", want: http.StatusNotFound},
+		{name: "non_draft", path: fmt.Sprintf("/api/v1/invoices/%d", id), want: http.StatusConflict},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp := doRawJSONRequest(t, ts, http.MethodPut, tt.path, token, "{")
+			defer resp.Body.Close()
+			if resp.StatusCode != tt.want {
+				t.Fatalf("status=%d want %d", resp.StatusCode, tt.want)
+			}
+		})
+	}
+}
+
+func TestPaymentPreservesDecodeValidationAndStatusPrecedence(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+	cid := seedContact(t, db)
+	rev := accountID(t, db, "4-1001")
+	id, _ := createInvoice(t, ts, token, defaultInvoiceBody(cid, rev))
+
+	tests := []struct {
+		name string
+		path string
+		body string
+		want int
+	}{
+		{name: "missing_before_decode", path: "/api/v1/invoices/999999/payment", body: "{", want: http.StatusNotFound},
+		{name: "decode_before_status", path: fmt.Sprintf("/api/v1/invoices/%d/payment", id), body: "{", want: http.StatusBadRequest},
+		{name: "validation_before_status", path: fmt.Sprintf("/api/v1/invoices/%d/payment", id), body: `{}`, want: http.StatusUnprocessableEntity},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp := doRawJSONRequest(t, ts, http.MethodPost, tt.path, token, tt.body)
+			defer resp.Body.Close()
+			if resp.StatusCode != tt.want {
+				t.Fatalf("status=%d want %d", resp.StatusCode, tt.want)
+			}
+		})
 	}
 }
 

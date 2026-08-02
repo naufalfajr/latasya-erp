@@ -1,17 +1,123 @@
 package testutil
 
 import (
+	"context"
 	"database/sql"
 	"sync"
 	"testing"
 
+	"github.com/naufal/latasya-erp/internal/access"
+	"github.com/naufal/latasya-erp/internal/account"
+	"github.com/naufal/latasya-erp/internal/apitoken"
+	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/auth"
+	"github.com/naufal/latasya-erp/internal/bill"
+	"github.com/naufal/latasya-erp/internal/company"
+	"github.com/naufal/latasya-erp/internal/contact"
+	"github.com/naufal/latasya-erp/internal/creditnote"
 	"github.com/naufal/latasya-erp/internal/database"
 	"github.com/naufal/latasya-erp/internal/handler"
+	"github.com/naufal/latasya-erp/internal/invoice"
+	"github.com/naufal/latasya-erp/internal/journal"
+	"github.com/naufal/latasya-erp/internal/model"
+	"github.com/naufal/latasya-erp/internal/reporting"
+	"github.com/naufal/latasya-erp/internal/schoolcalendar"
 	"github.com/naufal/latasya-erp/internal/tmpl"
 
 	latasyaerp "github.com/naufal/latasya-erp"
 )
+
+// CreateInvoice creates an invoice through the business module for test setup.
+func CreateInvoice(db *sql.DB, inv *model.Invoice, lines []model.InvoiceLine) (int, error) {
+	draftLines := make([]invoice.DraftLine, len(lines))
+	for i, line := range lines {
+		draftLines[i] = invoice.DraftLine{
+			Description: line.Description,
+			Quantity:    line.Quantity,
+			UnitPrice:   line.UnitPrice,
+			AccountID:   line.AccountID,
+		}
+	}
+	userID := inv.CreatedBy
+	if userID == 0 {
+		userID = 1
+	}
+	created, err := invoice.New(db).Create(context.Background(), invoice.Actor{UserID: userID, CanManage: true}, invoice.Draft{
+		ContactID: inv.ContactID, InvoiceDate: inv.InvoiceDate, DueDate: inv.DueDate,
+		TaxAmount: inv.TaxAmount, Notes: inv.Notes, Lines: draftLines,
+	})
+	if err != nil {
+		return 0, err
+	}
+	inv.ID, inv.InvoiceNumber = created.ID, created.InvoiceNumber
+	return created.ID, nil
+}
+
+// SendInvoice advances a fixture through the real invoice lifecycle.
+func SendInvoice(db *sql.DB, id, userID int) error {
+	_, err := invoice.New(db).Send(context.Background(), invoice.Actor{UserID: userID, CanManage: true}, id)
+	return err
+}
+
+// RecordInvoicePayment records a fixture payment through the business module.
+func RecordInvoicePayment(db *sql.DB, id, amount int, paymentDate string, accountID, userID int) error {
+	_, err := invoice.New(db).RecordPayment(context.Background(), invoice.Actor{UserID: userID, CanManage: true}, id, invoice.Payment{
+		Amount: amount, Date: paymentDate, AccountID: accountID,
+	})
+	return err
+}
+
+// GetInvoice loads a fixture through the business module.
+func GetInvoice(db *sql.DB, id int) (*model.Invoice, error) {
+	return invoice.New(db).Get(context.Background(), id)
+}
+
+func CreateCreditNote(db *sql.DB, cn *model.CreditNote, lines []model.CreditNoteLine) (int, error) {
+	draftLines := make([]creditnote.Line, len(lines))
+	for i, line := range lines {
+		draftLines[i] = creditnote.Line{Description: line.Description, Quantity: line.Quantity, UnitPrice: line.UnitPrice, AccountID: line.AccountID}
+	}
+	userID := cn.CreatedBy
+	if userID == 0 {
+		userID = 1
+	}
+	created, err := creditnote.New(db).Create(context.Background(), creditnote.Actor{UserID: userID, CanManage: true}, creditnote.Draft{
+		ContactID: cn.ContactID, InvoiceID: cn.InvoiceID, Date: cn.CNDate, Reason: cn.Reason, TaxAmount: cn.TaxAmount, Notes: cn.Notes, Lines: draftLines,
+	})
+	if err != nil {
+		return 0, err
+	}
+	cn.ID, cn.CNNumber = created.ID, created.CNNumber
+	return created.ID, nil
+}
+
+func IssueCreditNote(db *sql.DB, id, userID int) error {
+	_, err := creditnote.New(db).Issue(context.Background(), creditnote.Actor{UserID: userID, CanManage: true}, id)
+	return err
+}
+
+func CreateBill(db *sql.DB, b *model.Bill, lines []model.BillLine) (int, error) {
+	draftLines := make([]bill.Line, len(lines))
+	for i, line := range lines {
+		draftLines[i] = bill.Line{Description: line.Description, Quantity: line.Quantity, UnitPrice: line.UnitPrice, AccountID: line.AccountID}
+	}
+	userID := b.CreatedBy
+	if userID == 0 {
+		userID = 1
+	}
+	created, err := bill.New(db).Create(context.Background(), bill.Actor{UserID: userID, CanManage: true}, bill.Draft{
+		ContactID: b.ContactID, BillDate: b.BillDate, DueDate: b.DueDate, TaxAmount: b.TaxAmount, Notes: b.Notes, Lines: draftLines,
+	})
+	if err != nil {
+		return 0, err
+	}
+	b.ID, b.BillNumber = created.ID, created.BillNumber
+	return created.ID, nil
+}
+
+func GetBill(db *sql.DB, id int) (*model.Bill, error) {
+	return bill.New(db).Get(context.Background(), id)
+}
 
 // Parallel tests all register the same FS; once is enough and keeps the
 // global write out of the race detector's way.
@@ -38,11 +144,75 @@ func SetupTestDB(t *testing.T) *sql.DB {
 func SetupTestHandler(t *testing.T, db *sql.DB) *handler.Handler {
 	t.Helper()
 	return &handler.Handler{
-		DB:         db,
-		TemplateFS: latasyaerp.TemplateFS,
-		FuncMap:    tmpl.FuncMap(),
-		DevMode:    true,
+		DB:             db,
+		TemplateFS:     latasyaerp.TemplateFS,
+		FuncMap:        tmpl.FuncMap(),
+		DevMode:        true,
+		Invoices:       invoice.New(db),
+		Journals:       journal.New(db),
+		Bills:          bill.New(db),
+		CreditNotes:    creditnote.New(db),
+		Accounts:       account.New(db),
+		Access:         access.New(db, auth.HashPassword),
+		APITokens:      apitoken.New(db),
+		Audit:          audit.New(db),
+		SchoolCalendar: schoolcalendar.New(db),
+		Contacts:       contact.New(db),
+		Company:        company.New(db),
+		Reporting:      reporting.New(db),
 	}
+}
+
+// CreateJournalEntry creates accounting fixtures through the journal module.
+// It retains the old test signature while production code uses typed drafts.
+func CreateJournalEntry(db *sql.DB, entry *model.JournalEntry, lines []model.JournalLine) (int, error) {
+	actor := journal.Actor{UserID: entry.CreatedBy, CanManageJournals: true, CanManageIncome: true, CanManageExpenses: true}
+	module := journal.New(db)
+	toLines := make([]journal.Line, 0, len(lines))
+	for _, line := range lines {
+		toLines = append(toLines, journal.Line{AccountID: line.AccountID, Debit: line.Debit, Credit: line.Credit, Memo: line.Memo})
+	}
+	var created *model.JournalEntry
+	var err error
+	switch entry.SourceType {
+	case model.SourceIncome:
+		amount, deposit, revenue := journalShape(lines)
+		created, err = module.CreateIncome(context.Background(), actor, journal.IncomeDraft{EntryDate: entry.EntryDate,
+			Description: entry.Description, Amount: amount, RevenueAccount: revenue, DepositAccount: deposit})
+	case model.SourceExpense:
+		amount, expense, payment := journalShape(lines)
+		created, err = module.CreateExpense(context.Background(), actor, journal.ExpenseDraft{EntryDate: entry.EntryDate,
+			Description: entry.Description, Amount: amount, ExpenseAccount: expense, PaymentAccount: payment, VehicleID: entry.VehicleID})
+	default:
+		created, err = module.CreateManual(context.Background(), actor, journal.ManualDraft{EntryDate: entry.EntryDate,
+			Description: entry.Description, Lines: toLines})
+	}
+	if err != nil {
+		return 0, err
+	}
+	if !entry.IsPosted {
+		if _, err := db.Exec("UPDATE journal_entries SET is_posted=0 WHERE id=?", created.ID); err != nil {
+			return 0, err
+		}
+	}
+	entry.ID, entry.Reference = created.ID, created.Reference
+	return created.ID, nil
+}
+
+func GetJournalEntry(db *sql.DB, id int) (*model.JournalEntry, error) {
+	return journal.New(db).Get(context.Background(), id)
+}
+
+func journalShape(lines []model.JournalLine) (amount, debitAccount, creditAccount int) {
+	for _, line := range lines {
+		if line.Debit > 0 {
+			amount, debitAccount = line.Debit, line.AccountID
+		}
+		if line.Credit > 0 {
+			creditAccount = line.AccountID
+		}
+	}
+	return
 }
 
 // CreateTestUser creates a user in the test database and returns the user ID.

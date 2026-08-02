@@ -1,11 +1,40 @@
 package audit
 
 import (
+	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 )
+
+var ErrForbidden = errors.New("audit viewing capability missing")
+
+type Module struct{ db *sql.DB }
+
+func New(db *sql.DB) *Module { return &Module{db: db} }
+
+type Actor struct {
+	UserID  int
+	CanView bool
+}
+
+type Page struct {
+	Entries []Entry
+	Total   int
+}
+
+func (m *Module) List(ctx context.Context, actor Actor, f ListFilter) (*Page, error) {
+	if actor.UserID <= 0 || !actor.CanView {
+		return nil, ErrForbidden
+	}
+	entries, total, err := list(ctx, m.db, f)
+	if err != nil {
+		return nil, err
+	}
+	return &Page{Entries: entries, Total: total}, nil
+}
 
 // Entry is one audit_log row, shaped for template rendering.
 type Entry struct {
@@ -34,9 +63,7 @@ type ListFilter struct {
 	Offset        int
 }
 
-// List returns audit entries matching the filter, most recent first, along
-// with the total matching count (for pagination).
-func List(db *sql.DB, f ListFilter) ([]Entry, int, error) {
+func list(ctx context.Context, db *sql.DB, f ListFilter) ([]Entry, int, error) {
 	if f.Limit <= 0 {
 		f.Limit = 50
 	}
@@ -67,7 +94,7 @@ func List(db *sql.DB, f ListFilter) ([]Entry, int, error) {
 	}
 
 	var total int
-	if err := db.QueryRow("SELECT COUNT(*) FROM audit_log "+whereSQL, args...).Scan(&total); err != nil {
+	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM audit_log "+whereSQL, args...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count audit_log: %w", err)
 	}
 
@@ -83,13 +110,13 @@ func List(db *sql.DB, f ListFilter) ([]Entry, int, error) {
 		LIMIT ? OFFSET ?`
 
 	args = append(args, f.Limit, f.Offset)
-	rows, err := db.Query(query, args...)
+	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("query audit_log: %w", err)
 	}
 	defer rows.Close()
 
-	var entries []Entry
+	entries := []Entry{}
 	for rows.Next() {
 		var e Entry
 		var occurredAt string

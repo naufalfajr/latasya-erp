@@ -13,6 +13,8 @@ import (
 
 	v1 "github.com/naufal/latasya-erp/internal/api/v1"
 	creditnotes "github.com/naufal/latasya-erp/internal/api/v1/credit_notes"
+	"github.com/naufal/latasya-erp/internal/creditnote"
+	"github.com/naufal/latasya-erp/internal/idempotency"
 	"github.com/naufal/latasya-erp/internal/model"
 	"github.com/naufal/latasya-erp/internal/testutil"
 )
@@ -21,17 +23,11 @@ func setupServer(t *testing.T) (*httptest.Server, *sql.DB) {
 	t.Helper()
 	db := testutil.SetupTestDB(t)
 
-	idem := v1.Idempotency(db)
+	idem := v1.Idempotency(idempotency.New(db))
 
 	apiMux := http.NewServeMux()
-	h := &creditnotes.Handler{DB: db}
-	apiMux.HandleFunc("GET /api/v1/credit-notes", h.List)
-	apiMux.HandleFunc("GET /api/v1/credit-notes/{id}", h.Get)
-	apiMux.Handle("POST /api/v1/credit-notes", idem(http.HandlerFunc(h.Create)))
-	apiMux.Handle("PUT /api/v1/credit-notes/{id}", idem(http.HandlerFunc(h.Update)))
-	apiMux.HandleFunc("DELETE /api/v1/credit-notes/{id}", h.Delete)
-	apiMux.Handle("POST /api/v1/credit-notes/{id}/issue", idem(http.HandlerFunc(h.Issue)))
-	apiMux.Handle("POST /api/v1/credit-notes/{id}/void", idem(http.HandlerFunc(h.Void)))
+	h := &creditnotes.Handler{CreditNotes: creditnote.New(db)}
+	h.RegisterRoutes(apiMux, idem)
 
 	mux := http.NewServeMux()
 	mux.Handle("/api/v1/", v1.BearerOrCookie(db)(apiMux))
@@ -47,7 +43,7 @@ func adminToken(t *testing.T, db *sql.DB) string {
 	if err := db.QueryRow("SELECT id FROM users WHERE username = 'admin'").Scan(&adminID); err != nil {
 		t.Fatalf("get admin: %v", err)
 	}
-	_, plaintext, err := model.CreateAPIToken(db, adminID, fmt.Sprintf("test-%d", time.Now().UnixNano()),
+	_, plaintext, err := testutil.CreateAPIToken(db, adminID, fmt.Sprintf("test-%d", time.Now().UnixNano()),
 		[]string{model.CapInvoicesManage}, nil)
 	if err != nil {
 		t.Fatalf("create token: %v", err)
@@ -534,6 +530,9 @@ func TestCreateCreditNote_ValidationErrors(t *testing.T) {
 		"no_lines":           func(b map[string]any) { b["lines"] = []map[string]any{} },
 		"invalid_quantity": func(b map[string]any) {
 			b["lines"].([]map[string]any)[0]["quantity"] = "abc"
+		},
+		"negative_fraction_quantity": func(b map[string]any) {
+			b["lines"].([]map[string]any)[0]["quantity"] = "1.-2"
 		},
 		"invalid_unit_price": func(b map[string]any) {
 			b["lines"].([]map[string]any)[0]["unit_price"] = "abc"

@@ -12,6 +12,7 @@ import (
 
 	v1 "github.com/naufal/latasya-erp/internal/api/v1"
 	v1contacts "github.com/naufal/latasya-erp/internal/api/v1/contacts"
+	contactModule "github.com/naufal/latasya-erp/internal/contact"
 	"github.com/naufal/latasya-erp/internal/model"
 	"github.com/naufal/latasya-erp/internal/testutil"
 )
@@ -21,12 +22,8 @@ func setupServer(t *testing.T) (*httptest.Server, *sql.DB) {
 	db := testutil.SetupTestDB(t)
 
 	apiMux := http.NewServeMux()
-	h := &v1contacts.Handler{DB: db}
-	apiMux.HandleFunc("GET /api/v1/contacts", h.List)
-	apiMux.HandleFunc("GET /api/v1/contacts/{id}", h.Get)
-	apiMux.HandleFunc("POST /api/v1/contacts", h.Create)
-	apiMux.HandleFunc("PUT /api/v1/contacts/{id}", h.Update)
-	apiMux.HandleFunc("DELETE /api/v1/contacts/{id}", h.Delete)
+	h := &v1contacts.Handler{Contacts: contactModule.New(db)}
+	h.RegisterRoutes(apiMux)
 
 	mux := http.NewServeMux()
 	mux.Handle("/api/v1/", v1.BearerOrCookie(db)(apiMux))
@@ -42,7 +39,7 @@ func adminToken(t *testing.T, db *sql.DB) string {
 	if err := db.QueryRow("SELECT id FROM users WHERE username = 'admin'").Scan(&adminID); err != nil {
 		t.Fatalf("get admin: %v", err)
 	}
-	_, plaintext, err := model.CreateAPIToken(db, adminID, fmt.Sprintf("test-%d", time.Now().UnixNano()),
+	_, plaintext, err := testutil.CreateAPIToken(db, adminID, fmt.Sprintf("test-%d", time.Now().UnixNano()),
 		[]string{model.CapContactsManage}, nil)
 	if err != nil {
 		t.Fatalf("create token: %v", err)
@@ -53,7 +50,7 @@ func adminToken(t *testing.T, db *sql.DB) string {
 func noScopeToken(t *testing.T, db *sql.DB) string {
 	t.Helper()
 	userID := testutil.CreateTestUser(t, db, fmt.Sprintf("noscope-%d", time.Now().UnixNano()), "pw", model.RoleViewer)
-	_, plaintext, err := model.CreateAPIToken(db, userID, "noscope", []string{}, nil)
+	_, plaintext, err := testutil.CreateAPIToken(db, userID, "noscope", []string{}, nil)
 	if err != nil {
 		t.Fatalf("create no-scope token: %v", err)
 	}

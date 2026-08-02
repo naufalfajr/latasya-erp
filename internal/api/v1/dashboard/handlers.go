@@ -1,16 +1,19 @@
 package dashboard
 
 import (
-	"database/sql"
 	"fmt"
 	"net/http"
 
 	v1 "github.com/naufal/latasya-erp/internal/api/v1"
-	"github.com/naufal/latasya-erp/internal/model"
+	"github.com/naufal/latasya-erp/internal/reporting"
 )
 
 type Handler struct {
-	DB *sql.DB
+	Reporting *reporting.Module
+}
+
+func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/v1/dashboard", h.Get)
 }
 
 func idr(n int) string {
@@ -53,14 +56,14 @@ type periodTrendResp struct {
 
 func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
-	granularity, err := model.ParseDashboardGranularity(query.Get("granularity"), query.Has("granularity"))
+	granularity, err := reporting.ParseDashboardGranularity(query.Get("granularity"), query.Has("granularity"))
 	if err != nil {
 		v1.WriteError(w, r, http.StatusBadRequest, v1.CodeInvalidRequest, err.Error(), map[string]string{
 			"granularity": "must be one of: monthly, quarterly",
 		})
 		return
 	}
-	data, err := model.GetDashboardDataAt(h.DB, granularity, model.BusinessNow())
+	data, err := h.Reporting.DashboardAt(r.Context(), granularity, reporting.BusinessNow())
 	if err != nil {
 		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to get dashboard data", nil)
 		return
