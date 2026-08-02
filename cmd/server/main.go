@@ -31,6 +31,8 @@ import (
 	v1users "github.com/naufal/latasya-erp/internal/api/v1/users"
 	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/auth"
+	"github.com/naufal/latasya-erp/internal/bill"
+	"github.com/naufal/latasya-erp/internal/creditnote"
 	"github.com/naufal/latasya-erp/internal/database"
 	"github.com/naufal/latasya-erp/internal/googlecalendar"
 	"github.com/naufal/latasya-erp/internal/handler"
@@ -74,14 +76,18 @@ func main() {
 
 	invoiceModule := invoice.New(db)
 	journalModule := journal.New(db)
+	billModule := bill.New(db)
+	creditNoteModule := creditnote.New(db)
 	h := &handler.Handler{
-		DB:         db,
-		TemplateFS: latasyaerp.TemplateFS,
-		FuncMap:    tmpl.FuncMap(),
-		DevMode:    devMode,
-		BasePath:   "/dashboard",
-		Invoices:   invoiceModule,
-		Journals:   journalModule,
+		DB:          db,
+		TemplateFS:  latasyaerp.TemplateFS,
+		FuncMap:     tmpl.FuncMap(),
+		DevMode:     devMode,
+		BasePath:    "/dashboard",
+		Invoices:    invoiceModule,
+		Journals:    journalModule,
+		Bills:       billModule,
+		CreditNotes: creditNoteModule,
 		GoogleCalendarConfig: googlecalendar.Config{
 			ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
 			ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
@@ -160,23 +166,11 @@ func main() {
 	apiMux.Handle("POST /api/v1/api-tokens", idem(http.HandlerFunc(apiTokensAPI.Create)))
 	apiMux.HandleFunc("DELETE /api/v1/api-tokens/{id}", apiTokensAPI.Revoke)
 
-	bills := &v1bills.Handler{DB: db}
-	apiMux.HandleFunc("GET /api/v1/bills", bills.List)
-	apiMux.HandleFunc("GET /api/v1/bills/{id}", bills.Get)
-	apiMux.Handle("POST /api/v1/bills", idem(http.HandlerFunc(bills.Create)))
-	apiMux.Handle("PUT /api/v1/bills/{id}", idem(http.HandlerFunc(bills.Update)))
-	apiMux.HandleFunc("DELETE /api/v1/bills/{id}", bills.Delete)
-	apiMux.Handle("POST /api/v1/bills/{id}/receive", idem(http.HandlerFunc(bills.Receive)))
-	apiMux.Handle("POST /api/v1/bills/{id}/payment", idem(http.HandlerFunc(bills.Payment)))
+	bills := &v1bills.Handler{Bills: billModule}
+	bills.RegisterRoutes(apiMux, idem)
 
-	creditNotes := &v1creditnotes.Handler{DB: db}
-	apiMux.HandleFunc("GET /api/v1/credit-notes", creditNotes.List)
-	apiMux.HandleFunc("GET /api/v1/credit-notes/{id}", creditNotes.Get)
-	apiMux.Handle("POST /api/v1/credit-notes", idem(http.HandlerFunc(creditNotes.Create)))
-	apiMux.Handle("PUT /api/v1/credit-notes/{id}", idem(http.HandlerFunc(creditNotes.Update)))
-	apiMux.HandleFunc("DELETE /api/v1/credit-notes/{id}", creditNotes.Delete)
-	apiMux.Handle("POST /api/v1/credit-notes/{id}/issue", idem(http.HandlerFunc(creditNotes.Issue)))
-	apiMux.Handle("POST /api/v1/credit-notes/{id}/void", idem(http.HandlerFunc(creditNotes.Void)))
+	creditNotes := &v1creditnotes.Handler{CreditNotes: creditNoteModule}
+	creditNotes.RegisterRoutes(apiMux, idem)
 
 	reportsAPI := &v1reports.Handler{DB: db}
 	apiMux.HandleFunc("GET /api/v1/reports/trial-balance", reportsAPI.TrialBalance)
@@ -257,31 +251,10 @@ func main() {
 	protected.HandleFunc("POST /contacts/{id}/portal-code", auth.AdminOnly(h.SaveContactPortalCode))
 
 	h.RegisterAccountingRoutes(protected)
+	h.RegisterReceivablesPayablesRoutes(protected)
 
 	// Invoices
 	h.RegisterInvoiceRoutes(protected)
-
-	// Credit Notes (piggyback on invoices.manage capability)
-	protected.HandleFunc("GET /credit-notes", h.ListCreditNotes)
-	protected.HandleFunc("GET /credit-notes/new", h.NewCreditNote)
-	protected.HandleFunc("POST /credit-notes", auth.CapabilityOnly(model.CapInvoicesManage, h.CreateCreditNote))
-	protected.HandleFunc("GET /credit-notes/{id}", h.ViewCreditNote)
-	protected.HandleFunc("GET /credit-notes/{id}/edit", h.EditCreditNote)
-	protected.HandleFunc("POST /credit-notes/{id}", auth.CapabilityOnly(model.CapInvoicesManage, h.UpdateCreditNote))
-	protected.HandleFunc("DELETE /credit-notes/{id}", auth.CapabilityOnly(model.CapInvoicesManage, h.DeleteCreditNote))
-	protected.HandleFunc("POST /credit-notes/{id}/issue", auth.CapabilityOnly(model.CapInvoicesManage, h.IssueCreditNote))
-	protected.HandleFunc("POST /credit-notes/{id}/void", auth.CapabilityOnly(model.CapInvoicesManage, h.VoidCreditNote))
-
-	// Bills
-	protected.HandleFunc("GET /bills", h.ListBills)
-	protected.HandleFunc("GET /bills/new", h.NewBill)
-	protected.HandleFunc("POST /bills", auth.CapabilityOnly(model.CapBillsManage, h.CreateBill))
-	protected.HandleFunc("GET /bills/{id}", h.ViewBill)
-	protected.HandleFunc("GET /bills/{id}/edit", h.EditBill)
-	protected.HandleFunc("POST /bills/{id}", auth.CapabilityOnly(model.CapBillsManage, h.UpdateBill))
-	protected.HandleFunc("DELETE /bills/{id}", auth.CapabilityOnly(model.CapBillsManage, h.DeleteBill))
-	protected.HandleFunc("POST /bills/{id}/receive", auth.CapabilityOnly(model.CapBillsManage, h.ReceiveBill))
-	protected.HandleFunc("POST /bills/{id}/payment", auth.CapabilityOnly(model.CapBillsManage, h.BillPayment))
 
 	// Reports
 	protected.HandleFunc("GET /reports/trial-balance", h.TrialBalance)

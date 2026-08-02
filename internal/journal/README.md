@@ -18,9 +18,9 @@ module because they are constrained, user-facing shapes of a journal entry.
 
 SQLite is the concrete persistence implementation. SQL for manual journals,
 income, and expenses remains private to this module; no repository interface
-is introduced before a second adapter exists. Bill and credit-note posting
-still uses a private transitional writer in `internal/model`; that bridge is
-removed when those two domains move into their modules.
+is introduced before a second adapter exists. The bill and credit-note modules
+own their source postings because each posting must share the aggregate's
+transaction; there is no generic cross-module journal writer.
 
 ## Adapter responsibilities
 

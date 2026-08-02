@@ -2,6 +2,7 @@ package handler_test
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -161,8 +162,8 @@ func TestCreateBill_LineValidationError(t *testing.T) {
 		return http.ErrUseLastResponse
 	}}
 
-	// Valid header fields but a line item missing price/account triggers the
-	// per-line validation branches in validateBill.
+	// Valid header fields but a line item missing price/account is rejected by
+	// the bill module and rendered back into the HTML form.
 	form := fmt.Sprintf(
 		"contact_id=%d&bill_date=2026-04-04&due_date=2026-04-30&line_description=Diesel&line_quantity=1&line_unit_price=0&line_account_id=0",
 		contactID,
@@ -176,6 +177,13 @@ func TestCreateBill_LineValidationError(t *testing.T) {
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("expected 200 (validation error), got %d", resp.StatusCode)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), "must be positive") || !strings.Contains(string(body), "input-error") {
+		t.Fatalf("missing row validation feedback: %s", body)
 	}
 }
 

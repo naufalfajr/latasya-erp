@@ -1,12 +1,13 @@
 package handler
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
 
-	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/auth"
+	billModule "github.com/naufal/latasya-erp/internal/bill"
 	"github.com/naufal/latasya-erp/internal/model"
 )
 
@@ -20,407 +21,233 @@ type billFormData struct {
 	IsEdit          bool
 }
 
-func (h *Handler) ListBills(w http.ResponseWriter, r *http.Request) {
-	f := model.BillFilter{
-		Status: r.URL.Query().Get("status"),
-		Search: r.URL.Query().Get("search"),
+func (h *Handler) billActor(r *http.Request) billModule.Actor {
+	u := auth.UserFromContext(r.Context())
+	if u == nil {
+		return billModule.Actor{}
 	}
-	total, err := model.CountBills(h.DB, f)
-	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
+	return billModule.Actor{UserID: u.ID, CanManage: u.HasCapability(model.CapBillsManage)}
+}
+func billDraft(b *model.Bill, lines []model.BillLine) billModule.Draft {
+	d := billModule.Draft{ContactID: b.ContactID, BillDate: b.BillDate, DueDate: b.DueDate, TaxAmount: b.TaxAmount, Notes: b.Notes, Lines: make([]billModule.Line, len(lines))}
+	for i, l := range lines {
+		d.Lines[i] = billModule.Line{Description: l.Description, Quantity: l.Quantity, UnitPrice: l.UnitPrice, AccountID: l.AccountID}
 	}
-	pg := newPagination(parsePage(r), total)
-	f.Limit, f.Offset = pg.PageSize, pg.Offset()
-
-	bills, err := model.ListBills(h.DB, f)
-	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-	h.render(w, r, "templates/bills/index.html", "Bills", map[string]any{
-		"Bills":      bills,
-		"Filter":     f.Status,
-		"Search":     f.Search,
-		"Pagination": newPageNav(pg, map[string]string{"status": f.Status, "search": f.Search}),
-	})
+	return d
 }
 
+func (h *Handler) ListBills(w http.ResponseWriter, r *http.Request) {
+	f := billModule.Filter{Status: r.URL.Query().Get("status"), Search: r.URL.Query().Get("search")}
+	page := parsePage(r)
+	f.Limit, f.Offset = listPageSize, (page-1)*listPageSize
+	result, err := h.Bills.List(r.Context(), f)
+	if err != nil {
+		http.Error(w, "Internal Server Error", 500)
+		return
+	}
+	pg := newPagination(page, result.Total)
+	if pg.Page != page {
+		f.Offset = pg.Offset()
+		result, err = h.Bills.List(r.Context(), f)
+		if err != nil {
+			http.Error(w, "Internal Server Error", 500)
+			return
+		}
+	}
+	h.render(w, r, "templates/bills/index.html", "Bills", map[string]any{"Bills": result.Bills, "Filter": f.Status, "Search": f.Search, "Pagination": newPageNav(pg, map[string]string{"status": f.Status, "search": f.Search})})
+}
 func (h *Handler) NewBill(w http.ResponseWriter, r *http.Request) {
-	fd := h.newBillFormData()
+	fd, err := h.newBillFormData(r)
+	if err != nil {
+		http.Error(w, "Internal Server Error", 500)
+		return
+	}
 	fd.Bill = &model.Bill{}
 	fd.Lines = []model.BillLine{{Quantity: 100}, {Quantity: 100}}
 	h.render(w, r, "templates/bills/form.html", "New Bill", fd, "templates/bills/line_partial.html")
 }
-
 func (h *Handler) CreateBill(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
-	user := auth.UserFromContext(r.Context())
-
-	contactID, _ := strconv.Atoi(r.FormValue("contact_id"))
-	taxAmount := parseIDR(r.FormValue("tax_amount"))
-
-	b := &model.Bill{
-		ContactID: contactID,
-		BillDate:  r.FormValue("bill_date"),
-		DueDate:   r.FormValue("due_date"),
-		TaxAmount: taxAmount,
-		Notes:     r.FormValue("notes"),
-		CreatedBy: user.ID,
-	}
-
-	lines := parseBillLines(r)
-	errors := validateBill(b, lines)
-
-	if len(errors) > 0 {
-		fd := h.newBillFormData()
-		fd.Bill = b
-		fd.Lines = lines
-		fd.Errors = errors
-		h.render(w, r, "templates/bills/form.html", "New Bill", fd, "templates/bills/line_partial.html")
-		return
-	}
-
-	billID, err := model.CreateBill(h.DB, b, lines)
+	b, lines := parseBill(r)
+	created, err := h.Bills.Create(r.Context(), h.billActor(r), billDraft(b, lines))
 	if err != nil {
-		fd := h.newBillFormData()
-		fd.Bill = b
-		fd.Lines = lines
-		fd.Errors = map[string]string{"general": err.Error()}
-		h.render(w, r, "templates/bills/form.html", "New Bill", fd, "templates/bills/line_partial.html")
+		h.renderBillForm(w, r, b, lines, billFormErrors(err), false)
 		return
 	}
-
-	created, _ := model.GetBill(h.DB, billID)
-	billNumber := ""
-	total := 0
-	if created != nil {
-		billNumber = created.BillNumber
-		total = created.Total
-	}
-	audit.Log(r.Context(), h.DB, audit.Event{
-		Action:      "bill.create",
-		TargetType:  "bill",
-		TargetID:    int64(billID),
-		TargetLabel: billNumber,
-		Metadata: map[string]any{
-			"after": map[string]any{
-				"contact_id": b.ContactID,
-				"bill_date":  b.BillDate,
-				"due_date":   b.DueDate,
-				"tax_amount": b.TaxAmount,
-				"total":      total,
-				"line_count": len(lines),
-			},
-		},
-	})
-
 	h.setFlash(w, "Bill created successfully")
-	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/bills/%d", billID), http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/bills/%d", created.ID), 303)
 }
-
 func (h *Handler) ViewBill(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.Atoi(r.PathValue("id"))
+	id, err := pathID(r)
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
-	b, err := model.GetBill(h.DB, id)
+	b, err := h.Bills.Get(r.Context(), id)
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
-	active := true
-	assetAccounts, _ := model.ListAccounts(h.DB, model.AccountFilter{Type: "asset", IsActive: &active})
-	h.render(w, r, "templates/bills/view.html", "Bill "+b.BillNumber, map[string]any{
-		"Bill":          b,
-		"AssetAccounts": assetAccounts,
-	})
+	options, err := h.Bills.Options(r.Context())
+	if err != nil {
+		http.Error(w, "Internal Server Error", 500)
+		return
+	}
+	h.render(w, r, "templates/bills/view.html", "Bill "+b.BillNumber, map[string]any{"Bill": b, "AssetAccounts": options.AssetAccounts})
 }
-
 func (h *Handler) EditBill(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.Atoi(r.PathValue("id"))
+	id, err := pathID(r)
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
-	b, err := model.GetBill(h.DB, id)
+	b, err := h.Bills.Get(r.Context(), id)
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
-	if b.Status != "draft" {
+	if b.Status != model.StatusDraft {
 		h.setFlash(w, "Can only edit draft bills")
-		http.Redirect(w, r, h.BasePath+fmt.Sprintf("/bills/%d", id), http.StatusSeeOther)
+		http.Redirect(w, r, h.BasePath+fmt.Sprintf("/bills/%d", id), 303)
 		return
 	}
-	fd := h.newBillFormData()
-	fd.Bill = b
-	fd.Lines = b.Lines
-	fd.IsEdit = true
+	fd, err := h.newBillFormData(r)
+	if err != nil {
+		http.Error(w, "Internal Server Error", 500)
+		return
+	}
+	fd.Bill, fd.Lines, fd.IsEdit = b, b.Lines, true
 	h.render(w, r, "templates/bills/form.html", "Edit Bill", fd, "templates/bills/line_partial.html")
 }
-
 func (h *Handler) UpdateBill(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.Atoi(r.PathValue("id"))
+	id, err := pathID(r)
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
-	oldBill, err := model.GetBill(h.DB, id)
-	if err != nil {
+	if _, err = h.Bills.Get(r.Context(), id); err != nil {
 		http.NotFound(w, r)
 		return
 	}
 	r.ParseForm()
-	contactID, _ := strconv.Atoi(r.FormValue("contact_id"))
-	taxAmount := parseIDR(r.FormValue("tax_amount"))
-
-	b := &model.Bill{
-		ID: id, ContactID: contactID, BillDate: r.FormValue("bill_date"),
-		DueDate: r.FormValue("due_date"), TaxAmount: taxAmount, Notes: r.FormValue("notes"),
-	}
-	lines := parseBillLines(r)
-	errors := validateBill(b, lines)
-
-	if len(errors) > 0 {
-		fd := h.newBillFormData()
-		fd.Bill = b
-		fd.Lines = lines
-		fd.Errors = errors
-		fd.IsEdit = true
-		h.render(w, r, "templates/bills/form.html", "Edit Bill", fd, "templates/bills/line_partial.html")
+	b, lines := parseBill(r)
+	b.ID = id
+	if _, err = h.Bills.Update(r.Context(), h.billActor(r), id, billDraft(b, lines)); err != nil {
+		h.renderBillForm(w, r, b, lines, billFormErrors(err), true)
 		return
 	}
-
-	if err := model.UpdateBill(h.DB, b, lines); err != nil {
-		fd := h.newBillFormData()
-		fd.Bill = b
-		fd.Lines = lines
-		fd.Errors = map[string]string{"general": err.Error()}
-		fd.IsEdit = true
-		h.render(w, r, "templates/bills/form.html", "Edit Bill", fd, "templates/bills/line_partial.html")
-		return
-	}
-
-	newBill, _ := model.GetBill(h.DB, id)
-	oldFields := map[string]any{
-		"contact_id": oldBill.ContactID,
-		"bill_date":  oldBill.BillDate,
-		"due_date":   oldBill.DueDate,
-		"tax_amount": oldBill.TaxAmount,
-		"notes":      oldBill.Notes,
-		"total":      oldBill.Total,
-	}
-	newFields := map[string]any{
-		"contact_id": b.ContactID,
-		"bill_date":  b.BillDate,
-		"due_date":   b.DueDate,
-		"tax_amount": b.TaxAmount,
-		"notes":      b.Notes,
-	}
-	if newBill != nil {
-		newFields["total"] = newBill.Total
-	}
-	metadata := audit.Diff(oldFields, newFields,
-		[]string{"contact_id", "bill_date", "due_date", "tax_amount", "notes", "total"})
-	if metadata != nil {
-		audit.Log(r.Context(), h.DB, audit.Event{
-			Action:      "bill.update",
-			TargetType:  "bill",
-			TargetID:    int64(id),
-			TargetLabel: oldBill.BillNumber,
-			Metadata:    metadata,
-		})
-	}
-
 	h.setFlash(w, "Bill updated successfully")
-	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/bills/%d", id), http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/bills/%d", id), 303)
 }
-
 func (h *Handler) ReceiveBill(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.Atoi(r.PathValue("id"))
+	id, err := pathID(r)
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
-	user := auth.UserFromContext(r.Context())
-	if err := model.ReceiveBill(h.DB, id, user.ID); err != nil {
+	if _, err = h.Bills.Receive(r.Context(), h.billActor(r), id); err != nil {
 		h.setFlash(w, "Error: "+err.Error())
 	} else {
-		if b, err := model.GetBill(h.DB, id); err == nil {
-			audit.Log(r.Context(), h.DB, audit.Event{
-				Action:      "bill.receive",
-				TargetType:  "bill",
-				TargetID:    int64(id),
-				TargetLabel: b.BillNumber,
-				Metadata: map[string]any{
-					"after":      map[string]any{"status": b.Status},
-					"journal_id": b.JournalID,
-				},
-			})
-		}
 		h.setFlash(w, "Bill received — journal entry created")
 	}
-	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/bills/%d", id), http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/bills/%d", id), 303)
 }
-
 func (h *Handler) BillPayment(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.Atoi(r.PathValue("id"))
+	id, err := pathID(r)
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
-	user := auth.UserFromContext(r.Context())
 	amount := parseIDR(r.FormValue("amount"))
-	paymentDate := r.FormValue("payment_date")
-	paymentAccountID, _ := strconv.Atoi(r.FormValue("payment_account"))
-
-	if amount <= 0 || paymentDate == "" || paymentAccountID == 0 {
-		h.setFlash(w, "Error: all payment fields are required")
-		http.Redirect(w, r, h.BasePath+fmt.Sprintf("/bills/%d", id), http.StatusSeeOther)
-		return
-	}
-
-	if err := model.RecordBillPayment(h.DB, id, amount, paymentDate, paymentAccountID, user.ID); err != nil {
+	date := r.FormValue("payment_date")
+	account, _ := strconv.Atoi(r.FormValue("payment_account"))
+	if _, err = h.Bills.RecordPayment(r.Context(), h.billActor(r), id, billModule.Payment{Amount: amount, PaymentDate: date, PaymentAccount: account}); err != nil {
 		h.setFlash(w, "Error: "+err.Error())
 	} else {
-		b, _ := model.GetBill(h.DB, id)
-		billNumber := ""
-		status := ""
-		if b != nil {
-			billNumber = b.BillNumber
-			status = b.Status
-		}
-		audit.Log(r.Context(), h.DB, audit.Event{
-			Action:      "bill.payment",
-			TargetType:  "bill",
-			TargetID:    int64(id),
-			TargetLabel: billNumber,
-			Metadata: map[string]any{
-				"amount":             amount,
-				"payment_date":       paymentDate,
-				"payment_account_id": paymentAccountID,
-				"status_after":       status,
-			},
-		})
 		h.setFlash(w, "Payment recorded successfully")
 	}
-	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/bills/%d", id), http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/bills/%d", id), 303)
 }
-
 func (h *Handler) DeleteBill(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.Atoi(r.PathValue("id"))
+	id, err := pathID(r)
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
-	existing, _ := model.GetBill(h.DB, id)
-
-	if err := model.DeleteBill(h.DB, id); err != nil {
+	if _, err = h.Bills.Delete(r.Context(), h.billActor(r), id); err != nil {
 		h.setFlash(w, "Error: "+err.Error())
-		http.Redirect(w, r, h.BasePath+fmt.Sprintf("/bills/%d", id), http.StatusSeeOther)
+		http.Redirect(w, r, h.BasePath+fmt.Sprintf("/bills/%d", id), 303)
 		return
 	}
-
-	if existing != nil {
-		audit.Log(r.Context(), h.DB, audit.Event{
-			Action:      "bill.delete",
-			TargetType:  "bill",
-			TargetID:    int64(id),
-			TargetLabel: existing.BillNumber,
-			Metadata: map[string]any{
-				"before": map[string]any{
-					"contact_id": existing.ContactID,
-					"bill_date":  existing.BillDate,
-					"status":     existing.Status,
-					"total":      existing.Total,
-				},
-			},
-		})
-	}
-
 	if r.Header.Get("HX-Request") == "true" {
-		w.WriteHeader(http.StatusOK)
+		w.WriteHeader(200)
 		return
 	}
 	h.setFlash(w, "Bill deleted")
-	http.Redirect(w, r, h.BasePath+"/bills", http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+"/bills", 303)
 }
-
 func (h *Handler) BillLinePartial(w http.ResponseWriter, r *http.Request) {
-	active := true
-	accounts, _ := model.ListAccounts(h.DB, model.AccountFilter{Type: "expense", IsActive: &active})
-	t, err := h.getTemplate("templates/bills/line_partial.html")
+	options, err := h.Bills.Options(r.Context())
 	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		http.Error(w, "Internal Server Error", 500)
 		return
 	}
-	t.ExecuteTemplate(w, "bill-line", map[string]any{"Accounts": accounts})
+	t, err := h.getTemplate("templates/bills/line_partial.html")
+	if err != nil {
+		http.Error(w, "Internal Server Error", 500)
+		return
+	}
+	t.ExecuteTemplate(w, "bill-line", map[string]any{"Accounts": options.ExpenseAccounts})
 }
 
+func pathID(r *http.Request) (int, error) { return strconv.Atoi(r.PathValue("id")) }
+func parseBill(r *http.Request) (*model.Bill, []model.BillLine) {
+	contact, _ := strconv.Atoi(r.FormValue("contact_id"))
+	b := &model.Bill{ContactID: contact, BillDate: r.FormValue("bill_date"), DueDate: r.FormValue("due_date"), TaxAmount: parseIDR(r.FormValue("tax_amount")), Notes: r.FormValue("notes")}
+	return b, parseBillLines(r)
+}
 func parseBillLines(r *http.Request) []model.BillLine {
-	descriptions := r.Form["line_description"]
-	quantities := r.Form["line_quantity"]
-	unitPrices := r.Form["line_unit_price"]
-	accountIDs := r.Form["line_account_id"]
-
-	var lines []model.BillLine
+	descriptions, quantities, prices, accounts := r.Form["line_description"], r.Form["line_quantity"], r.Form["line_unit_price"], r.Form["line_account_id"]
+	lines := []model.BillLine{}
 	for i := range descriptions {
 		desc := getIndex(descriptions, i)
 		qty := parseQuantity(getIndex(quantities, i))
 		if qty == 0 {
 			qty = 100
 		}
-		price := parseIDR(getIndex(unitPrices, i))
-		accountID, _ := strconv.Atoi(getIndex(accountIDs, i))
-
-		if desc == "" && price == 0 && accountID == 0 {
+		price := parseIDR(getIndex(prices, i))
+		account, _ := strconv.Atoi(getIndex(accounts, i))
+		if desc == "" && price == 0 && account == 0 {
 			continue
 		}
-		lines = append(lines, model.BillLine{
-			Description: desc, Quantity: qty, UnitPrice: price,
-			AccountID: accountID, Amount: qty * price / 100,
-		})
+		lines = append(lines, model.BillLine{Description: desc, Quantity: qty, UnitPrice: price, AccountID: account, Amount: qty * price / 100})
 	}
 	return lines
 }
-
-func validateBill(b *model.Bill, lines []model.BillLine) map[string]string {
-	errors := make(map[string]string)
-	if b.ContactID == 0 {
-		errors["contact_id"] = "Supplier is required"
+func billFormErrors(err error) map[string]string {
+	var validation *billModule.ValidationError
+	if !errors.As(err, &validation) {
+		return map[string]string{"general": err.Error()}
 	}
-	if b.BillDate == "" {
-		errors["bill_date"] = "Bill date is required"
-	}
-	if b.DueDate == "" {
-		errors["due_date"] = "Due date is required"
-	}
-	if len(lines) == 0 {
-		errors["lines"] = "At least one line item is required"
-	}
-	for i, l := range lines {
-		if l.Description == "" {
-			errors[fmt.Sprintf("line_%d_desc", i)] = "Description required"
-		}
-		if l.UnitPrice <= 0 {
-			errors[fmt.Sprintf("line_%d_price", i)] = "Price required"
-		}
-		if l.AccountID == 0 {
-			errors[fmt.Sprintf("line_%d_account", i)] = "Account required"
-		}
-	}
-	return errors
+	return transportFormFields(validation.Fields)
 }
-
-func (h *Handler) newBillFormData() billFormData {
-	active := true
-	contacts, _ := model.ListContacts(h.DB, model.ContactFilter{Type: "supplier", IsActive: &active})
-	expenseAccounts, _ := model.ListAccounts(h.DB, model.AccountFilter{Type: "expense", IsActive: &active})
-	assetAccounts, _ := model.ListAccounts(h.DB, model.AccountFilter{Type: "asset", IsActive: &active})
-	return billFormData{
-		Contacts: contacts, ExpenseAccounts: expenseAccounts,
-		AssetAccounts: assetAccounts, Errors: make(map[string]string),
+func (h *Handler) newBillFormData(r *http.Request) (billFormData, error) {
+	options, err := h.Bills.Options(r.Context())
+	if err != nil {
+		return billFormData{}, err
 	}
+	return billFormData{Contacts: options.Contacts, ExpenseAccounts: options.ExpenseAccounts, AssetAccounts: options.AssetAccounts, Errors: map[string]string{}}, nil
+}
+func (h *Handler) renderBillForm(w http.ResponseWriter, r *http.Request, b *model.Bill, lines []model.BillLine, errs map[string]string, edit bool) {
+	fd, err := h.newBillFormData(r)
+	if err != nil {
+		http.Error(w, "Internal Server Error", 500)
+		return
+	}
+	fd.Bill, fd.Lines, fd.Errors, fd.IsEdit = b, lines, errs, edit
+	title := "New Bill"
+	if edit {
+		title = "Edit Bill"
+	}
+	h.render(w, r, "templates/bills/form.html", title, fd, "templates/bills/line_partial.html")
 }

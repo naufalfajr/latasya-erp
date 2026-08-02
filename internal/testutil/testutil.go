@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/naufal/latasya-erp/internal/auth"
+	"github.com/naufal/latasya-erp/internal/bill"
+	"github.com/naufal/latasya-erp/internal/creditnote"
 	"github.com/naufal/latasya-erp/internal/database"
 	"github.com/naufal/latasya-erp/internal/handler"
 	"github.com/naufal/latasya-erp/internal/invoice"
@@ -62,6 +64,53 @@ func GetInvoice(db *sql.DB, id int) (*model.Invoice, error) {
 	return invoice.New(db).Get(context.Background(), id)
 }
 
+func CreateCreditNote(db *sql.DB, cn *model.CreditNote, lines []model.CreditNoteLine) (int, error) {
+	draftLines := make([]creditnote.Line, len(lines))
+	for i, line := range lines {
+		draftLines[i] = creditnote.Line{Description: line.Description, Quantity: line.Quantity, UnitPrice: line.UnitPrice, AccountID: line.AccountID}
+	}
+	userID := cn.CreatedBy
+	if userID == 0 {
+		userID = 1
+	}
+	created, err := creditnote.New(db).Create(context.Background(), creditnote.Actor{UserID: userID, CanManage: true}, creditnote.Draft{
+		ContactID: cn.ContactID, InvoiceID: cn.InvoiceID, Date: cn.CNDate, Reason: cn.Reason, TaxAmount: cn.TaxAmount, Notes: cn.Notes, Lines: draftLines,
+	})
+	if err != nil {
+		return 0, err
+	}
+	cn.ID, cn.CNNumber = created.ID, created.CNNumber
+	return created.ID, nil
+}
+
+func IssueCreditNote(db *sql.DB, id, userID int) error {
+	_, err := creditnote.New(db).Issue(context.Background(), creditnote.Actor{UserID: userID, CanManage: true}, id)
+	return err
+}
+
+func CreateBill(db *sql.DB, b *model.Bill, lines []model.BillLine) (int, error) {
+	draftLines := make([]bill.Line, len(lines))
+	for i, line := range lines {
+		draftLines[i] = bill.Line{Description: line.Description, Quantity: line.Quantity, UnitPrice: line.UnitPrice, AccountID: line.AccountID}
+	}
+	userID := b.CreatedBy
+	if userID == 0 {
+		userID = 1
+	}
+	created, err := bill.New(db).Create(context.Background(), bill.Actor{UserID: userID, CanManage: true}, bill.Draft{
+		ContactID: b.ContactID, BillDate: b.BillDate, DueDate: b.DueDate, TaxAmount: b.TaxAmount, Notes: b.Notes, Lines: draftLines,
+	})
+	if err != nil {
+		return 0, err
+	}
+	b.ID, b.BillNumber = created.ID, created.BillNumber
+	return created.ID, nil
+}
+
+func GetBill(db *sql.DB, id int) (*model.Bill, error) {
+	return bill.New(db).Get(context.Background(), id)
+}
+
 // Parallel tests all register the same FS; once is enough and keeps the
 // global write out of the race detector's way.
 var setMigrations = sync.OnceFunc(func() {
@@ -87,12 +136,14 @@ func SetupTestDB(t *testing.T) *sql.DB {
 func SetupTestHandler(t *testing.T, db *sql.DB) *handler.Handler {
 	t.Helper()
 	return &handler.Handler{
-		DB:         db,
-		TemplateFS: latasyaerp.TemplateFS,
-		FuncMap:    tmpl.FuncMap(),
-		DevMode:    true,
-		Invoices:   invoice.New(db),
-		Journals:   journal.New(db),
+		DB:          db,
+		TemplateFS:  latasyaerp.TemplateFS,
+		FuncMap:     tmpl.FuncMap(),
+		DevMode:     true,
+		Invoices:    invoice.New(db),
+		Journals:    journal.New(db),
+		Bills:       bill.New(db),
+		CreditNotes: creditnote.New(db),
 	}
 }
 

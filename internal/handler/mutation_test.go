@@ -618,7 +618,7 @@ func TestUpdateCreditNote_Success(t *testing.T) {
 	db.QueryRow("SELECT id FROM contacts WHERE name = 'CN Edit'").Scan(&contactID)
 	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
 
-	cnID, err := model.CreateCreditNote(db, &model.CreditNote{
+	cnID, err := testutil.CreateCreditNote(db, &model.CreditNote{
 		ContactID: contactID, CNDate: "2026-04-10",
 		Reason: model.CreditNoteReasonOther, CreatedBy: 1,
 	}, []model.CreditNoteLine{
@@ -660,7 +660,7 @@ func TestDeleteCreditNote_Success(t *testing.T) {
 	db.QueryRow("SELECT id FROM contacts WHERE name = 'CN Del'").Scan(&contactID)
 	db.QueryRow("SELECT id FROM accounts WHERE code = '4-1001'").Scan(&revenueID)
 
-	cnID, _ := model.CreateCreditNote(db, &model.CreditNote{
+	cnID, _ := testutil.CreateCreditNote(db, &model.CreditNote{
 		ContactID: contactID, CNDate: "2026-04-10",
 		Reason: model.CreditNoteReasonOther, CreatedBy: 1,
 	}, []model.CreditNoteLine{
@@ -698,7 +698,7 @@ func TestIssueCreditNote_HTTP(t *testing.T) {
 	})
 	testutil.SendInvoice(db, invID, 1)
 
-	cnID, _ := model.CreateCreditNote(db, &model.CreditNote{
+	cnID, _ := testutil.CreateCreditNote(db, &model.CreditNote{
 		ContactID: contactID, InvoiceID: &invID, CNDate: "2026-04-10",
 		Reason: model.CreditNoteReasonCancellation, CreatedBy: 1,
 	}, []model.CreditNoteLine{
@@ -740,13 +740,13 @@ func TestVoidCreditNote_HTTP(t *testing.T) {
 	})
 	testutil.SendInvoice(db, invID, 1)
 
-	cnID, _ := model.CreateCreditNote(db, &model.CreditNote{
+	cnID, _ := testutil.CreateCreditNote(db, &model.CreditNote{
 		ContactID: contactID, InvoiceID: &invID, CNDate: "2026-04-10",
 		Reason: model.CreditNoteReasonCancellation, CreatedBy: 1,
 	}, []model.CreditNoteLine{
 		{Description: "Cancel", Quantity: 100, UnitPrice: 1000000, AccountID: revenueID},
 	})
-	model.IssueCreditNote(db, cnID, 1)
+	testutil.IssueCreditNote(db, cnID, 1)
 
 	req, _ := requestWithCookies(db, "POST", ts.URL+"/credit-notes/"+strconv.Itoa(cnID)+"/void", cookies, "")
 	resp, err := noRedirectClient().Do(req)

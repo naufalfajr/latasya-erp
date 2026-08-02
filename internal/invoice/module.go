@@ -4,16 +4,19 @@ import (
 	"database/sql"
 	"sync"
 	"time"
+
+	"github.com/naufal/latasya-erp/internal/creditnote"
 )
 
 type Module struct {
-	db         *sql.DB
-	now        func() time.Time
-	bulkSendMu sync.Mutex
+	db          *sql.DB
+	now         func() time.Time
+	bulkSendMu  sync.Mutex
+	creditNotes *creditnote.Module
 }
 
 func New(db *sql.DB) *Module {
-	return &Module{db: db, now: time.Now}
+	return &Module{db: db, now: time.Now, creditNotes: creditnote.New(db)}
 }
 
 type Actor struct {

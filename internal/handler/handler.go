@@ -9,6 +9,8 @@ import (
 	"sync"
 
 	"github.com/naufal/latasya-erp/internal/auth"
+	"github.com/naufal/latasya-erp/internal/bill"
+	"github.com/naufal/latasya-erp/internal/creditnote"
 	"github.com/naufal/latasya-erp/internal/googlecalendar"
 	"github.com/naufal/latasya-erp/internal/invoice"
 	"github.com/naufal/latasya-erp/internal/journal"
@@ -30,6 +32,8 @@ type Handler struct {
 	GoogleCalendarConfig googlecalendar.Config
 	Invoices             *invoice.Module
 	Journals             *journal.Module
+	Bills                *bill.Module
+	CreditNotes          *creditnote.Module
 
 	mu    sync.RWMutex
 	cache map[string]*template.Template

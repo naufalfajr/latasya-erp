@@ -112,12 +112,9 @@ func (m *Module) Detail(ctx context.Context, id int) (*Detail, error) {
 	if err != nil {
 		return nil, err
 	}
-	notes, err := model.ListCreditNotesForInvoiceContext(ctx, m.db, id)
+	notes, err := m.creditNotes.ForInvoice(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("list invoice credit notes: %w", err)
-	}
-	if notes == nil {
-		notes = []model.CreditNote{}
 	}
 	return &Detail{Invoice: inv, CreditNotes: notes}, nil
 }

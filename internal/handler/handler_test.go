@@ -54,26 +54,7 @@ func testServer(t *testing.T, basePath ...string) (*httptest.Server, *sql.DB) {
 	protected.HandleFunc("POST /contacts/{id}/portal-code", auth.AdminOnly(h.SaveContactPortalCode))
 	h.RegisterAccountingRoutes(protected)
 	h.RegisterInvoiceRoutes(protected)
-	protected.HandleFunc("GET /credit-notes", h.ListCreditNotes)
-	protected.HandleFunc("GET /credit-notes/new", h.NewCreditNote)
-	protected.HandleFunc("POST /credit-notes", auth.CapabilityOnly("invoices.manage", h.CreateCreditNote))
-	protected.HandleFunc("GET /credit-notes/{id}", h.ViewCreditNote)
-	protected.HandleFunc("GET /credit-notes/{id}/edit", h.EditCreditNote)
-	protected.HandleFunc("POST /credit-notes/{id}", auth.CapabilityOnly("invoices.manage", h.UpdateCreditNote))
-	protected.HandleFunc("DELETE /credit-notes/{id}", auth.CapabilityOnly("invoices.manage", h.DeleteCreditNote))
-	protected.HandleFunc("POST /credit-notes/{id}/issue", auth.CapabilityOnly("invoices.manage", h.IssueCreditNote))
-	protected.HandleFunc("POST /credit-notes/{id}/void", auth.CapabilityOnly("invoices.manage", h.VoidCreditNote))
-	protected.HandleFunc("GET /htmx/credit-note-line", h.CreditNoteLinePartial)
-	protected.HandleFunc("GET /bills", h.ListBills)
-	protected.HandleFunc("GET /bills/new", h.NewBill)
-	protected.HandleFunc("POST /bills", auth.CapabilityOnly("bills.manage", h.CreateBill))
-	protected.HandleFunc("GET /bills/{id}", h.ViewBill)
-	protected.HandleFunc("GET /bills/{id}/edit", h.EditBill)
-	protected.HandleFunc("POST /bills/{id}", auth.CapabilityOnly("bills.manage", h.UpdateBill))
-	protected.HandleFunc("DELETE /bills/{id}", auth.CapabilityOnly("bills.manage", h.DeleteBill))
-	protected.HandleFunc("POST /bills/{id}/receive", auth.CapabilityOnly("bills.manage", h.ReceiveBill))
-	protected.HandleFunc("POST /bills/{id}/payment", auth.CapabilityOnly("bills.manage", h.BillPayment))
-	protected.HandleFunc("GET /htmx/bill-line", h.BillLinePartial)
+	h.RegisterReceivablesPayablesRoutes(protected)
 	protected.HandleFunc("GET /reports/trial-balance", h.TrialBalance)
 	protected.HandleFunc("GET /reports/profit-loss", h.ProfitLoss)
 	protected.HandleFunc("GET /reports/balance-sheet", h.BalanceSheet)
@@ -1115,6 +1096,47 @@ func TestListBills_Handler(t *testing.T) {
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+}
+
+func TestReceivablesPayablesListsClampHighPage(t *testing.T) {
+	t.Parallel()
+	ts, db := testServer(t)
+	cookies := loginAsAdmin(t, ts)
+	db.Exec("INSERT INTO contacts (name,contact_type,is_active) VALUES ('Page Supplier','supplier',1),('Page Customer','customer',1)")
+	var supplier, customer, expense, revenue int
+	db.QueryRow("SELECT id FROM contacts WHERE name='Page Supplier'").Scan(&supplier)
+	db.QueryRow("SELECT id FROM contacts WHERE name='Page Customer'").Scan(&customer)
+	db.QueryRow("SELECT id FROM accounts WHERE code='5-1001'").Scan(&expense)
+	db.QueryRow("SELECT id FROM accounts WHERE code='4-1001'").Scan(&revenue)
+	billID, err := testutil.CreateBill(db, &model.Bill{ContactID: supplier, BillDate: "2026-08-01", DueDate: "2026-08-31", CreatedBy: 1}, []model.BillLine{{Description: "Page bill", Quantity: 100, UnitPrice: 100_000, AccountID: expense}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := testutil.GetBill(db, billID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cnID, err := testutil.CreateCreditNote(db, &model.CreditNote{ContactID: customer, CNDate: "2026-08-01", Reason: model.CreditNoteReasonOther, CreatedBy: 1}, []model.CreditNoteLine{{Description: "Page credit", Quantity: 100, UnitPrice: 100_000, AccountID: revenue}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cnNumber string
+	db.QueryRow("SELECT cn_number FROM credit_notes WHERE id=?", cnID).Scan(&cnNumber)
+	for _, tc := range []struct{ path, want string }{{"/bills?page=999", b.BillNumber}, {"/credit-notes?page=999", cnNumber}} {
+		req, _ := requestWithCookies(db, "GET", ts.URL+tc.path, cookies, "")
+		resp, err := ts.Client().Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resp.StatusCode != http.StatusOK || !strings.Contains(string(body), tc.want) {
+			t.Fatalf("%s status=%d missing %q", tc.path, resp.StatusCode, tc.want)
+		}
 	}
 }
 

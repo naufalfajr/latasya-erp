@@ -103,7 +103,7 @@
                         </thead>
                         <tbody id="cn-lines-body">
                             {{range $i, $line := $data.Lines}}
-                            {{template "credit-note-line-row" (dict "Index" $i "Line" $line "Accounts" $data.RevenueAccounts)}}
+                            {{template "credit-note-line-row" (dict "Index" $i "Line" $line "Accounts" $data.RevenueAccounts "Errors" $data.Errors)}}
                             {{end}}
                         </tbody>
                     </table>
@@ -157,28 +157,36 @@ function removeCnLine(btn) { btn.closest('tr').remove(); }
 {{end}}
 
 {{define "credit-note-line-row"}}
+{{$descError := index .Errors (printf "line_%d_desc" .Index)}}
+{{$accountError := index .Errors (printf "line_%d_account" .Index)}}
+{{$quantityError := index .Errors (printf "line_%d_quantity" .Index)}}
+{{$priceError := index .Errors (printf "line_%d_price" .Index)}}
 <tr>
     <td>
         <input type="text" name="line_description" placeholder="Description"
-            class="input input-sm w-full" value="{{.Line.Description}}">
+            class="input input-sm w-full {{if $descError}}input-error{{end}}" value="{{.Line.Description}}">
+        {{if $descError}}<span class="text-xs text-error">{{$descError}}</span>{{end}}
     </td>
     <td>
-        <select name="line_account_id" class="select select-sm w-full">
+        <select name="line_account_id" class="select select-sm w-full {{if $accountError}}select-error{{end}}">
             <option value="">Account</option>
             {{$selAcct := .Line.AccountID}}
             {{range .Accounts}}
             <option value="{{.ID}}" {{if eq .ID $selAcct}}selected{{end}}>{{.Code}} - {{.Name}}</option>
             {{end}}
         </select>
+        {{if $accountError}}<span class="text-xs text-error">{{$accountError}}</span>{{end}}
     </td>
     <td>
-        <input type="number" name="line_quantity" class="input input-sm w-full"
+        <input type="number" name="line_quantity" class="input input-sm w-full {{if $quantityError}}input-error{{end}}"
             value="{{if gt .Line.Quantity 0}}{{formatQty .Line.Quantity}}{{else}}1{{end}}"
             step="0.01" min="0">
+        {{if $quantityError}}<span class="text-xs text-error">{{$quantityError}}</span>{{end}}
     </td>
     <td>
-        <input type="number" name="line_unit_price" placeholder="0" class="input input-sm w-full font-mono"
+        <input type="number" name="line_unit_price" placeholder="0" class="input input-sm w-full font-mono {{if $priceError}}input-error{{end}}"
             value="{{if gt .Line.UnitPrice 0}}{{.Line.UnitPrice}}{{end}}" min="0">
+        {{if $priceError}}<span class="text-xs text-error">{{$priceError}}</span>{{end}}
     </td>
     <td class="font-mono text-sm line-amount">{{if gt .Line.Amount 0}}{{.Line.Amount}}{{else}}0{{end}}</td>
     <td>

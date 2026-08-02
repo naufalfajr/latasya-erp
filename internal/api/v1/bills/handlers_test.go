@@ -13,6 +13,7 @@ import (
 
 	v1 "github.com/naufal/latasya-erp/internal/api/v1"
 	v1bills "github.com/naufal/latasya-erp/internal/api/v1/bills"
+	"github.com/naufal/latasya-erp/internal/bill"
 	"github.com/naufal/latasya-erp/internal/model"
 	"github.com/naufal/latasya-erp/internal/testutil"
 )
@@ -24,14 +25,8 @@ func setupServer(t *testing.T) (*httptest.Server, *sql.DB) {
 	idem := v1.Idempotency(db)
 
 	apiMux := http.NewServeMux()
-	h := &v1bills.Handler{DB: db}
-	apiMux.HandleFunc("GET /api/v1/bills", h.List)
-	apiMux.HandleFunc("GET /api/v1/bills/{id}", h.Get)
-	apiMux.Handle("POST /api/v1/bills", idem(http.HandlerFunc(h.Create)))
-	apiMux.Handle("PUT /api/v1/bills/{id}", idem(http.HandlerFunc(h.Update)))
-	apiMux.HandleFunc("DELETE /api/v1/bills/{id}", h.Delete)
-	apiMux.Handle("POST /api/v1/bills/{id}/receive", idem(http.HandlerFunc(h.Receive)))
-	apiMux.Handle("POST /api/v1/bills/{id}/payment", idem(http.HandlerFunc(h.Payment)))
+	h := &v1bills.Handler{Bills: bill.New(db)}
+	h.RegisterRoutes(apiMux, idem)
 
 	mux := http.NewServeMux()
 	mux.Handle("/api/v1/", v1.BearerOrCookie(db)(apiMux))
