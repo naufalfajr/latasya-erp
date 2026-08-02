@@ -15,6 +15,7 @@ import (
 
 	"golang.org/x/oauth2"
 
+	"github.com/naufal/latasya-erp/internal/access"
 	"github.com/naufal/latasya-erp/internal/auth"
 	"github.com/naufal/latasya-erp/internal/googlecalendar"
 	"github.com/naufal/latasya-erp/internal/model"
@@ -50,7 +51,7 @@ func testServerWithSchoolCalendar(t *testing.T, config googlecalendar.Config, mo
 	protected.HandleFunc("GET /password/change", h.PasswordChangePage)
 	protected.HandleFunc("POST /password/change", h.PasswordChange)
 
-	mux.Handle("/", auth.RequireAuth(db, auth.CSRFProtect(h.EnforcePasswordChange(protected))))
+	mux.Handle("/", auth.RequireAuth(db, access.New(db, nil), auth.CSRFProtect(h.EnforcePasswordChange(protected))))
 
 	hash, err := auth.HashPassword(adminTestPassword)
 	if err != nil {
@@ -104,7 +105,7 @@ func adminUserID(t *testing.T, db *sql.DB) int {
 func seedOAuthState(t *testing.T, db *sql.DB, userID int, state, verifier string) {
 	t.Helper()
 	expiresAt := time.Now().UTC().Add(10 * time.Minute).Format(time.RFC3339)
-	if err := model.CreateGoogleOAuthState(db, state, userID, verifier, expiresAt); err != nil {
+	if err := testutil.CreateGoogleOAuthState(db, state, userID, verifier, expiresAt); err != nil {
 		t.Fatalf("seed oauth state: %v", err)
 	}
 }
@@ -186,7 +187,7 @@ func TestCreateSchoolClosure_PersistsAndRedirects(t *testing.T) {
 		t.Fatalf("Location = %q", got)
 	}
 
-	closures, err := model.ListSchoolClosures(db, "2026-06")
+	closures, err := testutil.ListSchoolClosures(db, "2026-06")
 	if err != nil {
 		t.Fatalf("list closures: %v", err)
 	}
@@ -200,7 +201,7 @@ func TestSaveGoogleCalendarID_PreservesRefreshToken(t *testing.T) {
 	ts, db := testServerWithSchoolCalendar(t, googlecalendar.Config{})
 	cookies := loginAsAdmin(t, ts)
 
-	if err := model.SaveGoogleCalendarConnection(db, &model.GoogleCalendarConnection{
+	if err := testutil.SaveGoogleCalendarConnection(db, &model.GoogleCalendarConnection{
 		CalendarID:     "old-calendar",
 		RefreshToken:   "refresh-token",
 		IsActive:       true,
@@ -220,7 +221,7 @@ func TestSaveGoogleCalendarID_PreservesRefreshToken(t *testing.T) {
 	if resp.StatusCode != http.StatusSeeOther {
 		t.Fatalf("expected 303, got %d", resp.StatusCode)
 	}
-	conn, err := model.GetGoogleCalendarConnection(db)
+	conn, err := testutil.GetGoogleCalendarConnection(db)
 	if err != nil {
 		t.Fatalf("get connection: %v", err)
 	}
@@ -322,7 +323,7 @@ func TestCreateSchoolClosure_ValidationErrorsRerenderForm(t *testing.T) {
 		}
 	}
 
-	closures, err := model.ListSchoolClosures(db, "2026-06")
+	closures, err := testutil.ListSchoolClosures(db, "2026-06")
 	if err != nil {
 		t.Fatalf("list closures: %v", err)
 	}
@@ -393,7 +394,7 @@ func TestDeleteSchoolClosure_RemovesRowAndRedirects(t *testing.T) {
 	}
 	createResp.Body.Close()
 
-	closures, err := model.ListSchoolClosures(db, "2026-06")
+	closures, err := testutil.ListSchoolClosures(db, "2026-06")
 	if err != nil || len(closures) != 1 {
 		t.Fatalf("expected one seeded closure, got %+v err=%v", closures, err)
 	}
@@ -416,7 +417,7 @@ func TestDeleteSchoolClosure_RemovesRowAndRedirects(t *testing.T) {
 		t.Fatalf("flash = %q", flash)
 	}
 
-	remaining, err := model.ListSchoolClosures(db, "2026-06")
+	remaining, err := testutil.ListSchoolClosures(db, "2026-06")
 	if err != nil {
 		t.Fatalf("list after delete: %v", err)
 	}
@@ -544,7 +545,7 @@ func TestConnectGoogleCalendar_EnabledRedirectsWithPersistedState(t *testing.T) 
 	}
 
 	adminID := adminUserID(t, db)
-	oauthState, err := model.ConsumeGoogleOAuthState(db, state, adminID)
+	oauthState, err := testutil.ConsumeGoogleOAuthState(db, state, adminID)
 	if err != nil {
 		t.Fatalf("expected persisted oauth state, got err: %v", err)
 	}
@@ -754,7 +755,7 @@ func TestGoogleCalendarCallback_SuccessSavesConnection(t *testing.T) {
 		t.Fatalf("flash = %q", flash)
 	}
 
-	conn, err := model.GetGoogleCalendarConnection(db)
+	conn, err := testutil.GetGoogleCalendarConnection(db)
 	if err != nil {
 		t.Fatalf("get connection: %v", err)
 	}
@@ -762,7 +763,7 @@ func TestGoogleCalendarCallback_SuccessSavesConnection(t *testing.T) {
 		t.Fatalf("connection not saved as expected: %+v", conn)
 	}
 
-	if _, err := model.ConsumeGoogleOAuthState(db, "state-success", adminID); err == nil {
+	if _, err := testutil.ConsumeGoogleOAuthState(db, "state-success", adminID); err == nil {
 		t.Fatal("expected oauth state to be single-use (already consumed)")
 	}
 }
@@ -775,7 +776,7 @@ func TestGoogleCalendarCallback_MissingRefreshTokenFallsBackToExisting(t *testin
 	ts, db := testServerWithSchoolCalendar(t, enabledConfig(), mockClient)
 	cookies := loginAsAdmin(t, ts)
 
-	if err := model.SaveGoogleCalendarConnection(db, &model.GoogleCalendarConnection{
+	if err := testutil.SaveGoogleCalendarConnection(db, &model.GoogleCalendarConnection{
 		CalendarID:   "existing-cal",
 		RefreshToken: "existing-refresh",
 		IsActive:     true,
@@ -796,7 +797,7 @@ func TestGoogleCalendarCallback_MissingRefreshTokenFallsBackToExisting(t *testin
 	if flash := flashCookieValue(resp); flash != "Google Calendar connected" {
 		t.Fatalf("flash = %q", flash)
 	}
-	conn, err := model.GetGoogleCalendarConnection(db)
+	conn, err := testutil.GetGoogleCalendarConnection(db)
 	if err != nil {
 		t.Fatalf("get connection: %v", err)
 	}
@@ -825,7 +826,7 @@ func TestGoogleCalendarCallback_NoRefreshTokenSetsFlash(t *testing.T) {
 	if flash := flashCookieValue(resp); flash != "Google did not return a refresh token. Please reconnect and approve offline access." {
 		t.Fatalf("flash = %q", flash)
 	}
-	conn, err := model.GetGoogleCalendarConnection(db)
+	conn, err := testutil.GetGoogleCalendarConnection(db)
 	if err != nil {
 		t.Fatalf("get connection: %v", err)
 	}
@@ -896,7 +897,7 @@ func TestSyncGoogleCalendar_SuccessStoresClosureAndSetsFlash(t *testing.T) {
 	ts, db := testServerWithSchoolCalendar(t, enabledConfig(), mockClient)
 	cookies := loginAsAdmin(t, ts)
 
-	if err := model.SaveGoogleCalendarConnection(db, &model.GoogleCalendarConnection{
+	if err := testutil.SaveGoogleCalendarConnection(db, &model.GoogleCalendarConnection{
 		CalendarID:   "school@example.com",
 		RefreshToken: "existing-refresh",
 		IsActive:     true,
@@ -918,7 +919,7 @@ func TestSyncGoogleCalendar_SuccessStoresClosureAndSetsFlash(t *testing.T) {
 		t.Fatalf("flash = %q", flash)
 	}
 
-	conn, err := model.GetGoogleCalendarConnection(db)
+	conn, err := testutil.GetGoogleCalendarConnection(db)
 	if err != nil {
 		t.Fatalf("get connection: %v", err)
 	}
@@ -934,7 +935,7 @@ func TestDisconnectGoogleCalendar_RemovesConnectionAndRedirects(t *testing.T) {
 	ts, db := testServerWithSchoolCalendar(t, googlecalendar.Config{})
 	cookies := loginAsAdmin(t, ts)
 
-	if err := model.SaveGoogleCalendarConnection(db, &model.GoogleCalendarConnection{
+	if err := testutil.SaveGoogleCalendarConnection(db, &model.GoogleCalendarConnection{
 		CalendarID:   "school@example.com",
 		RefreshToken: "refresh-token",
 		IsActive:     true,
@@ -956,7 +957,7 @@ func TestDisconnectGoogleCalendar_RemovesConnectionAndRedirects(t *testing.T) {
 		t.Fatalf("flash = %q", flash)
 	}
 
-	conn, err := model.GetGoogleCalendarConnection(db)
+	conn, err := testutil.GetGoogleCalendarConnection(db)
 	if err != nil {
 		t.Fatalf("get connection: %v", err)
 	}

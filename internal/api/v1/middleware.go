@@ -2,13 +2,13 @@ package v1
 
 import (
 	"context"
-	"crypto/sha256"
 	"database/sql"
-	"encoding/hex"
 	"log/slog"
 	"net/http"
 	"strings"
 
+	"github.com/naufal/latasya-erp/internal/access"
+	"github.com/naufal/latasya-erp/internal/apitoken"
 	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/auth"
 	"github.com/naufal/latasya-erp/internal/model"
@@ -31,6 +31,8 @@ const (
 // failure). Bearer path returns JSON 401 envelopes. Requests with neither
 // credential type return JSON 401.
 func BearerOrCookie(db *sql.DB) func(http.Handler) http.Handler {
+	accessModule := access.New(db, nil)
+	tokenModule := apitoken.New(db)
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			authHeader := r.Header.Get("Authorization")
@@ -47,23 +49,20 @@ func BearerOrCookie(db *sql.DB) func(http.Handler) http.Handler {
 					WriteError(w, r, http.StatusUnauthorized, CodeInvalidToken, "invalid or expired token", nil)
 					return
 				}
-				h := sha256.Sum256([]byte(plaintext))
-				hash := hex.EncodeToString(h[:])
-
-				token, err := model.GetAPITokenByHash(db, hash)
+				token, err := tokenModule.Authenticate(r.Context(), plaintext)
 				if err != nil {
 					WriteError(w, r, http.StatusUnauthorized, CodeInvalidToken, "invalid or expired token", nil)
 					return
 				}
 
-				user, err := model.GetUserByID(db, token.UserID)
+				user, err := accessModule.LookupUserByIDForAuth(r.Context(), token.UserID)
 				if err != nil || !user.IsActive {
 					WriteError(w, r, http.StatusUnauthorized, CodeInvalidToken, "token user not found or inactive", nil)
 					return
 				}
 
 				if user.Role != model.RoleAdmin {
-					if role, err := model.GetRoleByName(db, user.Role); err == nil {
+					if role, err := accessModule.LookupRoleForAuth(r.Context(), user.Role); err == nil {
 						user.Capabilities = role.Capabilities
 					}
 				}
@@ -81,7 +80,7 @@ func BearerOrCookie(db *sql.DB) func(http.Handler) http.Handler {
 			}
 
 			if hasCookie {
-				auth.RequireAuth(db, next).ServeHTTP(w, r)
+				auth.RequireAuth(db, accessModule, next).ServeHTTP(w, r)
 				return
 			}
 

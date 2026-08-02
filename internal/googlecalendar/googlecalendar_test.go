@@ -16,6 +16,7 @@ import (
 	latasyaerp "github.com/naufal/latasya-erp"
 	"github.com/naufal/latasya-erp/internal/database"
 	"github.com/naufal/latasya-erp/internal/model"
+	"github.com/naufal/latasya-erp/internal/schoolcalendar"
 )
 
 // setupTestDB creates an in-memory SQLite database with migrations applied.
@@ -31,6 +32,28 @@ func setupTestDB(t *testing.T) *sql.DB {
 	}
 	t.Cleanup(func() { db.Close() })
 	return db
+}
+
+func saveGoogleCalendarConnection(db *sql.DB, connection *model.GoogleCalendarConnection) error {
+	module := schoolcalendar.New(db)
+	actor := schoolcalendar.Actor{UserID: 1, IsAdmin: true}
+	ctx := context.Background()
+	if _, err := module.SaveCalendarID(ctx, actor, connection.CalendarID); err != nil {
+		return err
+	}
+	if connection.RefreshToken != "" && connection.IsActive {
+		if _, err := module.Connect(ctx, actor, connection.RefreshToken); err != nil {
+			return err
+		}
+	}
+	if connection.LastSyncStatus != "" || connection.LastSyncError != "" {
+		return module.UpdateSyncStatus(ctx, connection.LastSyncStatus, connection.LastSyncError)
+	}
+	return nil
+}
+
+func getGoogleCalendarConnection(db *sql.DB) (*model.GoogleCalendarConnection, error) {
+	return schoolcalendar.New(db).Connection(context.Background())
 }
 
 func TestConvertEventAllDayExclusiveEnd(t *testing.T) {
@@ -286,7 +309,7 @@ func TestSyncNotConnected(t *testing.T) {
 	// UPDATE ... WHERE id = 1) has a row to update; without one the update
 	// is a no-op and LastSyncStatus would stay empty regardless of Sync's
 	// error handling.
-	if err := model.SaveGoogleCalendarConnection(db, &model.GoogleCalendarConnection{
+	if err := saveGoogleCalendarConnection(db, &model.GoogleCalendarConnection{
 		CalendarID:   "cal-primary",
 		RefreshToken: "refresh-tok",
 		IsActive:     true,
@@ -296,12 +319,12 @@ func TestSyncNotConnected(t *testing.T) {
 
 	// Config{} is not Enabled(), so Sync should fail before making any
 	// network calls or touching fetchEvents.
-	_, err := Sync(context.Background(), db, Config{}, "")
+	_, err := Sync(context.Background(), schoolcalendar.New(db), Config{}, "")
 	if err == nil {
 		t.Fatal("expected sync error when google calendar is not connected")
 	}
 
-	conn, err := model.GetGoogleCalendarConnection(db)
+	conn, err := getGoogleCalendarConnection(db)
 	if err != nil {
 		t.Fatalf("get connection: %v", err)
 	}
@@ -312,7 +335,7 @@ func TestSyncNotConnected(t *testing.T) {
 
 func TestSyncSuccess(t *testing.T) {
 	db := setupTestDB(t)
-	if err := model.SaveGoogleCalendarConnection(db, &model.GoogleCalendarConnection{
+	if err := saveGoogleCalendarConnection(db, &model.GoogleCalendarConnection{
 		CalendarID:   "cal-primary",
 		RefreshToken: "refresh-tok",
 		IsActive:     true,
@@ -351,7 +374,7 @@ func TestSyncSuccess(t *testing.T) {
 	t.Cleanup(func() { eventsBaseURL = oldBaseURL })
 
 	cfg := Config{ClientID: "cid", ClientSecret: "csecret", RedirectURL: "https://app.example.com/cb"}
-	result, err := Sync(context.Background(), db, cfg, "")
+	result, err := Sync(context.Background(), schoolcalendar.New(db), cfg, "")
 	if err != nil {
 		t.Fatalf("sync: %v", err)
 	}
@@ -362,7 +385,7 @@ func TestSyncSuccess(t *testing.T) {
 		t.Fatalf("stored: got %d want 1 (cancelled event filtered)", result.Stored)
 	}
 
-	conn, err := model.GetGoogleCalendarConnection(db)
+	conn, err := getGoogleCalendarConnection(db)
 	if err != nil {
 		t.Fatalf("get connection: %v", err)
 	}

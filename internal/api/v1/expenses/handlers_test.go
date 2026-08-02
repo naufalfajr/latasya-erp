@@ -41,7 +41,7 @@ func adminToken(t *testing.T, db *sql.DB) string {
 	if err := db.QueryRow("SELECT id FROM users WHERE username = 'admin'").Scan(&adminID); err != nil {
 		t.Fatalf("get admin: %v", err)
 	}
-	_, plaintext, err := model.CreateAPIToken(db, adminID,
+	_, plaintext, err := testutil.CreateAPIToken(db, adminID,
 		fmt.Sprintf("test-expenses-%d", time.Now().UnixNano()),
 		[]string{model.CapExpensesManage}, nil)
 	if err != nil {
@@ -53,7 +53,7 @@ func adminToken(t *testing.T, db *sql.DB) string {
 func noScopeToken(t *testing.T, db *sql.DB) string {
 	t.Helper()
 	userID := testutil.CreateTestUser(t, db, fmt.Sprintf("noscope-%d", time.Now().UnixNano()), "pw", model.RoleViewer)
-	_, plaintext, err := model.CreateAPIToken(db, userID, "noscope", []string{}, nil)
+	_, plaintext, err := testutil.CreateAPIToken(db, userID, "noscope", []string{}, nil)
 	if err != nil {
 		t.Fatalf("create no-scope token: %v", err)
 	}

@@ -8,7 +8,10 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/naufal/latasya-erp/internal/access"
 	"github.com/naufal/latasya-erp/internal/account"
+	"github.com/naufal/latasya-erp/internal/apitoken"
+	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/auth"
 	"github.com/naufal/latasya-erp/internal/bill"
 	"github.com/naufal/latasya-erp/internal/company"
@@ -18,6 +21,7 @@ import (
 	"github.com/naufal/latasya-erp/internal/invoice"
 	"github.com/naufal/latasya-erp/internal/journal"
 	"github.com/naufal/latasya-erp/internal/model"
+	"github.com/naufal/latasya-erp/internal/schoolcalendar"
 )
 
 type Handler struct {
@@ -38,6 +42,10 @@ type Handler struct {
 	Bills                *bill.Module
 	CreditNotes          *creditnote.Module
 	Accounts             *account.Module
+	Access               *access.Module
+	APITokens            *apitoken.Module
+	Audit                *audit.Module
+	SchoolCalendar       *schoolcalendar.Module
 	Contacts             *contact.Module
 	Company              *company.Module
 

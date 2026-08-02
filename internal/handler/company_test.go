@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/naufal/latasya-erp/internal/access"
 	"github.com/naufal/latasya-erp/internal/auth"
 	"github.com/naufal/latasya-erp/internal/model"
 	"github.com/naufal/latasya-erp/internal/testutil"
@@ -31,7 +32,7 @@ func testServerWithCompany(t *testing.T) (*httptest.Server, *sql.DB) {
 	protected.HandleFunc("GET /password/change", h.PasswordChangePage)
 	protected.HandleFunc("POST /password/change", h.PasswordChange)
 
-	mux.Handle("/", auth.RequireAuth(db, auth.CSRFProtect(h.EnforcePasswordChange(protected))))
+	mux.Handle("/", auth.RequireAuth(db, access.New(db, nil), auth.CSRFProtect(h.EnforcePasswordChange(protected))))
 
 	hash, err := auth.HashPassword(adminTestPassword)
 	if err != nil {

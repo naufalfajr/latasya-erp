@@ -12,6 +12,7 @@ import (
 	"time"
 
 	latasyaerp "github.com/naufal/latasya-erp"
+	"github.com/naufal/latasya-erp/internal/access"
 	"github.com/naufal/latasya-erp/internal/account"
 	v1 "github.com/naufal/latasya-erp/internal/api/v1"
 	v1accounts "github.com/naufal/latasya-erp/internal/api/v1/accounts"
@@ -30,6 +31,7 @@ import (
 	v1roles "github.com/naufal/latasya-erp/internal/api/v1/roles"
 	v1schoolcalendar "github.com/naufal/latasya-erp/internal/api/v1/school_calendar"
 	v1users "github.com/naufal/latasya-erp/internal/api/v1/users"
+	"github.com/naufal/latasya-erp/internal/apitoken"
 	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/auth"
 	"github.com/naufal/latasya-erp/internal/bill"
@@ -42,6 +44,7 @@ import (
 	"github.com/naufal/latasya-erp/internal/invoice"
 	"github.com/naufal/latasya-erp/internal/journal"
 	"github.com/naufal/latasya-erp/internal/model"
+	"github.com/naufal/latasya-erp/internal/schoolcalendar"
 	"github.com/naufal/latasya-erp/internal/tmpl"
 )
 
@@ -82,21 +85,29 @@ func main() {
 	billModule := bill.New(db)
 	creditNoteModule := creditnote.New(db)
 	accountModule := account.New(db)
+	accessModule := access.New(db, auth.HashPassword)
+	apiTokenModule := apitoken.New(db)
+	auditModule := audit.New(db)
+	schoolCalendarModule := schoolcalendar.New(db)
 	contactsModule := contactModule.New(db)
 	companyProfileModule := companyModule.New(db)
 	h := &handler.Handler{
-		DB:          db,
-		TemplateFS:  latasyaerp.TemplateFS,
-		FuncMap:     tmpl.FuncMap(),
-		DevMode:     devMode,
-		BasePath:    "/dashboard",
-		Invoices:    invoiceModule,
-		Journals:    journalModule,
-		Bills:       billModule,
-		CreditNotes: creditNoteModule,
-		Accounts:    accountModule,
-		Contacts:    contactsModule,
-		Company:     companyProfileModule,
+		DB:             db,
+		TemplateFS:     latasyaerp.TemplateFS,
+		FuncMap:        tmpl.FuncMap(),
+		DevMode:        devMode,
+		BasePath:       "/dashboard",
+		Invoices:       invoiceModule,
+		Journals:       journalModule,
+		Bills:          billModule,
+		CreditNotes:    creditNoteModule,
+		Accounts:       accountModule,
+		Access:         accessModule,
+		APITokens:      apiTokenModule,
+		Audit:          auditModule,
+		SchoolCalendar: schoolCalendarModule,
+		Contacts:       contactsModule,
+		Company:        companyProfileModule,
 		GoogleCalendarConfig: googlecalendar.Config{
 			ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
 			ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
@@ -162,10 +173,8 @@ func main() {
 	invoicesAPI := &v1invoices.Handler{Invoices: invoiceModule}
 	invoicesAPI.RegisterRoutes(apiMux, idem)
 
-	apiTokensAPI := &v1apitokens.Handler{DB: db}
-	apiMux.HandleFunc("GET /api/v1/api-tokens", apiTokensAPI.List)
-	apiMux.Handle("POST /api/v1/api-tokens", idem(http.HandlerFunc(apiTokensAPI.Create)))
-	apiMux.HandleFunc("DELETE /api/v1/api-tokens/{id}", apiTokensAPI.Revoke)
+	apiTokensAPI := &v1apitokens.Handler{Tokens: apiTokenModule}
+	apiTokensAPI.RegisterRoutes(apiMux, idem)
 
 	bills := &v1bills.Handler{Bills: billModule}
 	bills.RegisterRoutes(apiMux, idem)
@@ -180,33 +189,20 @@ func main() {
 	apiMux.HandleFunc("GET /api/v1/reports/cash-flow", reportsAPI.CashFlow)
 	apiMux.HandleFunc("GET /api/v1/reports/general-ledger", reportsAPI.GeneralLedger)
 
-	usersAPI := &v1users.Handler{DB: db}
-	apiMux.HandleFunc("GET /api/v1/users", usersAPI.List)
-	apiMux.HandleFunc("GET /api/v1/users/{id}", usersAPI.Get)
-	apiMux.HandleFunc("POST /api/v1/users", usersAPI.Create)
-	apiMux.HandleFunc("PUT /api/v1/users/{id}", usersAPI.Update)
-	apiMux.HandleFunc("DELETE /api/v1/users/{id}", usersAPI.Delete)
+	usersAPI := &v1users.Handler{Access: accessModule}
+	usersAPI.RegisterRoutes(apiMux)
 
-	rolesAPI := &v1roles.Handler{DB: db}
-	apiMux.HandleFunc("GET /api/v1/roles", rolesAPI.List)
-	apiMux.HandleFunc("GET /api/v1/roles/capabilities", rolesAPI.Capabilities)
-	apiMux.HandleFunc("GET /api/v1/roles/{name}", rolesAPI.Get)
-	apiMux.HandleFunc("POST /api/v1/roles", rolesAPI.Create)
-	apiMux.HandleFunc("PUT /api/v1/roles/{name}", rolesAPI.Update)
-	apiMux.HandleFunc("DELETE /api/v1/roles/{name}", rolesAPI.Delete)
+	rolesAPI := &v1roles.Handler{Access: accessModule}
+	rolesAPI.RegisterRoutes(apiMux)
 
-	auditAPI := &v1audit.Handler{DB: db}
-	apiMux.HandleFunc("GET /api/v1/audit", auditAPI.List)
+	auditAPI := &v1audit.Handler{Audit: auditModule}
+	auditAPI.RegisterRoutes(apiMux)
 
 	dashboardAPI := &v1dashboard.Handler{DB: db}
 	apiMux.HandleFunc("GET /api/v1/dashboard", dashboardAPI.Get)
 
-	schoolCalendarAPI := &v1schoolcalendar.Handler{DB: db, GoogleCalendarConfig: h.GoogleCalendarConfig}
-	apiMux.HandleFunc("GET /api/v1/school-calendar/closures", schoolCalendarAPI.ListClosures)
-	apiMux.HandleFunc("POST /api/v1/school-calendar/closures", schoolCalendarAPI.CreateClosure)
-	apiMux.HandleFunc("DELETE /api/v1/school-calendar/closures/{id}", schoolCalendarAPI.DeleteClosure)
-	apiMux.HandleFunc("GET /api/v1/school-calendar/effective-days", schoolCalendarAPI.EffectiveDays)
-	apiMux.HandleFunc("POST /api/v1/integrations/google-calendar/sync", schoolCalendarAPI.SyncGoogleCalendar)
+	schoolCalendarAPI := &v1schoolcalendar.Handler{Calendar: schoolCalendarModule, GoogleCalendarConfig: h.GoogleCalendarConfig}
+	schoolCalendarAPI.RegisterRoutes(apiMux)
 
 	mux.Handle("/api/v1/", v1.BearerOrCookie(db)(apiMux))
 	mux.Handle("POST /api/v1/auth/login", v1.LoginRateLimiter()(http.HandlerFunc(authAPI.Login)))
@@ -303,7 +299,7 @@ func main() {
 	// Audit log (admin-only via audit.view capability)
 	protected.HandleFunc("GET /audit", auth.CapabilityOnly(model.CapAuditView, h.AuditList))
 
-	mux.Handle(h.BasePath+"/", http.StripPrefix(h.BasePath, auth.RequireAuth(db, auth.CSRFProtect(h.EnforcePasswordChange(protected)))))
+	mux.Handle(h.BasePath+"/", http.StripPrefix(h.BasePath, auth.RequireAuth(db, accessModule, auth.CSRFProtect(h.EnforcePasswordChange(protected)))))
 
 	// audit.RequestContext wraps everything so pre-auth events (login attempts)
 	// still get a request_id and client IP attached.

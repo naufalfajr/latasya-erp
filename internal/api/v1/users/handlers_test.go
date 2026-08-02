@@ -8,6 +8,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/naufal/latasya-erp/internal/access"
+	"github.com/naufal/latasya-erp/internal/auth"
 	"time"
 
 	v1 "github.com/naufal/latasya-erp/internal/api/v1"
@@ -18,7 +21,7 @@ import (
 
 func newTestServer(t *testing.T, db *sql.DB) *httptest.Server {
 	t.Helper()
-	h := &users.Handler{DB: db}
+	h := &users.Handler{Access: access.New(db, auth.HashPassword)}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/users", h.List)
 	mux.HandleFunc("GET /api/v1/users/{id}", h.Get)
@@ -36,7 +39,7 @@ func adminToken(t *testing.T, db *sql.DB) string {
 	if err := db.QueryRow("SELECT id FROM users WHERE username = 'admin'").Scan(&adminID); err != nil {
 		t.Fatalf("get admin: %v", err)
 	}
-	_, tok, err := model.CreateAPIToken(db, adminID,
+	_, tok, err := testutil.CreateAPIToken(db, adminID,
 		fmt.Sprintf("test-users-%d", time.Now().UnixNano()),
 		[]string{model.CapUsersManage}, nil)
 	if err != nil {
@@ -157,7 +160,7 @@ func TestGetUser(t *testing.T) {
 
 	t.Run("forbidden returns 403", func(t *testing.T) {
 		viewerID := testutil.CreateTestUser(t, db, "viewer-get-user", "pw", "viewer")
-		_, noCapTok, err := model.CreateAPIToken(db, viewerID, "no-cap-get-user", []string{}, nil)
+		_, noCapTok, err := testutil.CreateAPIToken(db, viewerID, "no-cap-get-user", []string{}, nil)
 		if err != nil {
 			t.Fatalf("create token: %v", err)
 		}
@@ -234,7 +237,7 @@ func TestCreateUser(t *testing.T) {
 
 	t.Run("forbidden returns 403", func(t *testing.T) {
 		viewerID := testutil.CreateTestUser(t, db, "viewer-create-user", "pw", "viewer")
-		_, noCapTok, err := model.CreateAPIToken(db, viewerID, "no-cap-create-user", []string{}, nil)
+		_, noCapTok, err := testutil.CreateAPIToken(db, viewerID, "no-cap-create-user", []string{}, nil)
 		if err != nil {
 			t.Fatalf("create token: %v", err)
 		}
@@ -329,7 +332,7 @@ func TestUpdateUser(t *testing.T) {
 	t.Run("forbidden returns 403", func(t *testing.T) {
 		targetID := testutil.CreateTestUser(t, db, "update-target-forbidden", "pw", "viewer")
 		viewerID := testutil.CreateTestUser(t, db, "viewer-update-user", "pw", "viewer")
-		_, noCapTok, err := model.CreateAPIToken(db, viewerID, "no-cap-update-user", []string{}, nil)
+		_, noCapTok, err := testutil.CreateAPIToken(db, viewerID, "no-cap-update-user", []string{}, nil)
 		if err != nil {
 			t.Fatalf("create token: %v", err)
 		}
@@ -426,7 +429,7 @@ func TestUpdateUser(t *testing.T) {
 		if resp.StatusCode != http.StatusOK {
 			t.Fatalf("expected 200, got %d", resp.StatusCode)
 		}
-		u, err := model.GetUserByID(db, targetID)
+		u, err := testutil.GetUserByID(db, targetID)
 		if err != nil {
 			t.Fatalf("get user: %v", err)
 		}
@@ -440,7 +443,7 @@ func TestUpdateUser(t *testing.T) {
 		// for the effective-capability intersection to allow the request;
 		// only the admin role bypasses intersection entirely.
 		selfID := testutil.CreateTestUser(t, db, "update-self-pwd", "pw", "admin")
-		_, selfTok, err := model.CreateAPIToken(db, selfID, "self-pwd-tok", []string{model.CapUsersManage}, nil)
+		_, selfTok, err := testutil.CreateAPIToken(db, selfID, "self-pwd-tok", []string{model.CapUsersManage}, nil)
 		if err != nil {
 			t.Fatalf("create token: %v", err)
 		}
@@ -454,7 +457,7 @@ func TestUpdateUser(t *testing.T) {
 		if resp.StatusCode != http.StatusOK {
 			t.Fatalf("expected 200, got %d", resp.StatusCode)
 		}
-		u, err := model.GetUserByID(db, selfID)
+		u, err := testutil.GetUserByID(db, selfID)
 		if err != nil {
 			t.Fatalf("get user: %v", err)
 		}
@@ -472,7 +475,7 @@ func TestDeleteUser(t *testing.T) {
 	t.Run("forbidden returns 403", func(t *testing.T) {
 		targetID := testutil.CreateTestUser(t, db, "delete-target-forbidden", "pw", "viewer")
 		viewerID := testutil.CreateTestUser(t, db, "viewer-delete-user", "pw", "viewer")
-		_, noCapTok, err := model.CreateAPIToken(db, viewerID, "no-cap-delete-user", []string{}, nil)
+		_, noCapTok, err := testutil.CreateAPIToken(db, viewerID, "no-cap-delete-user", []string{}, nil)
 		if err != nil {
 			t.Fatalf("create token: %v", err)
 		}
@@ -506,7 +509,7 @@ func TestDeleteUser(t *testing.T) {
 		if resp.StatusCode != http.StatusNoContent {
 			t.Errorf("expected 204, got %d", resp.StatusCode)
 		}
-		u, err := model.GetUserByID(db, targetID)
+		u, err := testutil.GetUserByID(db, targetID)
 		if err != nil {
 			t.Fatalf("get user: %v", err)
 		}
@@ -521,7 +524,7 @@ func TestCapabilityEnforcement(t *testing.T) {
 	ts := newTestServer(t, db)
 
 	viewerID := testutil.CreateTestUser(t, db, "viewer-users", "pw", "viewer")
-	_, noCapTok, err := model.CreateAPIToken(db, viewerID, "no-cap-users", []string{}, nil)
+	_, noCapTok, err := testutil.CreateAPIToken(db, viewerID, "no-cap-users", []string{}, nil)
 	if err != nil {
 		t.Fatalf("create token: %v", err)
 	}
@@ -542,7 +545,7 @@ func TestSelfProtection(t *testing.T) {
 		t.Fatalf("get admin id: %v", err)
 	}
 
-	_, tok, err := model.CreateAPIToken(db, adminID,
+	_, tok, err := testutil.CreateAPIToken(db, adminID,
 		fmt.Sprintf("admin-self-%d", time.Now().UnixNano()),
 		[]string{model.CapUsersManage}, nil)
 	if err != nil {

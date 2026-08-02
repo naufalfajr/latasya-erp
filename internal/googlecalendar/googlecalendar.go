@@ -2,8 +2,8 @@ package googlecalendar
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -23,6 +23,8 @@ var oauthEndpoint = oauth2.Endpoint{
 	TokenURL: "https://oauth2.googleapis.com/token",
 }
 
+var ErrNotConnected = errors.New("google calendar is not connected")
+
 type Config struct {
 	ClientID     string
 	ClientSecret string
@@ -34,6 +36,12 @@ type SyncResult struct {
 	Stored      int    `json:"stored"`
 	WindowStart string `json:"window_start"`
 	WindowEnd   string `json:"window_end"`
+}
+
+type Store interface {
+	Connection(context.Context) (*model.GoogleCalendarConnection, error)
+	ReplaceGoogleClosures(context.Context, []model.SchoolClosure, string, string) error
+	UpdateSyncStatus(context.Context, string, string) error
 }
 
 type googleEvent struct {
@@ -79,9 +87,9 @@ func (c Config) Exchange(ctx context.Context, code, pkceVerifier string) (*oauth
 	return tok, nil
 }
 
-func Sync(ctx context.Context, db *sql.DB, config Config, calendarID string) (SyncResult, error) {
+func Sync(ctx context.Context, store Store, config Config, calendarID string) (SyncResult, error) {
 	var result SyncResult
-	conn, err := model.GetGoogleCalendarConnection(db)
+	conn, err := store.Connection(ctx)
 	if err != nil {
 		return result, err
 	}
@@ -89,8 +97,8 @@ func Sync(ctx context.Context, db *sql.DB, config Config, calendarID string) (Sy
 		calendarID = conn.CalendarID
 	}
 	if !config.Enabled() || !conn.IsActive || conn.RefreshToken == "" || calendarID == "" {
-		err := fmt.Errorf("google calendar is not connected")
-		_ = model.UpdateGoogleCalendarSyncStatus(db, "error", err.Error())
+		err := ErrNotConnected
+		_ = store.UpdateSyncStatus(ctx, "error", err.Error())
 		return result, err
 	}
 
@@ -103,14 +111,14 @@ func Sync(ctx context.Context, db *sql.DB, config Config, calendarID string) (Sy
 	httpClient := oauth2.NewClient(ctx, config.oauth2Config().TokenSource(ctx, &oauth2.Token{RefreshToken: conn.RefreshToken}))
 	events, err := fetchEvents(ctx, httpClient, calendarID, windowStart, windowEnd)
 	if err != nil {
-		_ = model.UpdateGoogleCalendarSyncStatus(db, "error", err.Error())
+		_ = store.UpdateSyncStatus(ctx, "error", err.Error())
 		return result, err
 	}
 	result.Fetched = len(events)
 
 	jakarta, err := time.LoadLocation("Asia/Jakarta")
 	if err != nil {
-		_ = model.UpdateGoogleCalendarSyncStatus(db, "error", err.Error())
+		_ = store.UpdateSyncStatus(ctx, "error", err.Error())
 		return result, fmt.Errorf("load Asia/Jakarta: %w", err)
 	}
 	closures := make([]model.SchoolClosure, 0, len(events))
@@ -121,11 +129,11 @@ func Sync(ctx context.Context, db *sql.DB, config Config, calendarID string) (Sy
 		}
 	}
 
-	if err := model.ReplaceGoogleSchoolClosures(db, closures, result.WindowStart, result.WindowEnd); err != nil {
-		_ = model.UpdateGoogleCalendarSyncStatus(db, "error", err.Error())
+	if err := store.ReplaceGoogleClosures(ctx, closures, result.WindowStart, result.WindowEnd); err != nil {
+		_ = store.UpdateSyncStatus(ctx, "error", err.Error())
 		return result, err
 	}
-	if err := model.UpdateGoogleCalendarSyncStatus(db, "success", ""); err != nil {
+	if err := store.UpdateSyncStatus(ctx, "success", ""); err != nil {
 		return result, err
 	}
 	result.Stored = len(closures)

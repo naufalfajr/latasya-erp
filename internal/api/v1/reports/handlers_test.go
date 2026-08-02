@@ -37,7 +37,7 @@ func adminToken(t *testing.T, db *sql.DB) string {
 	if err := db.QueryRow("SELECT id FROM users WHERE username = 'admin'").Scan(&adminID); err != nil {
 		t.Fatalf("get admin: %v", err)
 	}
-	_, tok, err := model.CreateAPIToken(db, adminID,
+	_, tok, err := testutil.CreateAPIToken(db, adminID,
 		fmt.Sprintf("test-reports-%d", time.Now().UnixNano()),
 		model.AllCapabilities, nil)
 	if err != nil {
@@ -252,7 +252,7 @@ func TestCapabilityEnforcement(t *testing.T) {
 	ts := newTestServer(t, db)
 
 	viewerID := testutil.CreateTestUser(t, db, "viewer-reports", "pw", "viewer")
-	_, noCapTok, err := model.CreateAPIToken(db, viewerID, "no-cap-reports", []string{}, nil)
+	_, noCapTok, err := testutil.CreateAPIToken(db, viewerID, "no-cap-reports", []string{}, nil)
 	if err != nil {
 		t.Fatalf("create token: %v", err)
 	}

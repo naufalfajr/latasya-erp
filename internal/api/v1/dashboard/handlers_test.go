@@ -32,7 +32,7 @@ func anyAuthToken(t *testing.T, db *sql.DB) string {
 	if err := db.QueryRow("SELECT id FROM users WHERE username = 'admin'").Scan(&adminID); err != nil {
 		t.Fatalf("get admin: %v", err)
 	}
-	_, tok, err := model.CreateAPIToken(db, adminID,
+	_, tok, err := testutil.CreateAPIToken(db, adminID,
 		fmt.Sprintf("test-dashboard-%d", time.Now().UnixNano()),
 		model.AllCapabilities, nil)
 	if err != nil {
@@ -106,7 +106,7 @@ func TestGetDashboard(t *testing.T) {
 
 	t.Run("viewer with no caps can access dashboard", func(t *testing.T) {
 		viewerID := testutil.CreateTestUser(t, db, "viewer-dash", "pw", "viewer")
-		_, viewerTok, err := model.CreateAPIToken(db, viewerID, "viewer-dash-tok", []string{}, nil)
+		_, viewerTok, err := testutil.CreateAPIToken(db, viewerID, "viewer-dash-tok", []string{}, nil)
 		if err != nil {
 			t.Fatalf("create token: %v", err)
 		}

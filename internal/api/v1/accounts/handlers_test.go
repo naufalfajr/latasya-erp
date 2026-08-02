@@ -34,7 +34,7 @@ func adminBearerToken(t *testing.T, db *sql.DB) string {
 	if err := db.QueryRow("SELECT id FROM users WHERE username = 'admin'").Scan(&adminID); err != nil {
 		t.Fatalf("get admin user: %v", err)
 	}
-	_, plaintext, err := model.CreateAPIToken(db, adminID,
+	_, plaintext, err := testutil.CreateAPIToken(db, adminID,
 		fmt.Sprintf("test-admin-%d", time.Now().UnixNano()),
 		[]string{model.CapAccountsManage}, nil)
 	if err != nil {

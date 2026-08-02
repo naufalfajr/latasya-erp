@@ -5,7 +5,6 @@ import (
 
 	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/auth"
-	"github.com/naufal/latasya-erp/internal/model"
 )
 
 func (h *Handler) LoginPage(w http.ResponseWriter, r *http.Request) {
@@ -30,7 +29,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := model.GetUserByUsername(h.DB, username)
+	user, err := h.Access.LookupUserForAuth(r.Context(), username)
 	if err != nil {
 		audit.Log(r.Context(), h.DB, audit.Event{
 			Action:        "auth.login_failed",
@@ -76,7 +75,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 
 	// Catch legacy deploys where admin is still using the seeded default.
 	if username == "admin" && password == "admin" && !user.MustChangePassword {
-		_ = model.SetMustChangePassword(h.DB, user.ID, true)
+		_ = h.Access.SetPasswordChangeRequired(r.Context(), user.ID, true)
 		user.MustChangePassword = true
 	}
 
@@ -120,7 +119,7 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 		// Resolve the actor before deleting the session so the audit row has
 		// username attribution. Silent if the session was already invalid.
 		if userID, err := auth.GetSessionUserID(h.DB, cookie.Value); err == nil {
-			if user, err := model.GetUserByID(h.DB, userID); err == nil {
+			if user, err := h.Access.LookupUserByID(r.Context(), userID); err == nil {
 				audit.Log(r.Context(), h.DB, audit.Event{
 					Action:        "auth.logout",
 					ActorID:       int64(user.ID),

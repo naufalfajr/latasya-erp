@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/naufal/latasya-erp/internal/access"
 	"github.com/naufal/latasya-erp/internal/auth"
 	"github.com/naufal/latasya-erp/internal/model"
 	"github.com/naufal/latasya-erp/internal/testutil"
@@ -74,7 +75,7 @@ func testServer(t *testing.T, basePath ...string) (*httptest.Server, *sql.DB) {
 
 	protected.HandleFunc("GET /audit", auth.CapabilityOnly("audit.view", h.AuditList))
 
-	authChain := auth.RequireAuth(db, auth.CSRFProtect(h.EnforcePasswordChange(protected)))
+	authChain := auth.RequireAuth(db, access.New(db, nil), auth.CSRFProtect(h.EnforcePasswordChange(protected)))
 	if bp == "" {
 		mux.Handle("/", authChain)
 	} else {

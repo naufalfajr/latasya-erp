@@ -11,6 +11,7 @@ import (
 	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/contact"
 	"github.com/naufal/latasya-erp/internal/model"
+	"github.com/naufal/latasya-erp/internal/schoolcalendar"
 )
 
 type DeletedInvoice struct {
@@ -158,11 +159,11 @@ func (m *Module) GenerateRecurring(ctx context.Context, actor Actor, invoiceDate
 	if n, _ := fmt.Sscanf(invoiceDate[:7], "%d-%d", &year, &month); n != 2 {
 		return nil, &ValidationError{Message: fmt.Sprintf("invalid invoice date %q", invoiceDate)}
 	}
-	effectiveDays, err := model.EffectiveSchoolDaysContext(ctx, m.db, invoiceDate[:7])
+	effectiveDays, err := m.calendar.EffectiveDays(ctx, invoiceDate[:7])
 	if err != nil {
 		return nil, fmt.Errorf("calculate effective school days: %w", err)
 	}
-	multiplier := model.MonthlyPriceMultiplierPercent(effectiveDays)
+	multiplier := schoolcalendar.MultiplierPercent(effectiveDays)
 	template := profile.RecurringDescriptionTemplate
 	if template == "" {
 		template = "Antar jemput {month} {year}"
@@ -178,7 +179,7 @@ func (m *Module) GenerateRecurring(ctx context.Context, actor Actor, invoiceDate
 	for _, customer := range customers.Contacts {
 		item := GeneratedInvoice{ContactID: customer.ID, ContactName: customer.Name}
 		created, err := m.create(ctx, actor, Draft{ContactID: customer.ID, InvoiceDate: invoiceDate, DueDate: dueDate,
-			Lines: []DraftLine{{Description: description, Quantity: 100, UnitPrice: model.ApplyMonthlyPriceMultiplier(customer.Price(), multiplier), AccountID: profile.DefaultRevenueAccountID}}}, false, invoiceDate[:7])
+			Lines: []DraftLine{{Description: description, Quantity: 100, UnitPrice: schoolcalendar.ApplyMultiplier(customer.Price(), multiplier), AccountID: profile.DefaultRevenueAccountID}}}, false, invoiceDate[:7])
 		if errors.Is(err, errRecurringAlreadyExists) {
 			item.Result = GeneratedSkipped
 			result.Skipped++

@@ -9,6 +9,7 @@ import (
 	"github.com/naufal/latasya-erp/internal/company"
 	"github.com/naufal/latasya-erp/internal/contact"
 	"github.com/naufal/latasya-erp/internal/creditnote"
+	"github.com/naufal/latasya-erp/internal/schoolcalendar"
 )
 
 type Module struct {
@@ -19,10 +20,11 @@ type Module struct {
 	accounts    *account.Module
 	contacts    *contact.Module
 	company     *company.Module
+	calendar    *schoolcalendar.Module
 }
 
 func New(db *sql.DB) *Module {
-	return &Module{db: db, now: time.Now, creditNotes: creditnote.New(db), accounts: account.New(db), contacts: contact.New(db), company: company.New(db)}
+	return &Module{db: db, now: time.Now, creditNotes: creditnote.New(db), accounts: account.New(db), contacts: contact.New(db), company: company.New(db), calendar: schoolcalendar.New(db)}
 }
 
 type Actor struct {

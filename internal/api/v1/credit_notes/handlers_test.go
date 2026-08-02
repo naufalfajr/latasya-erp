@@ -42,7 +42,7 @@ func adminToken(t *testing.T, db *sql.DB) string {
 	if err := db.QueryRow("SELECT id FROM users WHERE username = 'admin'").Scan(&adminID); err != nil {
 		t.Fatalf("get admin: %v", err)
 	}
-	_, plaintext, err := model.CreateAPIToken(db, adminID, fmt.Sprintf("test-%d", time.Now().UnixNano()),
+	_, plaintext, err := testutil.CreateAPIToken(db, adminID, fmt.Sprintf("test-%d", time.Now().UnixNano()),
 		[]string{model.CapInvoicesManage}, nil)
 	if err != nil {
 		t.Fatalf("create token: %v", err)

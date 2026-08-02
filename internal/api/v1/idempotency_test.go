@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/naufal/latasya-erp/internal/access"
 	v1 "github.com/naufal/latasya-erp/internal/api/v1"
 	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/auth"
@@ -42,7 +43,7 @@ func setupIdempotencyServer(t *testing.T, h http.Handler) (*httptest.Server, str
 	sessionID := testutil.CreateTestSession(t, db, userID)
 
 	mw := v1.Idempotency(db)
-	chained := audit.RequestContext(auth.RequireAuth(db, mw(h)))
+	chained := audit.RequestContext(auth.RequireAuth(db, access.New(db, nil), mw(h)))
 	srv := httptest.NewServer(chained)
 	t.Cleanup(srv.Close)
 	return srv, sessionID

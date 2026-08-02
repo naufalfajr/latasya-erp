@@ -252,7 +252,7 @@ func TestMe_Cookie(t *testing.T) {
 func TestMe_Bearer(t *testing.T) {
 	srv, db, _ := newTestServer(t)
 	userID := testutil.CreateTestUser(t, db, "eve", "pw", model.RoleBookkeeper)
-	tok, plaintext, err := model.CreateAPIToken(db, userID, "t", []string{model.CapReportsView}, nil)
+	tok, plaintext, err := testutil.CreateAPIToken(db, userID, "t", []string{model.CapReportsView}, nil)
 	if err != nil {
 		t.Fatalf("CreateAPIToken: %v", err)
 	}
@@ -308,7 +308,7 @@ func TestCSRF_Cookie(t *testing.T) {
 func TestCSRF_Bearer(t *testing.T) {
 	srv, db, _ := newTestServer(t)
 	userID := testutil.CreateTestUser(t, db, "gina", "pw", model.RoleBookkeeper)
-	_, plaintext, err := model.CreateAPIToken(db, userID, "t", []string{model.CapReportsView}, nil)
+	_, plaintext, err := testutil.CreateAPIToken(db, userID, "t", []string{model.CapReportsView}, nil)
 	if err != nil {
 		t.Fatalf("CreateAPIToken: %v", err)
 	}
@@ -342,7 +342,7 @@ func TestPasswordChange_Success(t *testing.T) {
 		t.Fatalf("status=%d body=%s", resp.StatusCode, body)
 	}
 
-	user, err := model.GetUserByID(db, userID)
+	user, err := testutil.GetUserByID(db, userID)
 	if err != nil {
 		t.Fatalf("GetUserByID: %v", err)
 	}
@@ -403,10 +403,10 @@ func TestPasswordChange_TooShort(t *testing.T) {
 func TestPasswordChange_BearerNotBlockedByMustChange(t *testing.T) {
 	srv, db, _ := newTestServer(t)
 	userID := testutil.CreateTestUser(t, db, "kate", "old-password", model.RoleBookkeeper)
-	if err := model.SetMustChangePassword(db, userID, true); err != nil {
+	if err := testutil.SetMustChangePassword(db, userID, true); err != nil {
 		t.Fatalf("SetMustChangePassword: %v", err)
 	}
-	_, plaintext, err := model.CreateAPIToken(db, userID, "t", []string{model.CapReportsView}, nil)
+	_, plaintext, err := testutil.CreateAPIToken(db, userID, "t", []string{model.CapReportsView}, nil)
 	if err != nil {
 		t.Fatalf("CreateAPIToken: %v", err)
 	}

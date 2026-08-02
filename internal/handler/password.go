@@ -5,7 +5,6 @@ import (
 
 	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/auth"
-	"github.com/naufal/latasya-erp/internal/model"
 )
 
 const minPasswordLength = 8
@@ -78,11 +77,7 @@ func (h *Handler) PasswordChange(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
-	if err := model.UpdateUserPassword(h.DB, user.ID, hash); err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-	if err := model.SetMustChangePassword(h.DB, user.ID, false); err != nil {
+	if err := h.Access.StorePasswordHash(r.Context(), user.ID, hash, false); err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}

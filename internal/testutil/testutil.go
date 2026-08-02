@@ -6,7 +6,10 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/naufal/latasya-erp/internal/access"
 	"github.com/naufal/latasya-erp/internal/account"
+	"github.com/naufal/latasya-erp/internal/apitoken"
+	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/auth"
 	"github.com/naufal/latasya-erp/internal/bill"
 	"github.com/naufal/latasya-erp/internal/company"
@@ -17,6 +20,7 @@ import (
 	"github.com/naufal/latasya-erp/internal/invoice"
 	"github.com/naufal/latasya-erp/internal/journal"
 	"github.com/naufal/latasya-erp/internal/model"
+	"github.com/naufal/latasya-erp/internal/schoolcalendar"
 	"github.com/naufal/latasya-erp/internal/tmpl"
 
 	latasyaerp "github.com/naufal/latasya-erp"
@@ -139,17 +143,21 @@ func SetupTestDB(t *testing.T) *sql.DB {
 func SetupTestHandler(t *testing.T, db *sql.DB) *handler.Handler {
 	t.Helper()
 	return &handler.Handler{
-		DB:          db,
-		TemplateFS:  latasyaerp.TemplateFS,
-		FuncMap:     tmpl.FuncMap(),
-		DevMode:     true,
-		Invoices:    invoice.New(db),
-		Journals:    journal.New(db),
-		Bills:       bill.New(db),
-		CreditNotes: creditnote.New(db),
-		Accounts:    account.New(db),
-		Contacts:    contact.New(db),
-		Company:     company.New(db),
+		DB:             db,
+		TemplateFS:     latasyaerp.TemplateFS,
+		FuncMap:        tmpl.FuncMap(),
+		DevMode:        true,
+		Invoices:       invoice.New(db),
+		Journals:       journal.New(db),
+		Bills:          bill.New(db),
+		CreditNotes:    creditnote.New(db),
+		Accounts:       account.New(db),
+		Access:         access.New(db, auth.HashPassword),
+		APITokens:      apitoken.New(db),
+		Audit:          audit.New(db),
+		SchoolCalendar: schoolcalendar.New(db),
+		Contacts:       contact.New(db),
+		Company:        company.New(db),
 	}
 }
 
