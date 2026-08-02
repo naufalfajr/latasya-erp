@@ -1,6 +1,7 @@
 package model
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -30,6 +31,10 @@ type AccountFilter struct {
 }
 
 func ListAccounts(db *sql.DB, f AccountFilter) ([]Account, error) {
+	return ListAccountsContext(context.Background(), db, f)
+}
+
+func ListAccountsContext(ctx context.Context, db *sql.DB, f AccountFilter) ([]Account, error) {
 	query := "SELECT id, code, name, account_type, normal_balance, parent_id, is_system, is_active, is_cash, COALESCE(description,''), created_at, updated_at FROM accounts WHERE 1=1"
 	var args []any
 
@@ -52,7 +57,7 @@ func ListAccounts(db *sql.DB, f AccountFilter) ([]Account, error) {
 	}
 	query += " ORDER BY code"
 
-	rows, err := db.Query(query, args...)
+	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list accounts: %w", err)
 	}

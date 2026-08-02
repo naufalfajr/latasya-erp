@@ -228,6 +228,58 @@ func TestSendPaymentAndDeleteLifecycle(t *testing.T) {
 	}
 }
 
+func TestInvoiceQueriesReturnCompletePresentationData(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	module := invoice.New(db)
+	contactID, accountID := invoiceFixtures(t, db)
+	created, err := module.Create(context.Background(), invoice.Actor{UserID: 1, CanManage: true}, invoice.Draft{
+		ContactID: contactID, InvoiceDate: "2026-08-02", DueDate: "2026-08-12",
+		Lines: []invoice.DraftLine{{Description: "Query", Quantity: 100, UnitPrice: 100_000, AccountID: accountID}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	list, err := module.List(context.Background(), invoice.Filter{Status: model.StatusDraft, Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if list.Total != 1 || len(list.Invoices) != 1 {
+		t.Fatalf("list=%#v", list)
+	}
+	detail, err := module.Detail(context.Background(), created.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if detail.Invoice.ID != created.ID || detail.CreditNotes == nil {
+		t.Fatalf("detail=%#v", detail)
+	}
+	view, err := module.View(context.Background(), created.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(view.AssetAccounts) == 0 {
+		t.Fatalf("view=%#v", view)
+	}
+	options, err := module.FormOptions(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(options.Contacts) == 0 || len(options.RevenueAccounts) == 0 {
+		t.Fatalf("options=%#v", options)
+	}
+	document, err := module.Document(context.Background(), created.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if document.Company == nil || document.Invoice.ID != created.ID {
+		t.Fatalf("document=%#v", document)
+	}
+	if _, err := module.Get(context.Background(), 999999); !errors.Is(err, invoice.ErrNotFound) {
+		t.Fatalf("Get missing=%v", err)
+	}
+}
+
 func invoiceFixtures(t *testing.T, db *sql.DB) (int, int) {
 	t.Helper()
 	result, err := db.Exec("INSERT INTO contacts (name, contact_type) VALUES ('Module Customer', 'customer')")

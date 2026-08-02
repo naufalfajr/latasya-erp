@@ -1,6 +1,7 @@
 package model
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 )
@@ -235,7 +236,11 @@ func ListCreditNotes(db *sql.DB, f CreditNoteFilter) ([]CreditNote, error) {
 // ListCreditNotesForInvoice returns all credit notes linked to a given
 // invoice, used by the invoice view to render a "Credit Notes" section.
 func ListCreditNotesForInvoice(db *sql.DB, invoiceID int) ([]CreditNote, error) {
-	rows, err := db.Query(
+	return ListCreditNotesForInvoiceContext(context.Background(), db, invoiceID)
+}
+
+func ListCreditNotesForInvoiceContext(ctx context.Context, db *sql.DB, invoiceID int) ([]CreditNote, error) {
+	rows, err := db.QueryContext(ctx,
 		`SELECT id, cn_number, cn_date, reason, status, total, journal_id
 		 FROM credit_notes
 		 WHERE invoice_id = ?

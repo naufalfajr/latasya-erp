@@ -159,29 +159,19 @@ type invoiceResponse struct {
 // List handles GET /api/v1/invoices.
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	page := v1.ParsePage(r)
-	filter := model.InvoiceFilter{
+	filter := invoiceModule.Filter{
 		Status: r.URL.Query().Get("status"),
 		Search: r.URL.Query().Get("search"),
 		Limit:  page.PerPage,
 		Offset: page.Offset(),
 	}
 
-	total, err := model.CountInvoices(h.DB, filter)
+	result, err := h.Invoices.List(r.Context(), filter)
 	if err != nil {
 		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to list invoices", nil)
 		return
 	}
-
-	invoices, err := model.ListInvoices(h.DB, filter)
-	if err != nil {
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to list invoices", nil)
-		return
-	}
-	if invoices == nil {
-		invoices = []model.Invoice{}
-	}
-
-	v1.WriteList(w, http.StatusOK, invoices, page, total)
+	v1.WriteList(w, http.StatusOK, result.Invoices, page, result.Total)
 }
 
 // Get handles GET /api/v1/invoices/{id}.
@@ -192,19 +182,18 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	inv, err := model.GetInvoice(h.DB, id)
+	detail, err := h.Invoices.Detail(r.Context(), id)
 	if err != nil {
-		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "invoice not found", nil)
+		if errors.Is(err, invoiceModule.ErrNotFound) {
+			v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "invoice not found", nil)
+		} else {
+			v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to retrieve invoice", nil)
+		}
 		return
 	}
 
-	creditNotes, _ := model.ListCreditNotesForInvoice(h.DB, id)
-	if creditNotes == nil {
-		creditNotes = []model.CreditNote{}
-	}
-
 	v1.WriteJSON(w, http.StatusOK, map[string]any{
-		"data": invoiceResponse{Invoice: inv, CreditNotes: creditNotes},
+		"data": invoiceResponse{Invoice: detail.Invoice, CreditNotes: detail.CreditNotes},
 	})
 }
 
@@ -516,26 +505,24 @@ func (h *Handler) PDF(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	inv, err := model.GetInvoice(h.DB, id)
+	document, err := h.Invoices.Document(r.Context(), id)
 	if err != nil {
-		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "invoice not found", nil)
+		if errors.Is(err, invoiceModule.ErrNotFound) {
+			v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "invoice not found", nil)
+		} else {
+			v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to load company profile", nil)
+		}
 		return
 	}
 
-	company, err := model.GetCompanyProfile(h.DB)
-	if err != nil {
-		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to load company profile", nil)
-		return
-	}
-
-	data, err := pdf.InvoicePDF(inv, company)
+	data, err := pdf.InvoicePDF(document.Invoice, document.Company)
 	if err != nil {
 		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to generate pdf", nil)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/pdf")
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", inv.InvoiceNumber+".pdf"))
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", document.Invoice.InvoiceNumber+".pdf"))
 	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
 	w.Write(data)
 }

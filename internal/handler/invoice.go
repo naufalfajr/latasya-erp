@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -18,7 +19,6 @@ type invoiceFormData struct {
 	Lines                        []model.InvoiceLine
 	Contacts                     []model.Contact
 	RevenueAccounts              []model.Account
-	AssetAccounts                []model.Account
 	DefaultRevenueAccountID      int
 	RecurringDescriptionTemplate string
 	Errors                       map[string]string
@@ -26,12 +26,12 @@ type invoiceFormData struct {
 }
 
 func (h *Handler) ListInvoices(w http.ResponseWriter, r *http.Request) {
-	f := model.InvoiceFilter{
+	f := invoiceModule.Filter{
 		Status: r.URL.Query().Get("status"),
 		Search: r.URL.Query().Get("search"),
 	}
 
-	total, err := model.CountInvoices(h.DB, f)
+	total, err := h.Invoices.Count(r.Context(), f)
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
@@ -39,7 +39,7 @@ func (h *Handler) ListInvoices(w http.ResponseWriter, r *http.Request) {
 	pg := newPagination(parsePage(r), total)
 	f.Limit, f.Offset = pg.PageSize, pg.Offset()
 
-	invoices, err := model.ListInvoices(h.DB, f)
+	invoices, err := h.Invoices.Find(r.Context(), f)
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
@@ -54,7 +54,11 @@ func (h *Handler) ListInvoices(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) NewInvoice(w http.ResponseWriter, r *http.Request) {
-	fd := h.newInvoiceFormData()
+	fd, err := h.newInvoiceFormData(r.Context())
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
 	fd.Invoice = &model.Invoice{}
 	fd.Lines = []model.InvoiceLine{{Quantity: 100}} // 1 empty line, qty=1.00
 	h.render(w, r, "templates/invoices/form.html", "New Invoice", fd, "templates/invoices/line_partial.html")
@@ -83,7 +87,11 @@ func (h *Handler) CreateInvoice(w http.ResponseWriter, r *http.Request) {
 		TaxAmount: inv.TaxAmount, Notes: inv.Notes, Lines: invoiceDraftLines(lines),
 	})
 	if err != nil {
-		fd := h.newInvoiceFormData()
+		fd, formErr := h.newInvoiceFormData(r.Context())
+		if formErr != nil {
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
 		fd.Invoice = inv
 		fd.Lines = lines
 		fd.Errors = invoiceFormErrors(err, lines)
@@ -189,20 +197,20 @@ func (h *Handler) ViewInvoice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	inv, err := model.GetInvoice(h.DB, id)
+	detail, err := h.Invoices.View(r.Context(), id)
 	if err != nil {
-		http.NotFound(w, r)
+		if errors.Is(err, invoiceModule.ErrNotFound) {
+			http.NotFound(w, r)
+		} else {
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		}
 		return
 	}
 
-	active := true
-	assetAccounts, _ := model.ListAccounts(h.DB, model.AccountFilter{Type: "asset", IsActive: &active})
-	creditNotes, _ := model.ListCreditNotesForInvoice(h.DB, id)
-
-	h.render(w, r, "templates/invoices/view.html", "Invoice "+inv.InvoiceNumber, map[string]any{
-		"Invoice":       inv,
-		"AssetAccounts": assetAccounts,
-		"CreditNotes":   creditNotes,
+	h.render(w, r, "templates/invoices/view.html", "Invoice "+detail.Invoice.InvoiceNumber, map[string]any{
+		"Invoice":       detail.Invoice,
+		"AssetAccounts": detail.AssetAccounts,
+		"CreditNotes":   detail.CreditNotes,
 	})
 }
 
@@ -213,9 +221,13 @@ func (h *Handler) EditInvoice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	inv, err := model.GetInvoice(h.DB, id)
+	inv, err := h.Invoices.Get(r.Context(), id)
 	if err != nil {
-		http.NotFound(w, r)
+		if errors.Is(err, invoiceModule.ErrNotFound) {
+			http.NotFound(w, r)
+		} else {
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		}
 		return
 	}
 
@@ -225,7 +237,11 @@ func (h *Handler) EditInvoice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fd := h.newInvoiceFormData()
+	fd, err := h.newInvoiceFormData(r.Context())
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
 	fd.Invoice = inv
 	fd.Lines = inv.Lines
 	fd.IsEdit = true
@@ -265,7 +281,11 @@ func (h *Handler) UpdateInvoice(w http.ResponseWriter, r *http.Request) {
 			http.NotFound(w, r)
 			return
 		}
-		fd := h.newInvoiceFormData()
+		fd, formErr := h.newInvoiceFormData(r.Context())
+		if formErr != nil {
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
 		fd.Invoice = inv
 		fd.Lines = lines
 		fd.Errors = invoiceFormErrors(err, lines)
@@ -306,9 +326,13 @@ func (h *Handler) InvoiceWhatsApp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	inv, err := model.GetInvoice(h.DB, id)
+	inv, err := h.Invoices.Get(r.Context(), id)
 	if err != nil {
-		http.NotFound(w, r)
+		if errors.Is(err, invoiceModule.ErrNotFound) {
+			http.NotFound(w, r)
+		} else {
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		}
 		return
 	}
 	if inv.Status == model.StatusDraft {
@@ -407,15 +431,13 @@ func (h *Handler) PrintInvoice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	inv, err := model.GetInvoice(h.DB, id)
+	document, err := h.Invoices.Document(r.Context(), id)
 	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-
-	company, err := model.GetCompanyProfile(h.DB)
-	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		if errors.Is(err, invoiceModule.ErrNotFound) {
+			http.NotFound(w, r)
+		} else {
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		}
 		return
 	}
 
@@ -428,9 +450,9 @@ func (h *Handler) PrintInvoice(w http.ResponseWriter, r *http.Request) {
 
 	pd := PageData{
 		User:     auth.UserFromContext(r.Context()),
-		Title:    "Invoice " + inv.InvoiceNumber,
+		Title:    "Invoice " + document.Invoice.InvoiceNumber,
 		BasePath: h.BasePath,
-		Data:     invoicePrintData{Invoice: inv, Company: company},
+		Data:     invoicePrintData{Invoice: document.Invoice, Company: document.Company},
 	}
 	t.ExecuteTemplate(w, "print.html", pd)
 }
@@ -442,33 +464,34 @@ func (h *Handler) InvoicePDF(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	inv, err := model.GetInvoice(h.DB, id)
+	document, err := h.Invoices.Document(r.Context(), id)
 	if err != nil {
-		http.NotFound(w, r)
+		if errors.Is(err, invoiceModule.ErrNotFound) {
+			http.NotFound(w, r)
+		} else {
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		}
 		return
 	}
 
-	company, err := model.GetCompanyProfile(h.DB)
-	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-
-	data, err := pdf.InvoicePDF(inv, company)
+	data, err := pdf.InvoicePDF(document.Invoice, document.Company)
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/pdf")
-	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=%q", inv.InvoiceNumber+".pdf"))
+	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=%q", document.Invoice.InvoiceNumber+".pdf"))
 	w.Write(data)
 }
 
 // HTMX partial for adding invoice lines
 func (h *Handler) InvoiceLinePartial(w http.ResponseWriter, r *http.Request) {
-	active := true
-	accounts, _ := model.ListAccounts(h.DB, model.AccountFilter{Type: "revenue", IsActive: &active})
+	accounts, err := h.Invoices.RevenueAccounts(r.Context())
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
 
 	t, err := h.getTemplate("templates/invoices/line_partial.html")
 	if err != nil {
@@ -555,22 +578,17 @@ func invoiceFormErrors(err error, lines []model.InvoiceLine) map[string]string {
 	return fields
 }
 
-func (h *Handler) newInvoiceFormData() invoiceFormData {
-	active := true
-	contacts, _ := model.ListContacts(h.DB, model.ContactFilter{Type: "customer", IsActive: &active})
-	revenueAccounts, _ := model.ListAccounts(h.DB, model.AccountFilter{Type: "revenue", IsActive: &active})
-	assetAccounts, _ := model.ListAccounts(h.DB, model.AccountFilter{Type: "asset", IsActive: &active})
-	profile, _ := model.GetCompanyProfile(h.DB)
-
+func (h *Handler) newInvoiceFormData(ctx context.Context) (invoiceFormData, error) {
+	options, err := h.Invoices.FormOptions(ctx)
+	if err != nil {
+		return invoiceFormData{}, err
+	}
 	fd := invoiceFormData{
-		Contacts:        contacts,
-		RevenueAccounts: revenueAccounts,
-		AssetAccounts:   assetAccounts,
-		Errors:          make(map[string]string),
+		Errors: make(map[string]string),
 	}
-	if profile != nil {
-		fd.DefaultRevenueAccountID = profile.DefaultRevenueAccountID
-		fd.RecurringDescriptionTemplate = profile.RecurringDescriptionTemplate
-	}
-	return fd
+	fd.Contacts = options.Contacts
+	fd.RevenueAccounts = options.RevenueAccounts
+	fd.DefaultRevenueAccountID = options.DefaultRevenueAccountID
+	fd.RecurringDescriptionTemplate = options.RecurringDescriptionTemplate
+	return fd, nil
 }
