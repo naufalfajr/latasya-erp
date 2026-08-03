@@ -3,6 +3,7 @@ package handler_test
 import (
 	"database/sql"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -306,6 +307,30 @@ func TestBulkSendInvoices_SendsSkipsAndReportsFailures(t *testing.T) {
 	db.QueryRow("SELECT status FROM invoices WHERE id = ?", okDraft).Scan(&status)
 	if status != "sent" {
 		t.Errorf("okDraft status = %q, want sent", status)
+	}
+}
+
+// TestNewInvoiceForm_RendersFullPage guards against template runtime errors in
+// the customer <option> loop, which truncate the response mid-<select>.
+func TestNewInvoiceForm_RendersFullPage(t *testing.T) {
+	t.Parallel()
+	ts, db := testServer(t)
+	cookies := loginAsAdmin(t, ts)
+	seedCustomer(t, db, "Form Render Customer")
+
+	req, _ := requestWithCookies(db, "GET", ts.URL+"/invoices/new", cookies, "")
+	resp, err := noRedirectClient().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	if !strings.Contains(string(body), "Form Render Customer") {
+		t.Fatalf("customer option missing from form")
+	}
+	if !strings.Contains(string(body), "Create Invoice") {
+		t.Fatalf("form truncated: submit button missing")
 	}
 }
 

@@ -6,14 +6,17 @@ import (
 	"html/template"
 	"strings"
 	"time"
+
+	"github.com/naufal/latasya-erp/internal/contact"
 )
 
 func FuncMap() template.FuncMap {
 	return template.FuncMap{
-		"formatIDR":  formatIDR,
-		"formatQty":  formatQty,
-		"formatDate": formatDate,
-		"isNegative": func(n *int) bool { return n != nil && *n < 0 },
+		"formatIDR":    formatIDR,
+		"contactPrice": contact.Price,
+		"formatQty":    formatQty,
+		"formatDate":   formatDate,
+		"isNegative":   func(n *int) bool { return n != nil && *n < 0 },
 		"toJSON": func(v any) template.JS {
 			b, _ := json.Marshal(v)
 			return template.JS(b) //nolint:gosec // JSON encoding escapes script-breaking characters.

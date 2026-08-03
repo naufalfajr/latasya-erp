@@ -22,8 +22,8 @@
         <h1 class="text-2xl font-bold">Invoice {{$d.FamilyLabel}}</h1>
     </div>
 
-    <div class="alert alert-info mb-4 text-sm">
-        <span>Simpan link ini: <span class="font-mono font-semibold">{{$d.ShortURL}}</span>. Link berisi daftar invoice akan terus aktif sesuai masa keikutsertaan antar jemput.</span>
+    <div class="alert alert-info mb-4 text-sm flex flex-wrap">
+        <span class="min-w-0">Simpan link ini: <span class="font-mono font-semibold break-all">{{$d.ShortURL}}</span>. Link berisi daftar invoice akan terus aktif sesuai masa keikutsertaan antar jemput.</span>
         <button type="button" class="btn btn-ghost btn-xs" data-copy="{{$d.ShortURL}}" onclick="copyText(this)">Salin</button>
     </div>
 
@@ -56,7 +56,7 @@
                         <p class="font-semibold">{{.ChildName}}</p>
                         <p class="text-xs opacity-60">{{.InvoiceNumber}} &middot; {{formatDate .InvoiceDate}}</p>
                     </div>
-                    <span class="badge
+                    <span class="badge shrink-0 whitespace-nowrap
                         {{if eq .Status "paid"}}badge-success
                         {{else if eq .Status "partial"}}badge-warning
                         {{else if eq .Status "cancelled"}}badge-ghost

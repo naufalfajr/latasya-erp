@@ -24,7 +24,7 @@
                         <option value="">Select customer</option>
                         {{$selContact := $data.Invoice.ContactID}}
                         {{range $data.Contacts}}
-                        <option value="{{.ID}}" data-price="{{.Price}}" {{if eq .ID $selContact}}selected{{end}}>{{.Name}}</option>
+                        <option value="{{.ID}}" data-price="{{contactPrice .}}" {{if eq .ID $selContact}}selected{{end}}>{{.Name}}</option>
                         {{end}}
                     </select>
                     {{if index $data.Errors "contact_id"}}
