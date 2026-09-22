@@ -1,6 +1,7 @@
 {{template "base" .}}
 {{define "content"}}
-{{$je := .Data}}
+{{$view := .Data}}
+{{$je := $view.Entry}}
 
 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
     <div>
@@ -8,16 +9,13 @@
         <p class="text-sm opacity-60">{{formatDate $je.EntryDate}} &middot; Created by {{$je.CreatedByName}}</p>
     </div>
     <div class="flex gap-2">
-        <a href="{{$.BasePath}}/journals" class="btn btn-ghost btn-sm">Back</a>
-        {{if .User.HasCapability "journals.manage"}}
-            {{if or (eq $je.SourceType "") (eq $je.SourceType "manual")}}
-            <a href="{{$.BasePath}}/journals/{{$je.ID}}/edit" class="btn btn-sm">Edit</a>
-            <button class="btn btn-error btn-sm"
-                hx-delete="{{$.BasePath}}/journals/{{$je.ID}}"
-                hx-confirm="Delete this journal entry?"
-                hx-target="body"
-                hx-headers='{"HX-Redirect": "/journals"}'>Delete</button>
-            {{end}}
+        <a href="{{$view.BackURL}}" class="btn btn-ghost btn-sm">Back</a>
+        {{if $view.CanMutate}}
+        <a href="{{$view.EditURL}}" class="btn btn-sm">Edit</a>
+        <button class="btn btn-error btn-sm"
+            hx-delete="{{$view.DeleteURL}}"
+            hx-confirm="Delete this journal entry?"
+            hx-target="body">Delete</button>
         {{end}}
     </div>
 </div>

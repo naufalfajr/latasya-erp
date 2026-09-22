@@ -344,8 +344,8 @@ func TestDeleteJournal_NonManualErrors(t *testing.T) {
 	if resp.StatusCode != http.StatusSeeOther {
 		t.Errorf("expected 303 redirect, got %d", resp.StatusCode)
 	}
-	if loc := resp.Header.Get("Location"); loc != "/journals/"+strconv.Itoa(id) {
-		t.Errorf("Location = %q, want /journals/%d (error redirect, not list)", loc, id)
+	if loc := resp.Header.Get("Location"); loc != "/journals/"+strconv.Itoa(id)+"?return_to=%2Fjournals" {
+		t.Errorf("Location = %q, want the shared detail page with journal-list return context", loc)
 	}
 	flash := flashValue(resp)
 	if !strings.Contains(flash, "Error:") {

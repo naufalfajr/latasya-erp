@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/naufal/latasya-erp/internal/account"
@@ -25,6 +26,11 @@ func where(f Filter) (string, []any) {
 	if f.SourceType != "" {
 		clause += " AND je.source_type = ?"
 		args = append(args, f.SourceType)
+	}
+	if f.AccountID > 0 {
+		clause += ` AND EXISTS (SELECT 1 FROM journal_lines jl_account
+			WHERE jl_account.entry_id=je.id AND jl_account.account_id=?)`
+		args = append(args, f.AccountID)
 	}
 	if f.Search != "" {
 		clause += " AND (je.reference LIKE ? OR je.description LIKE ?)"
@@ -86,6 +92,77 @@ func (m *Module) List(ctx context.Context, f Filter) (*ListResult, error) {
 
 func (m *Module) Get(ctx context.Context, id int) (*model.JournalEntry, error) {
 	return getWith(ctx, m.db, id)
+}
+
+// AccountFilterOptions returns the stable, global account list for the journal
+// entries filter: every active account and every inactive account with journal
+// history, ordered by account type and code.
+func (m *Module) AccountFilterOptions(ctx context.Context) ([]model.Account, error) {
+	rows, err := m.db.QueryContext(ctx, `SELECT a.id,a.code,a.name,a.account_type,a.normal_balance,a.parent_id,
+		a.is_system,a.is_active,a.is_cash,COALESCE(a.description,''),a.created_at,a.updated_at
+		FROM accounts a
+		WHERE a.is_active=1 OR EXISTS (SELECT 1 FROM journal_lines jl WHERE jl.account_id=a.id)
+		ORDER BY CASE a.account_type
+			WHEN 'asset' THEN 1 WHEN 'liability' THEN 2 WHEN 'equity' THEN 3
+			WHEN 'revenue' THEN 4 WHEN 'expense' THEN 5 ELSE 6 END, a.code`)
+	if err != nil {
+		return nil, fmt.Errorf("list journal account filter options: %w", err)
+	}
+	defer rows.Close()
+	accounts := make([]model.Account, 0)
+	for rows.Next() {
+		var a model.Account
+		if err := rows.Scan(&a.ID, &a.Code, &a.Name, &a.AccountType, &a.NormalBalance, &a.ParentID,
+			&a.IsSystem, &a.IsActive, &a.IsCash, &a.Description, &a.CreatedAt, &a.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("scan journal account filter option: %w", err)
+		}
+		accounts = append(accounts, a)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate journal account filter options: %w", err)
+	}
+	return accounts, nil
+}
+
+// AccountSummaries loads only the first account and line count for the given
+// page of journal entries. The explicit line ID ordering makes the displayed
+// account deterministic and matches the detail page's posting order.
+func (m *Module) AccountSummaries(ctx context.Context, entryIDs []int) (map[int]AccountSummary, error) {
+	summaries := make(map[int]AccountSummary, len(entryIDs))
+	if len(entryIDs) == 0 {
+		return summaries, nil
+	}
+	placeholders := make([]string, len(entryIDs))
+	args := make([]any, len(entryIDs))
+	for i, id := range entryIDs {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+	query := `SELECT jl.entry_id,jl.id,a.code,a.name FROM journal_lines jl
+		JOIN accounts a ON a.id=jl.account_id WHERE jl.entry_id IN (` + strings.Join(placeholders, ",") + `)
+		ORDER BY jl.entry_id,jl.id`
+	rows, err := m.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list journal account summaries: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var entryID, lineID int
+		var code, name string
+		if err := rows.Scan(&entryID, &lineID, &code, &name); err != nil {
+			return nil, fmt.Errorf("scan journal account summary: %w", err)
+		}
+		summary := summaries[entryID]
+		if summary.LineCount == 0 {
+			summary.AccountCode, summary.AccountName = code, name
+		}
+		summary.LineCount++
+		summaries[entryID] = summary
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate journal account summaries: %w", err)
+	}
+	return summaries, nil
 }
 
 type queryer interface {

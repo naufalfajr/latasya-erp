@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/naufal/latasya-erp/internal/auth"
 	"github.com/naufal/latasya-erp/internal/journal"
@@ -13,9 +14,19 @@ import (
 )
 
 type journalPageData struct {
-	Entries    []model.JournalEntry
-	Filter     journal.Filter
-	Pagination Pagination
+	Entries       []model.JournalEntry
+	Filter        journal.Filter
+	AccountGroups []journalAccountGroup
+	AccountValue  string
+	AccountError  string
+	HasFilters    bool
+	ReturnTo      string
+	Pagination    Pagination
+}
+
+type journalAccountGroup struct {
+	Label    string
+	Accounts []model.Account
 }
 
 type journalFormData struct {
@@ -24,6 +35,7 @@ type journalFormData struct {
 	Accounts []model.Account
 	Errors   map[string]string
 	IsEdit   bool
+	ReturnTo string
 }
 
 const journalFormTemplate = "templates/journals/form.html"
@@ -32,20 +44,103 @@ const journalLinePartial = "templates/journals/line_partial.html"
 func (h *Handler) ListJournals(w http.ResponseWriter, r *http.Request) {
 	filter := journal.Filter{DateFrom: r.URL.Query().Get("from"), DateTo: r.URL.Query().Get("to"),
 		SourceType: r.URL.Query().Get("source"), Search: r.URL.Query().Get("search")}
-	page := parsePage(r)
-	filter.Limit, filter.Offset = listPageSize, (page-1)*listPageSize
-	result, err := h.Journals.List(r.Context(), filter)
+	accountValue := r.URL.Query().Get("account")
+	accountOptions, err := h.Journals.AccountFilterOptions(r.Context())
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
+	accountID, accountError := resolveJournalAccount(accountValue, r.URL.Query()["account"], accountOptions)
+	filter.AccountID = accountID
+	page := parsePage(r)
+	filter.Limit, filter.Offset = listPageSize, (page-1)*listPageSize
+	result := &journal.ListResult{Entries: make([]model.JournalEntry, 0)}
+	if accountError == "" {
+		result, err = h.Journals.List(r.Context(), filter)
+		if err != nil {
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+		entryIDs := make([]int, len(result.Entries))
+		for i, entry := range result.Entries {
+			entryIDs[i] = entry.ID
+		}
+		summaries, err := h.Journals.AccountSummaries(r.Context(), entryIDs)
+		if err != nil {
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+		for i := range result.Entries {
+			if summary, ok := summaries[result.Entries[i].ID]; ok {
+				result.Entries[i].ListAccountCode = summary.AccountCode
+				result.Entries[i].ListAccountName = summary.AccountName
+				result.Entries[i].JournalLineCount = summary.LineCount
+			}
+		}
+	}
 	pg := newPagination(page, result.Total)
-	data := journalPageData{Entries: result.Entries, Filter: filter, Pagination: pg}
+	data := journalPageData{
+		Entries: result.Entries, Filter: filter, AccountGroups: groupJournalAccounts(accountOptions),
+		AccountValue: accountValue, AccountError: accountError,
+		HasFilters: accountValue != "" || filter.DateFrom != "" || filter.DateTo != "" || filter.Search != "",
+		ReturnTo:   currentListURL(r, h.BasePath),
+		Pagination: pg,
+	}
 	if isHTMXTarget(r, "journal-table") {
 		h.renderFragment(w, r, "templates/journals/index.html", "journal-table", data)
 		return
 	}
 	h.render(w, r, "templates/journals/index.html", "Journal Entries", data)
+}
+
+func resolveJournalAccount(value string, values []string, options []model.Account) (int, string) {
+	if value == "" && len(values) == 0 {
+		return 0, ""
+	}
+	if len(values) > 1 {
+		return 0, "The selected account is invalid or unavailable. Reset filters to view all entries."
+	}
+	if value == "" {
+		return 0, ""
+	}
+	id, err := strconv.Atoi(value)
+	if err != nil || id < 1 {
+		return 0, "The selected account is invalid or unavailable. Reset filters to view all entries."
+	}
+	for _, option := range options {
+		if option.ID == id {
+			return id, ""
+		}
+	}
+	return 0, "The selected account is invalid or unavailable. Reset filters to view all entries."
+}
+
+func groupJournalAccounts(accounts []model.Account) []journalAccountGroup {
+	groups := make([]journalAccountGroup, 0, 5)
+	groupIndex := make(map[string]int, 5)
+	for _, account := range accounts {
+		index, ok := groupIndex[account.AccountType]
+		if !ok {
+			index = len(groups)
+			groupIndex[account.AccountType] = index
+			groups = append(groups, journalAccountGroup{Label: model.AccountTypeLabel(account.AccountType)})
+		}
+		groups[index].Accounts = append(groups[index].Accounts, account)
+	}
+	return groups
+}
+
+func currentListURL(r *http.Request, basePath string) string {
+	path := r.URL.Path
+	basePath = strings.TrimSuffix(basePath, "/")
+	if basePath != "" && strings.HasPrefix(path, basePath+"/") {
+		path = strings.TrimPrefix(path, basePath)
+	}
+	value := path
+	if r.URL.RawQuery != "" {
+		value += "?" + r.URL.RawQuery
+	}
+	return value
 }
 
 func (h *Handler) renderJournalForm(w http.ResponseWriter, r *http.Request, title string, data journalFormData) {
@@ -91,7 +186,7 @@ func (h *Handler) ViewJournal(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	h.render(w, r, "templates/journals/view.html", "Journal Entry "+entry.Reference, entry)
+	h.render(w, r, "templates/journals/view.html", "Journal Entry "+entry.Reference, h.journalViewData(r, entry))
 }
 
 func (h *Handler) EditJournal(w http.ResponseWriter, r *http.Request) {
@@ -107,7 +202,7 @@ func (h *Handler) EditJournal(w http.ResponseWriter, r *http.Request) {
 	}
 	if entry.SourceType != "" && entry.SourceType != model.SourceManual {
 		h.setFlash(w, "Cannot edit auto-generated journal entries")
-		http.Redirect(w, r, h.BasePath+fmt.Sprintf("/journals/%d", id), http.StatusSeeOther)
+		http.Redirect(w, r, h.journalDetailURL(id, journalReturnToFromRequest(r, entry.SourceType, h.BasePath)), http.StatusSeeOther)
 		return
 	}
 	options, err := h.Journals.Options(r.Context(), "", false)
@@ -115,7 +210,8 @@ func (h *Handler) EditJournal(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
-	h.renderJournalForm(w, r, "Edit Journal Entry", journalFormData{Entry: entry, Lines: entry.Lines, Accounts: options.Accounts, IsEdit: true})
+	h.renderJournalForm(w, r, "Edit Journal Entry", journalFormData{Entry: entry, Lines: entry.Lines, Accounts: options.Accounts,
+		IsEdit: true, ReturnTo: journalEditReturnToFromRequest(r, entry.SourceType, h.BasePath)})
 }
 
 func (h *Handler) UpdateJournal(w http.ResponseWriter, r *http.Request) {
@@ -143,7 +239,7 @@ func (h *Handler) UpdateJournal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.setFlash(w, "Journal entry updated successfully")
-	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/journals/%d", id), http.StatusSeeOther)
+	http.Redirect(w, r, h.journalUpdatedDetailURL(id, r, model.SourceManual), http.StatusSeeOther)
 }
 
 func (h *Handler) DeleteJournal(w http.ResponseWriter, r *http.Request) {
@@ -152,17 +248,14 @@ func (h *Handler) DeleteJournal(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	returnTo := journalReturnToFromRequest(r, model.SourceManual, h.BasePath)
 	if _, err := h.Journals.DeleteManual(r.Context(), journalActor(r), id); err != nil {
 		h.setFlash(w, "Error: "+err.Error())
-		http.Redirect(w, r, h.BasePath+fmt.Sprintf("/journals/%d", id), http.StatusSeeOther)
-		return
-	}
-	if r.Header.Get("HX-Request") == "true" {
-		w.WriteHeader(http.StatusOK)
+		h.finishJournalDelete(w, r, h.journalDetailURL(id, returnTo))
 		return
 	}
 	h.setFlash(w, "Journal entry deleted successfully")
-	http.Redirect(w, r, h.BasePath+"/journals", http.StatusSeeOther)
+	h.finishJournalDelete(w, r, h.BasePath+returnTo)
 }
 
 func (h *Handler) JournalLinePartial(w http.ResponseWriter, r *http.Request) {
@@ -189,7 +282,8 @@ func (h *Handler) renderJournalError(w http.ResponseWriter, r *http.Request, tit
 	if len(errorsByField) == 0 {
 		errorsByField["general"] = err.Error()
 	}
-	h.renderJournalForm(w, r, title, journalFormData{Entry: entry, Lines: lines, Accounts: options.Accounts, Errors: errorsByField, IsEdit: edit})
+	h.renderJournalForm(w, r, title, journalFormData{Entry: entry, Lines: lines, Accounts: options.Accounts,
+		Errors: errorsByField, IsEdit: edit, ReturnTo: journalEditReturnToFromForm(r, model.SourceManual, h.BasePath)})
 }
 
 func journalActor(r *http.Request) journal.Actor {

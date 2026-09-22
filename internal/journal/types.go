@@ -7,8 +7,17 @@ type Filter struct {
 	DateTo     string
 	SourceType string
 	Search     string
+	AccountID  int
 	Limit      int
 	Offset     int
+}
+
+// AccountSummary is the compact account display used by the paginated journal
+// entries list. Line order is journal_lines.id order.
+type AccountSummary struct {
+	AccountCode string
+	AccountName string
+	LineCount   int
 }
 
 type Line struct {

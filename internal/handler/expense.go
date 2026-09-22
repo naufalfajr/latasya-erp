@@ -21,6 +21,7 @@ type expenseFormData struct {
 	Vehicles        []model.Vehicle
 	Errors          map[string]string
 	IsEdit          bool
+	ReturnTo        string
 }
 
 func (h *Handler) ListExpenses(w http.ResponseWriter, r *http.Request) {
@@ -35,7 +36,8 @@ func (h *Handler) ListExpenses(w http.ResponseWriter, r *http.Request) {
 	}
 	pg := newPagination(page, result.Total)
 	h.render(w, r, "templates/expenses/index.html", "Expenses", map[string]any{
-		"Entries": result.Entries, "Pagination": newPageNav(pg, map[string]string{"from": filter.DateFrom, "to": filter.DateTo, "search": filter.Search}),
+		"Entries": result.Entries, "ReturnTo": currentListURL(r, h.BasePath),
+		"Pagination": newPageNav(pg, map[string]string{"from": filter.DateFrom, "to": filter.DateTo, "search": filter.Search}),
 	})
 }
 
@@ -70,6 +72,7 @@ func (h *Handler) EditExpense(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	form.Entry, form.VehicleID, form.IsEdit = entry, entry.VehicleID, true
+	form.ReturnTo = journalEditReturnToFromRequest(r, entry.SourceType, h.BasePath)
 	form.Amount, form.ExpenseAccount, form.PaymentAccount = extractExpenseShape(entry)
 	h.render(w, r, "templates/expenses/form.html", "Edit Expense", form)
 }
@@ -90,7 +93,7 @@ func (h *Handler) UpdateExpense(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.setFlash(w, "Expense updated successfully")
-	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/journals/%d", id), http.StatusSeeOther)
+	http.Redirect(w, r, h.journalUpdatedDetailURL(id, r, model.SourceExpense), http.StatusSeeOther)
 }
 
 func (h *Handler) DeleteExpense(w http.ResponseWriter, r *http.Request) {
@@ -99,17 +102,14 @@ func (h *Handler) DeleteExpense(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	returnTo := journalReturnToFromRequest(r, model.SourceExpense, h.BasePath)
 	if _, err := h.Journals.DeleteExpense(r.Context(), expenseActor(r), id); err != nil {
 		h.setFlash(w, "Error: "+err.Error())
-		http.Redirect(w, r, h.BasePath+"/expenses", http.StatusSeeOther)
-		return
-	}
-	if r.Header.Get("HX-Request") == "true" {
-		w.WriteHeader(http.StatusOK)
+		h.finishJournalDelete(w, r, h.journalDetailURL(id, returnTo))
 		return
 	}
 	h.setFlash(w, "Expense deleted successfully")
-	http.Redirect(w, r, h.BasePath+"/expenses", http.StatusSeeOther)
+	h.finishJournalDelete(w, r, h.BasePath+returnTo)
 }
 
 func expenseDraftFromForm(r *http.Request) journal.ExpenseDraft {
@@ -142,6 +142,9 @@ func (h *Handler) renderExpenseError(w http.ResponseWriter, r *http.Request, tit
 		SourceType: model.SourceExpense, VehicleID: draft.VehicleID, IsPosted: true}
 	form.Amount, form.ExpenseAccount, form.PaymentAccount, form.VehicleID = draft.Amount, draft.ExpenseAccount, draft.PaymentAccount, draft.VehicleID
 	form.Errors, form.IsEdit = moduleFields(err), edit
+	if edit {
+		form.ReturnTo = journalEditReturnToFromForm(r, model.SourceExpense, h.BasePath)
+	}
 	if len(form.Errors) == 0 {
 		form.Errors["general"] = err.Error()
 	}
