@@ -16,6 +16,7 @@
     <form method="POST" action="{{$.BasePath}}{{if $data.IsEdit}}/expenses/{{$data.Entry.ID}}{{else}}/expenses{{end}}"
         class="card bg-base-100 shadow">
         {{template "csrf" $}}
+        {{if $data.IsEdit}}<input type="hidden" name="return_to" value="{{$data.ReturnTo}}">{{end}}
         <div class="card-body">
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -100,7 +101,7 @@
             </div>
 
             <div class="card-actions justify-end mt-4">
-                <a href="{{$.BasePath}}/expenses" class="btn btn-ghost">Cancel</a>
+                <a href="{{if $data.IsEdit}}{{$.BasePath}}/journals/{{$data.Entry.ID}}?return_to={{urlquery $data.ReturnTo}}{{else}}{{$.BasePath}}/expenses{{end}}" class="btn btn-ghost">Cancel</a>
                 <button type="submit" class="btn btn-primary">
                     {{if $data.IsEdit}}Update{{else}}Record{{end}} Expense
                 </button>

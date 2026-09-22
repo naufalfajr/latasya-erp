@@ -19,6 +19,7 @@ type incomeFormData struct {
 	DepositAccounts []model.Account
 	Errors          map[string]string
 	IsEdit          bool
+	ReturnTo        string
 }
 
 func (h *Handler) ListIncome(w http.ResponseWriter, r *http.Request) {
@@ -33,7 +34,8 @@ func (h *Handler) ListIncome(w http.ResponseWriter, r *http.Request) {
 	}
 	pg := newPagination(page, result.Total)
 	h.render(w, r, "templates/income/index.html", "Income", map[string]any{
-		"Entries": result.Entries, "Pagination": newPageNav(pg, map[string]string{"from": filter.DateFrom, "to": filter.DateTo, "search": filter.Search}),
+		"Entries": result.Entries, "ReturnTo": currentListURL(r, h.BasePath),
+		"Pagination": newPageNav(pg, map[string]string{"from": filter.DateFrom, "to": filter.DateTo, "search": filter.Search}),
 	})
 }
 
@@ -68,6 +70,7 @@ func (h *Handler) EditIncome(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	form.Entry, form.IsEdit = entry, true
+	form.ReturnTo = journalEditReturnToFromRequest(r, entry.SourceType, h.BasePath)
 	form.Amount, form.RevenueAccount, form.DepositAccount = extractIncomeShape(entry)
 	h.render(w, r, "templates/income/form.html", "Edit Income", form)
 }
@@ -88,7 +91,7 @@ func (h *Handler) UpdateIncome(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.setFlash(w, "Income updated successfully")
-	http.Redirect(w, r, h.BasePath+fmt.Sprintf("/journals/%d", id), http.StatusSeeOther)
+	http.Redirect(w, r, h.journalUpdatedDetailURL(id, r, model.SourceIncome), http.StatusSeeOther)
 }
 
 func (h *Handler) DeleteIncome(w http.ResponseWriter, r *http.Request) {
@@ -97,17 +100,14 @@ func (h *Handler) DeleteIncome(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	returnTo := journalReturnToFromRequest(r, model.SourceIncome, h.BasePath)
 	if _, err := h.Journals.DeleteIncome(r.Context(), incomeActor(r), id); err != nil {
 		h.setFlash(w, "Error: "+err.Error())
-		http.Redirect(w, r, h.BasePath+"/income", http.StatusSeeOther)
-		return
-	}
-	if r.Header.Get("HX-Request") == "true" {
-		w.WriteHeader(http.StatusOK)
+		h.finishJournalDelete(w, r, h.journalDetailURL(id, returnTo))
 		return
 	}
 	h.setFlash(w, "Income deleted successfully")
-	http.Redirect(w, r, h.BasePath+"/income", http.StatusSeeOther)
+	h.finishJournalDelete(w, r, h.BasePath+returnTo)
 }
 
 func incomeDraftFromForm(r *http.Request) journal.IncomeDraft {
@@ -138,6 +138,9 @@ func (h *Handler) renderIncomeError(w http.ResponseWriter, r *http.Request, titl
 	form.Entry = &model.JournalEntry{ID: parsePathID(r), EntryDate: draft.EntryDate, Description: draft.Description, SourceType: model.SourceIncome, IsPosted: true}
 	form.Amount, form.RevenueAccount, form.DepositAccount = draft.Amount, draft.RevenueAccount, draft.DepositAccount
 	form.Errors, form.IsEdit = moduleFields(err), edit
+	if edit {
+		form.ReturnTo = journalEditReturnToFromForm(r, model.SourceIncome, h.BasePath)
+	}
 	if len(form.Errors) == 0 {
 		form.Errors["general"] = err.Error()
 	}

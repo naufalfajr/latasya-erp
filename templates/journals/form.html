@@ -21,6 +21,7 @@
     <form method="POST" action="{{$.BasePath}}{{if $data.IsEdit}}/journals/{{$data.Entry.ID}}{{else}}/journals{{end}}"
         class="card bg-base-100 shadow">
         {{template "csrf" $}}
+        {{if $data.IsEdit}}<input type="hidden" name="return_to" value="{{$data.ReturnTo}}">{{end}}
         <div class="card-body">
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
@@ -94,7 +95,7 @@
 
             <!-- Actions -->
             <div class="card-actions justify-end mt-4">
-                <a href="{{$.BasePath}}/journals" class="btn btn-ghost">Cancel</a>
+                <a href="{{if $data.IsEdit}}{{$.BasePath}}/journals/{{$data.Entry.ID}}?return_to={{urlquery $data.ReturnTo}}{{else}}{{$.BasePath}}/journals{{end}}" class="btn btn-ghost">Cancel</a>
                 <button type="submit" class="btn btn-primary">
                     {{if $data.IsEdit}}Update{{else}}Create{{end}} Journal Entry
                 </button>

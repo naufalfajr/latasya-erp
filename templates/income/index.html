@@ -31,17 +31,7 @@
                 <td><span class="font-mono text-xs">{{.AccountSummary}}</span></td>
                 <td class="text-right font-mono text-success">{{formatIDR .TotalDebit}}</td>
                 <td>
-                    <div class="flex gap-1">
-                        <a href="{{$.BasePath}}/journals/{{.ID}}" class="btn btn-ghost btn-xs">View</a>
-                        {{if $.User.HasCapability "income.manage"}}
-                        <a href="{{$.BasePath}}/income/{{.ID}}/edit" class="btn btn-ghost btn-xs">Edit</a>
-                        <button class="btn btn-ghost btn-xs text-error"
-                            hx-delete="{{$.BasePath}}/income/{{.ID}}"
-                            hx-target="#income-{{.ID}}"
-                            hx-swap="outerHTML"
-                            hx-confirm="Delete this income entry?">Delete</button>
-                        {{end}}
-                    </div>
+                    <a href="{{$.BasePath}}/journals/{{.ID}}?return_to={{urlquery $data.ReturnTo}}" class="btn btn-ghost btn-xs">View</a>
                 </td>
             </tr>
             {{else}}

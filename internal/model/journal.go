@@ -8,23 +8,26 @@ import (
 // JournalEntry is the shared persistence and presentation data shape. Journal
 // business operations live in internal/journal.
 type JournalEntry struct {
-	ID             int           `json:"id"`
-	EntryDate      string        `json:"entry_date"`
-	Reference      string        `json:"reference"`
-	Description    string        `json:"description"`
-	SourceType     string        `json:"source_type"`
-	SourceID       *int          `json:"source_id"`
-	IsPosted       bool          `json:"is_posted"`
-	VehicleID      int           `json:"vehicle_id,omitempty"`
-	CreatedBy      int           `json:"created_by"`
-	CreatedAt      string        `json:"created_at"`
-	UpdatedAt      string        `json:"updated_at"`
-	Lines          []JournalLine `json:"lines"`
-	CreatedByName  string        `json:"created_by_name,omitempty"`
-	TotalDebit     int           `json:"-"`
-	TotalCredit    int           `json:"-"`
-	AccountSummary string        `json:"account_summary,omitempty"`
-	VehicleCode    string        `json:"vehicle_code,omitempty"`
+	ID               int           `json:"id"`
+	EntryDate        string        `json:"entry_date"`
+	Reference        string        `json:"reference"`
+	Description      string        `json:"description"`
+	SourceType       string        `json:"source_type"`
+	SourceID         *int          `json:"source_id"`
+	IsPosted         bool          `json:"is_posted"`
+	VehicleID        int           `json:"vehicle_id,omitempty"`
+	CreatedBy        int           `json:"created_by"`
+	CreatedAt        string        `json:"created_at"`
+	UpdatedAt        string        `json:"updated_at"`
+	Lines            []JournalLine `json:"lines"`
+	CreatedByName    string        `json:"created_by_name,omitempty"`
+	TotalDebit       int           `json:"-"`
+	TotalCredit      int           `json:"-"`
+	AccountSummary   string        `json:"account_summary,omitempty"`
+	VehicleCode      string        `json:"vehicle_code,omitempty"`
+	ListAccountCode  string        `json:"-"`
+	ListAccountName  string        `json:"-"`
+	JournalLineCount int           `json:"-"`
 }
 
 func (j JournalEntry) MarshalJSON() ([]byte, error) {
