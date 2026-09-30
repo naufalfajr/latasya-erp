@@ -687,3 +687,105 @@ func TestDeleteExpense(t *testing.T) {
 		}
 	})
 }
+
+func TestExpenseVehicle(t *testing.T) {
+	ts, db := setupServer(t)
+	token := adminToken(t, db)
+	expID := expenseAccountID(t, db)
+	payID := assetAccountID(t, db)
+
+	type entryResp struct {
+		Data struct {
+			ID      int `json:"id"`
+			Vehicle *struct {
+				ID   int    `json:"id"`
+				Code string `json:"code"`
+			} `json:"vehicle"`
+		} `json:"data"`
+	}
+	body := func(extra map[string]any) map[string]any {
+		b := map[string]any{"entry_date": "2026-05-10", "description": "Solar", "amount": "150000",
+			"expense_account": expID, "payment_account": payID}
+		for k, v := range extra {
+			b[k] = v
+		}
+		return b
+	}
+
+	resp := doRequest(t, ts, http.MethodPost, "/api/v1/expenses", token, body(map[string]any{"vehicle_id": 1}))
+	var created entryResp
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create: status %d", resp.StatusCode)
+	}
+	json.NewDecoder(resp.Body).Decode(&created)
+	resp.Body.Close()
+	if created.Data.Vehicle == nil || created.Data.Vehicle.ID != 1 || created.Data.Vehicle.Code != "LA001" {
+		t.Fatalf("create vehicle: got %+v, want LA001", created.Data.Vehicle)
+	}
+	path := fmt.Sprintf("/api/v1/expenses/%d", created.Data.ID)
+
+	t.Run("put_without_vehicle_keeps_it", func(t *testing.T) {
+		resp := doRequest(t, ts, http.MethodPut, path, token, body(map[string]any{"description": "Solar edited"}))
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("status %d", resp.StatusCode)
+		}
+		entry, err := testutil.GetJournalEntry(db, created.Data.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if entry.VehicleID != 1 {
+			t.Errorf("vehicle_id: got %d, want 1", entry.VehicleID)
+		}
+	})
+
+	t.Run("put_zero_clears_it", func(t *testing.T) {
+		resp := doRequest(t, ts, http.MethodPut, path, token, body(map[string]any{"vehicle_id": 0}))
+		var updated entryResp
+		json.NewDecoder(resp.Body).Decode(&updated)
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("status %d", resp.StatusCode)
+		}
+		if updated.Data.Vehicle != nil {
+			t.Errorf("vehicle: got %+v, want nil", updated.Data.Vehicle)
+		}
+	})
+
+	t.Run("unknown_vehicle_422", func(t *testing.T) {
+		resp := doRequest(t, ts, http.MethodPost, "/api/v1/expenses", token, body(map[string]any{"vehicle_id": 9999}))
+		var env struct {
+			Fields map[string]string `json:"fields"`
+		}
+		json.NewDecoder(resp.Body).Decode(&env)
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusUnprocessableEntity || env.Fields["vehicle_id"] == "" {
+			t.Errorf("status %d fields %v, want 422 with vehicle_id", resp.StatusCode, env.Fields)
+		}
+	})
+
+	t.Run("vehicles_lists_active_only", func(t *testing.T) {
+		if _, err := db.Exec("UPDATE vehicles SET is_active=0 WHERE code='LA002'"); err != nil {
+			t.Fatal(err)
+		}
+		resp := doRequest(t, ts, http.MethodGet, "/api/v1/expenses/vehicles", token, nil)
+		var env struct {
+			Data []struct {
+				Code string `json:"code"`
+			} `json:"data"`
+		}
+		json.NewDecoder(resp.Body).Decode(&env)
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("status %d", resp.StatusCode)
+		}
+		for _, v := range env.Data {
+			if v.Code == "LA002" {
+				t.Error("inactive vehicle LA002 listed")
+			}
+		}
+		if len(env.Data) == 0 || env.Data[0].Code != "LA001" {
+			t.Errorf("vehicles: got %+v, want LA001 first", env.Data)
+		}
+	})
+}

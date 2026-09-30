@@ -185,6 +185,9 @@ func (m *Module) CreateExpense(ctx context.Context, actor Actor, draft ExpenseDr
 	if err := m.requireAccountTypes(ctx, map[int]string{draft.ExpenseAccount: model.AccountTypeExpense, draft.PaymentAccount: model.AccountTypeAsset}); err != nil {
 		return nil, err
 	}
+	if err := m.requireVehicle(ctx, draft.VehicleID); err != nil {
+		return nil, err
+	}
 	return m.create(ctx, actor, model.SourceExpense, draft.EntryDate, draft.Description, draft.VehicleID, []Line{
 		{AccountID: draft.ExpenseAccount, Debit: draft.Amount},
 		{AccountID: draft.PaymentAccount, Credit: draft.Amount},
@@ -199,6 +202,9 @@ func (m *Module) UpdateExpense(ctx context.Context, actor Actor, id int, draft E
 		return nil, err
 	}
 	if err := m.requireAccountTypes(ctx, map[int]string{draft.ExpenseAccount: model.AccountTypeExpense, draft.PaymentAccount: model.AccountTypeAsset}); err != nil {
+		return nil, err
+	}
+	if err := m.requireVehicle(ctx, draft.VehicleID); err != nil {
 		return nil, err
 	}
 	return m.update(ctx, actor, id, model.SourceExpense, draft.EntryDate, draft.Description, draft.VehicleID, []Line{
@@ -376,6 +382,23 @@ func (m *Module) requireAccountTypes(ctx context.Context, expected map[int]strin
 	}
 	if len(fields) > 0 {
 		return &ValidationError{Fields: fields}
+	}
+	return nil
+}
+
+// requireVehicle rejects a vehicle tag that does not exist (0 means untagged).
+// Inactive vehicles stay valid so older expenses remain editable.
+func (m *Module) requireVehicle(ctx context.Context, vehicleID int) error {
+	if vehicleID == 0 {
+		return nil
+	}
+	var id int
+	err := m.db.QueryRowContext(ctx, "SELECT id FROM vehicles WHERE id=?", vehicleID).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return &ValidationError{Fields: map[string]string{"vehicle_id": "unknown vehicle"}}
+	}
+	if err != nil {
+		return fmt.Errorf("validate vehicle: %w", err)
 	}
 	return nil
 }

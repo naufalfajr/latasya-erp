@@ -227,17 +227,27 @@ func (m *Module) Options(ctx context.Context, accountType string, withVehicles b
 	if !withVehicles {
 		return result, nil
 	}
+	result.Vehicles, err = m.Vehicles(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// Vehicles lists the active vehicles an expense can be tagged with, by code.
+func (m *Module) Vehicles(ctx context.Context) ([]model.Vehicle, error) {
 	vehicleRows, err := m.db.QueryContext(ctx, `SELECT id, code, capacity, is_active FROM vehicles WHERE is_active=1 ORDER BY code`)
 	if err != nil {
 		return nil, fmt.Errorf("list expense vehicles: %w", err)
 	}
 	defer vehicleRows.Close()
+	vehicles := make([]model.Vehicle, 0)
 	for vehicleRows.Next() {
 		var vehicle model.Vehicle
 		if err := vehicleRows.Scan(&vehicle.ID, &vehicle.Code, &vehicle.Capacity, &vehicle.IsActive); err != nil {
 			return nil, fmt.Errorf("scan expense vehicle: %w", err)
 		}
-		result.Vehicles = append(result.Vehicles, vehicle)
+		vehicles = append(vehicles, vehicle)
 	}
-	return result, vehicleRows.Err()
+	return vehicles, vehicleRows.Err()
 }

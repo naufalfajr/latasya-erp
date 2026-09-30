@@ -11,6 +11,7 @@ import (
 
 	"github.com/naufal/latasya-erp/internal/access"
 	"github.com/naufal/latasya-erp/internal/api/v1"
+	"github.com/naufal/latasya-erp/internal/apitoken"
 	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/auth"
 	"github.com/naufal/latasya-erp/internal/model"
@@ -21,11 +22,12 @@ type Handler struct {
 	DB      *sql.DB
 	DevMode bool
 	Access  *access.Module
+	Tokens  *apitoken.Module
 }
 
 // New constructs a Handler.
 func New(db *sql.DB, devMode bool) *Handler {
-	return &Handler{DB: db, DevMode: devMode, Access: access.New(db, auth.HashPassword)}
+	return &Handler{DB: db, DevMode: devMode, Access: access.New(db, auth.HashPassword), Tokens: apitoken.New(db)}
 }
 
 // RegisterRoutes installs authenticated auth endpoints. Login is intentionally
@@ -35,6 +37,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/auth/me", h.Me)
 	mux.HandleFunc("GET /api/v1/auth/csrf", h.CSRF)
 	mux.HandleFunc("POST /api/v1/auth/password/change", h.PasswordChange)
+	mux.HandleFunc("DELETE /api/v1/auth/token", h.RevokeToken)
 }
 
 // RegisterLoginRoute installs the unauthenticated login endpoint.
@@ -246,6 +249,13 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 		authMethod = "bearer"
 	}
 
+	// token_scopes is what the calling token can actually do (its scopes ∩ the
+	// user's current role); empty for cookie sessions.
+	tokenScopes := []string{}
+	if v1.IsBearerAuth(r.Context()) {
+		tokenScopes = append(tokenScopes, v1.EffectiveCapabilitiesFromContext(r.Context())...)
+	}
+
 	payload := map[string]any{
 		"id":                   user.ID,
 		"username":             user.Username,
@@ -255,9 +265,27 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 		"must_change_password": user.MustChangePassword,
 		"auth_method":          authMethod,
 		"token_id":             v1.TokenIDFromContext(r.Context()),
+		"token_scopes":         tokenScopes,
 	}
 
 	v1.WriteJSON(w, http.StatusOK, map[string]any{"data": payload})
+}
+
+// RevokeToken revokes the Bearer token making the request, so a client such as
+// the Telegram bot can log out without leaving a live credential behind.
+func (h *Handler) RevokeToken(w http.ResponseWriter, r *http.Request) {
+	tokenID := v1.TokenIDFromContext(r.Context())
+	if !v1.IsBearerAuth(r.Context()) || tokenID == nil {
+		v1.WriteError(w, r, http.StatusBadRequest, v1.CodeInvalidRequest,
+			"only a bearer token can revoke itself", nil)
+		return
+	}
+	user := auth.UserFromContext(r.Context())
+	if _, err := h.Tokens.Revoke(r.Context(), apitoken.Actor{UserID: user.ID, Username: user.Username}, *tokenID); err != nil {
+		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to revoke token", nil)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // CSRF returns the CSRF token bound to the current cookie session. Bearer

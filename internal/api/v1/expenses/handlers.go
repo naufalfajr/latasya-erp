@@ -19,6 +19,11 @@ type accountRef struct {
 	Name string `json:"name"`
 }
 
+type vehicleRef struct {
+	ID   int    `json:"id"`
+	Code string `json:"code"`
+}
+
 type expenseEntry struct {
 	ID             int         `json:"id"`
 	Reference      string      `json:"reference"`
@@ -27,6 +32,7 @@ type expenseEntry struct {
 	Amount         string      `json:"amount"`
 	ExpenseAccount *accountRef `json:"expense_account,omitempty"`
 	PaymentAccount *accountRef `json:"payment_account,omitempty"`
+	Vehicle        *vehicleRef `json:"vehicle,omitempty"`
 	CreatedAt      string      `json:"created_at"`
 }
 
@@ -36,11 +42,17 @@ type expenseInput struct {
 	Amount         string `json:"amount"`
 	ExpenseAccount int    `json:"expense_account"`
 	PaymentAccount int    `json:"payment_account"`
+	// VehicleID is optional: nil keeps the current tag on update (none on
+	// create), 0 clears it, and a positive ID sets it.
+	VehicleID *int `json:"vehicle_id"`
 }
 
 func toExpenseEntry(entry *model.JournalEntry) expenseEntry {
 	result := expenseEntry{ID: entry.ID, Reference: entry.Reference, EntryDate: entry.EntryDate,
 		Description: entry.Description, Amount: strconv.Itoa(entry.TotalDebit), CreatedAt: entry.CreatedAt}
+	if entry.VehicleID != 0 {
+		result.Vehicle = &vehicleRef{ID: entry.VehicleID, Code: entry.VehicleCode}
+	}
 	for _, line := range entry.Lines {
 		if line.Debit > 0 {
 			result.ExpenseAccount = &accountRef{ID: line.AccountID, Code: line.AccountCode, Name: line.AccountName}
@@ -69,8 +81,12 @@ func draft(input expenseInput) (journal.ExpenseDraft, map[string]string) {
 	if err != nil {
 		return journal.ExpenseDraft{}, map[string]string{"amount": "must be a positive integer"}
 	}
+	vehicleID := 0
+	if input.VehicleID != nil {
+		vehicleID = *input.VehicleID
+	}
 	return journal.ExpenseDraft{EntryDate: input.EntryDate, Description: input.Description, Amount: amount,
-		ExpenseAccount: input.ExpenseAccount, PaymentAccount: input.PaymentAccount}, nil
+		ExpenseAccount: input.ExpenseAccount, PaymentAccount: input.PaymentAccount, VehicleID: vehicleID}, nil
 }
 
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
@@ -127,7 +143,8 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "expense entry not found", nil)
 		return
 	}
-	if entry, err := h.Journals.Get(r.Context(), id); err != nil || entry.SourceType != model.SourceExpense {
+	entry, err := h.Journals.Get(r.Context(), id)
+	if err != nil || entry.SourceType != model.SourceExpense {
 		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "expense entry not found", nil)
 		return
 	}
@@ -140,6 +157,10 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	if fields != nil {
 		v1.WriteError(w, r, http.StatusUnprocessableEntity, v1.CodeValidationFailed, "validation failed", fields)
 		return
+	}
+	if input.VehicleID == nil {
+		// Clients that don't know about vehicles must not wipe a tag set on the web.
+		command.VehicleID = entry.VehicleID
 	}
 	updated, err := h.Journals.UpdateExpense(r.Context(), actor(r), id, command)
 	if !writeModuleError(w, r, err) {
@@ -166,6 +187,20 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// Vehicles lists the active vehicles an expense can be tagged with.
+func (h *Handler) Vehicles(w http.ResponseWriter, r *http.Request) {
+	vehicles, err := h.Journals.Vehicles(r.Context())
+	if err != nil {
+		v1.WriteError(w, r, http.StatusInternalServerError, v1.CodeInternal, "failed to list vehicles", nil)
+		return
+	}
+	refs := make([]vehicleRef, 0, len(vehicles))
+	for _, vehicle := range vehicles {
+		refs = append(refs, vehicleRef{ID: vehicle.ID, Code: vehicle.Code})
+	}
+	v1.WriteJSON(w, http.StatusOK, map[string]any{"data": refs})
 }
 
 func requireManage(w http.ResponseWriter, r *http.Request) bool {
