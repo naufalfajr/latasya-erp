@@ -17,6 +17,7 @@ Built with Go stdlib, HTMX, Tailwind CSS + DaisyUI, and SQLite. Deploys as a sin
 - **Dashboard** — cash balance, monthly revenue/expenses, outstanding invoices/bills
 - **Responsive** — works on desktop and mobile (DaisyUI drawer layout)
 - **HTMX** — SPA-like navigation with `hx-boost`, inline delete, live search, dynamic form rows
+- **Telegram bot** — record income/expenses, mark invoices sent, and record payments from Telegram with per-user API tokens
 
 ## Tech Stack
 
@@ -83,7 +84,7 @@ curl -s -X DELETE \
 | Method | Use Case | How |
 |--------|----------|-----|
 | Session cookie | Browser / SPA | Login via `/api/v1/auth/login`, cookie set automatically |
-| Bearer token | Bots, MCP, Telegram, scripts | Create at `/settings/api-tokens`, use `Authorization: Bearer lat_...` |
+| Bearer token | Bots, MCP, Telegram, scripts | Create at `/settings/api-tokens` (any user), use `Authorization: Bearer lat_...`; `DELETE /api/v1/auth/token` revokes the calling token |
 
 Bearer tokens are scoped (subset of your capabilities) and revocable. They skip CSRF validation.
 
@@ -113,6 +114,10 @@ curl http://localhost:8080/api/v1/openapi.yaml
 ```
 
 See `MIGRATION_NOTES.md` for the full migration strategy and sunset criteria.
+
+## Telegram Bot
+
+Staff can record income and expenses, mark invoices as sent, and record payments from Telegram. Each person pastes their own API token (sidebar → **API Tokens**, available to every user for their own capabilities) into a private chat with the bot; `/logout` revokes it. The bot is a separate binary (`cmd/telegram-bot`) that talks to the JSON API. Setup, commands, and safety behavior: [`cmd/telegram-bot/README.md`](cmd/telegram-bot/README.md).
 
 ## Quick Start
 
