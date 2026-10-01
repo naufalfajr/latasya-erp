@@ -764,6 +764,21 @@ func TestExpenseVehicle(t *testing.T) {
 		}
 	})
 
+	t.Run("put_unknown_vehicle_422_keeps_entry", func(t *testing.T) {
+		resp := doRequest(t, ts, http.MethodPut, path, token, body(map[string]any{"vehicle_id": 9999, "description": "nope"}))
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusUnprocessableEntity {
+			t.Errorf("status %d, want 422", resp.StatusCode)
+		}
+		entry, err := testutil.GetJournalEntry(db, created.Data.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if entry.Description == "nope" {
+			t.Error("entry updated despite unknown vehicle")
+		}
+	})
+
 	t.Run("vehicles_lists_active_only", func(t *testing.T) {
 		if _, err := db.Exec("UPDATE vehicles SET is_active=0 WHERE code='LA002'"); err != nil {
 			t.Fatal(err)
@@ -786,6 +801,17 @@ func TestExpenseVehicle(t *testing.T) {
 		}
 		if len(env.Data) == 0 || env.Data[0].Code != "LA001" {
 			t.Errorf("vehicles: got %+v, want LA001 first", env.Data)
+		}
+	})
+
+	t.Run("vehicles_db_error_500", func(t *testing.T) {
+		if _, err := db.Exec("ALTER TABLE vehicles RENAME TO vehicles_gone"); err != nil {
+			t.Fatal(err)
+		}
+		resp := doRequest(t, ts, http.MethodGet, "/api/v1/expenses/vehicles", token, nil)
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusInternalServerError {
+			t.Errorf("status %d, want 500", resp.StatusCode)
 		}
 	})
 }

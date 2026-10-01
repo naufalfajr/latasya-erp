@@ -16,7 +16,7 @@ The bot is a plain client of the JSON API (`/api/v1`). It imports no ERP interna
 
 The bot deletes the token message immediately and replies "Connected as …". If the token is missing a scope, the bot warns at connect time and those actions fail with a clear message.
 
-Passwords never go into Telegram. Bot chats are not end-to-end encrypted, and a token is limited to three scopes and can be revoked on its own.
+Passwords never go into Telegram. Bot chats are not end-to-end encrypted, and a token can be revoked on its own. Scopes limit what a token can change; it can still read all ERP data, like a logged-in user.
 
 **Disconnecting:**
 
@@ -76,7 +76,7 @@ TELEGRAM_BOT_TOKEN=<dev-bot-token> make run-bot   # terminal 2
 
 ```bash
 sudo install -m 600 -o root -g root /dev/null /etc/latasya/latasya-telegram.env
-echo 'TELEGRAM_BOT_TOKEN=<prod-bot-token>' | sudo tee /etc/latasya/latasya-telegram.env >/dev/null
+sudoedit /etc/latasya/latasya-telegram.env   # add: TELEGRAM_BOT_TOKEN=<prod-bot-token>
 sudo systemctl enable --now latasya-telegram
 journalctl -u latasya-telegram -f
 ```

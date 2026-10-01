@@ -85,7 +85,8 @@ func newBot(tgURL, apiURL, statePath string) *bot {
 }
 
 // run long-polls Telegram until ctx is cancelled. It only returns an error
-// when Telegram rejects the bot token, since retrying cannot fix that.
+// when Telegram rejects the bot token (401 invalid, 404 malformed), since
+// retrying cannot fix that.
 func (b *bot) run(ctx context.Context) error {
 	if err := b.tg("setMyCommands", map[string]any{"commands": commands}, nil); err != nil {
 		slog.Warn("setMyCommands failed", "error", err)
@@ -102,7 +103,7 @@ func (b *bot) run(ctx context.Context) error {
 				return nil
 			}
 			var te *tgError
-			if errors.As(err, &te) && te.Code == http.StatusUnauthorized {
+			if errors.As(err, &te) && (te.Code == http.StatusUnauthorized || te.Code == http.StatusNotFound) {
 				return err
 			}
 			slog.Warn("getUpdates failed", "error", err, "retry_in", backoff)

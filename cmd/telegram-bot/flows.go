@@ -29,9 +29,9 @@ var commands = []map[string]string{
 // requiredScopes are what the bot's write actions need from a token.
 var requiredScopes = []string{"income.manage", "expenses.manage", "invoices.manage"}
 
-// tokenRe finds an ERP API token anywhere in a message, so a token pasted
-// inside a sentence is still deleted from the chat.
-var tokenRe = regexp.MustCompile(`\blat_[0-9A-Za-z]{32}\b`)
+// tokenRe finds an ERP API token anywhere in a message, even glued to other
+// text ("token_lat_…"), so it is deleted rather than saved as a description.
+var tokenRe = regexp.MustCompile(`lat_[0-9A-Za-z]{32}`)
 
 const connectHelp = `To connect, create a personal API token in Latasya ERP:
 1. Open ERP → API Tokens (sidebar) → Create new token
@@ -503,6 +503,11 @@ func (b *bot) listEntries(t turn, s *session, c *chat, k *kind, page int) {
 		b.fail(t, c, err)
 		return
 	}
+	if len(res.Data) == 0 && page > res.Meta.TotalPages && res.Meta.TotalPages > 0 {
+		// The page emptied (e.g. its last entry was deleted): show the last one.
+		b.listEntries(t, s, c, k, res.Meta.TotalPages)
+		return
+	}
 	text := k.name + " — recent entries"
 	if res.Meta.Total == 0 {
 		text = "No " + strings.ToLower(k.name) + " recorded yet."
@@ -862,6 +867,12 @@ func (b *bot) save(t turn, s *session, c *chat) string {
 		// hour can't silently overwrite a change made on the web meanwhile.
 		var current entry
 		current, err = b.getEntry(s, k, c.editID)
+		if err == nil && current.draft().same(c.d) {
+			// A retry after a lost reply: the first PUT already landed.
+			c.reset()
+			b.showEntry(t, c, k, current, 1, "Saved.")
+			return ""
+		}
 		if err == nil && !current.draft().same(c.orig) {
 			c.reset()
 			b.showEntry(t, c, k, current, 1, "Not saved: this entry was changed elsewhere after you opened it. Here is the latest version — tap Edit to try again.")
@@ -984,6 +995,11 @@ func (b *bot) listInvoices(t turn, s *session, c *chat, status string, page int)
 		b.fail(t, c, err)
 		return
 	}
+	if len(res.Data) == 0 && page > res.Meta.TotalPages && res.Meta.TotalPages > 0 {
+		// The page emptied (e.g. its last invoice was paid): show the last one.
+		b.listInvoices(t, s, c, status, res.Meta.TotalPages)
+		return
+	}
 	label := "All"
 	if status != "" {
 		label = strings.ToUpper(status[:1]) + status[1:]
@@ -1020,6 +1036,13 @@ func (b *bot) viewInvoice(t turn, s *session, c *chat, id int, back, header stri
 		b.fail(t, c, err)
 		return
 	}
+	b.showInvoice(t, c, inv, back, header)
+}
+
+// showInvoice renders an invoice already in hand. After a send or payment it
+// renders the POST response: a follow-up GET could fail and hide a change that
+// already happened, inviting the user to pay twice.
+func (b *bot) showInvoice(t turn, c *chat, inv *invoice, back, header string) {
 	var sb strings.Builder
 	if header != "" {
 		sb.WriteString(header + "\n\n")
@@ -1078,12 +1101,15 @@ func (b *bot) confirmSend(t turn, s *session, c *chat, id int, back string) {
 
 func (b *bot) doSend(t turn, s *session, c *chat, id int, back string) {
 	key := fmt.Sprintf("send-%s-%d", c.nonce, id)
-	if err := b.api(s, http.MethodPost, fmt.Sprintf("/api/v1/invoices/%d/send", id), nil, key, nil); err != nil {
+	var res struct {
+		Data invoice `json:"data"`
+	}
+	if err := b.api(s, http.MethodPost, fmt.Sprintf("/api/v1/invoices/%d/send", id), nil, key, &res); err != nil {
 		b.fail(t, c, err)
 		return
 	}
 	c.reset()
-	b.viewInvoice(t, s, c, id, back, "Marked as sent.")
+	b.showInvoice(t, c, &res.Data, back, "Marked as sent.")
 }
 
 func (b *bot) startPayment(t turn, s *session, c *chat, id int, back string) {
@@ -1103,13 +1129,21 @@ func (b *bot) startPayment(t turn, s *session, c *chat, id int, back string) {
 
 func (b *bot) savePayment(t turn, s *session, c *chat) {
 	body := map[string]any{"amount": strconv.Itoa(c.d.Amount), "payment_date": c.d.Date, "payment_account": c.d.Cash.ID}
-	if err := b.api(s, http.MethodPost, fmt.Sprintf("/api/v1/invoices/%d/payment", c.invoice.ID), body, c.idemKey, nil); err != nil {
+	var res struct {
+		Data invoice `json:"data"`
+	}
+	if err := b.api(s, http.MethodPost, fmt.Sprintf("/api/v1/invoices/%d/payment", c.invoice.ID), body, c.idemKey, &res); err != nil {
+		// Refresh the amount due, which a payment on the web may have changed;
+		// otherwise "Full" keeps offering the stale amount.
+		if inv, getErr := b.getInvoice(s, c.invoice.ID); getErr == nil {
+			c.invoice = inv
+		}
 		b.saveFailed(t, c, err)
 		return
 	}
-	id, back := c.invoice.ID, c.back
+	back := c.back
 	c.reset()
-	b.viewInvoice(t, s, c, id, back, "Payment recorded.")
+	b.showInvoice(t, c, &res.Data, back, "Payment recorded.")
 }
 
 // --- Parsing and formatting ---

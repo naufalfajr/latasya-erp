@@ -51,6 +51,9 @@ type harness struct {
 	// connection before replying: a save that committed but whose response
 	// was lost.
 	dropNext atomic.Bool
+	// tgReply overrides the fake's response body for a Telegram method, e.g.
+	// to make editMessageText fail.
+	tgReply map[string]string
 }
 
 type tgCall struct {
@@ -116,6 +119,10 @@ func (h *harness) fakeTelegram(w http.ResponseWriter, r *http.Request) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.calls = append(h.calls, call)
+	if body, ok := h.tgReply[call.Method]; ok {
+		fmt.Fprint(w, body)
+		return
+	}
 	if call.Method == "getUpdates" {
 		if len(h.polls) == 0 {
 			fmt.Fprint(w, `{"ok":false,"error_code":401,"description":"Unauthorized"}`)
@@ -295,7 +302,7 @@ func TestConnect(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		h.send("/login " + plaintext)
+		h.send("token_" + plaintext + "_")
 		h.expect("Connected as sari")
 		if len(h.callsTo("deleteMessage")) != 1 {
 			t.Error("token message was not deleted")
@@ -650,6 +657,31 @@ func TestSaveFailures(t *testing.T) {
 		}
 	})
 
+	t.Run("lost edit response then retry reports saved", func(t *testing.T) {
+		h := newHarness(t)
+		h.connect(allScopes...)
+		h.startIncome("100000")
+		h.tap("Save")
+		h.tap("Edit")
+		h.tap("Amount")
+		h.send("120000")
+		next, lost := h.b.apiHTTP.Transport, false
+		h.b.apiHTTP.Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			resp, err := next.RoundTrip(r)
+			if err == nil && r.Method == http.MethodPut && !lost {
+				lost = true // the PUT committed; only its reply is lost
+				resp.Body.Close()
+				return nil, errors.New("connection reset by peer")
+			}
+			return resp, err
+		})
+		h.tap("Save")
+		h.expect("Tap Save to retry")
+		h.tap("Save")
+		h.expect("Saved.")
+		h.expect("Rp 120.000")
+	})
+
 	t.Run("forbidden closes the form with the ERP message", func(t *testing.T) {
 		h := newHarness(t)
 		h.connect(model.CapExpensesManage) // no income.manage
@@ -704,6 +736,23 @@ func TestNavigation(t *testing.T) {
 	}
 	h.tap("Yes, delete")
 	h.expect("Already deleted.")
+
+	// Deleting the only entry on the last page returns to the new last page.
+	if _, err := journal.New(h.db).CreateIncome(t.Context(), journal.Actor{UserID: 1, CanManageIncome: true},
+		journal.IncomeDraft{EntryDate: "2026-09-12", Description: "Entry 12", Amount: 12000,
+			RevenueAccount: revenue, DepositAccount: cash}); err != nil {
+		t.Fatal(err)
+	}
+	h.send("/income")
+	h.tap("Next ›")
+	h.tap("1 Sep")
+	h.tap("Delete")
+	h.tap("Yes, delete")
+	h.tap("« Back to list")
+	h.expect("Income — recent entries")
+	if !h.hasButton("2 Sep") {
+		t.Errorf("back to list after delete shows no entries:\n%s", h.last().Text)
+	}
 }
 
 func TestRunLoop(t *testing.T) {
@@ -730,6 +779,17 @@ func TestRunLoop(t *testing.T) {
 	}
 }
 
+func TestRunExitsOnMalformedBotToken(t *testing.T) {
+	h := newHarness(t)
+	h.tgReply = map[string]string{"getUpdates": `{"ok":false,"error_code":404,"description":"Not Found"}`}
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	var te *tgError
+	if err := h.b.run(ctx); !errors.As(err, &te) || te.Code != http.StatusNotFound {
+		t.Fatalf("run: got %v, want exit on Telegram 404", err)
+	}
+}
+
 func TestHandleSafelyContainsPanics(t *testing.T) {
 	h := newHarness(t)
 	h.connect(allScopes...)
@@ -737,3 +797,542 @@ func TestHandleSafelyContainsPanics(t *testing.T) {
 	h.b.handleSafely(update{UpdateID: 1, Message: &message{MessageID: 99, From: &tgUser{ID: userID},
 		Chat: tgChat{ID: userID, Type: "private"}, Text: "/menu"}})
 }
+
+func TestCommandsAndStaleCallbacks(t *testing.T) {
+	h := newHarness(t)
+
+	// Not connected: typed commands and old buttons both point at setup.
+	h.send("/menu")
+	h.expect("To connect")
+	h.press("abcdef|mn|")
+	h.expect("To connect")
+
+	h.connect(allScopes...)
+	h.send("/start")
+	h.expect("Connected as")
+	h.send("/expense")
+	h.expect("No expense recorded yet.")
+	h.send("/invoices")
+	h.expect("pick a status")
+	h.send("/menu@LatasyaBot")
+	h.expect("What do you want to do?")
+	h.send("/nope")
+	h.expect("Unknown command")
+
+	// Buttons that don't fit the current state never act, even with a valid nonce.
+	nonce := h.b.chats[userID].nonce
+	for _, data := range []string{"garbage", nonce + "|zz|", nonce + "|ls|x:1", nonce + "|dt|0",
+		nonce + "|pf|", nonce + "|fx|amount", nonce + "|sv|", nonce + "|ac|1"} {
+		if toast := h.press(data); toast != expired {
+			t.Errorf("press(%q): toast %q, want %q", data, toast, expired)
+		}
+	}
+
+	h.send("/income")
+	h.tap("+ Add income")
+	nonce = h.b.chats[userID].nonce
+	for _, data := range []string{nonce + "|fx|bogus", nonce + "|sv|", nonce + "|ac|1"} {
+		if toast := h.press(data); toast != expired {
+			t.Errorf("mid-form press(%q): toast %q, want %q", data, toast, expired)
+		}
+	}
+	h.tap("Cancel")
+	h.expect("Cancelled.")
+}
+
+func TestReviewChangesEveryField(t *testing.T) {
+	h := newHarness(t)
+	h.connect(allScopes...)
+	fuel := h.label(`SELECT code||' '||name FROM accounts WHERE code='5-1001'`)
+	cash := h.label(`SELECT code||' '||name FROM accounts WHERE code='1-1001'`)
+
+	h.send("/expense")
+	h.tap("+ Add expense")
+	h.send("75000")
+	h.send("   ")
+	h.expect("Please type a description")
+	h.send("Servis rem")
+	h.tap(fuel)
+	h.tap(cash)
+	h.tap("LA001")
+	h.send("31/02/2026")
+	h.expect("couldn't read that date")
+	h.send("15/9/2026")
+	h.expect("Date: 15 Sep 2026")
+	h.tap("Save")
+	h.expect("Saved.")
+	id := h.int(`SELECT id FROM journal_entries WHERE source_type='expense'`)
+
+	// Edit every field except amount/description (covered elsewhere),
+	// including clearing the vehicle tag.
+	h.tap("Edit")
+	h.tap("Vehicle")
+	h.tap("No vehicle")
+	h.expect("Vehicle: No vehicle")
+	h.tap("Date")
+	h.send("2026-09-16")
+	h.tap("Expense account")
+	h.tap(h.label(`SELECT code||' '||name FROM accounts WHERE code='5-2001'`))
+	h.tap("Paid from")
+	h.tap(h.label(`SELECT code||' '||name FROM accounts WHERE code='1-1002'`))
+	h.expect("Edit expense")
+	h.tap("Save")
+	h.expect("Saved.")
+
+	entry, err := testutil.GetJournalEntry(h.db, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if entry.VehicleID != 0 || entry.EntryDate != "2026-09-16" {
+		t.Errorf("after edit: vehicle=%d date=%s, want untagged on 2026-09-16", entry.VehicleID, entry.EntryDate)
+	}
+	accounts := map[string]bool{}
+	for _, l := range entry.Lines {
+		accounts[l.AccountCode] = true
+	}
+	if !accounts["5-2001"] || !accounts["1-1002"] {
+		t.Errorf("after edit: accounts %v, want 5-2001 and 1-1002", accounts)
+	}
+}
+
+func TestPickerFallbacks(t *testing.T) {
+	h := newHarness(t)
+	h.connect(allScopes...)
+	if _, err := h.db.Exec(`UPDATE vehicles SET is_active=0`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.db.Exec(`UPDATE accounts SET is_cash=0`); err != nil {
+		t.Fatal(err)
+	}
+
+	h.send("/expense")
+	h.tap("+ Add expense")
+	h.send("10000")
+	h.send("Parkir")
+	h.tap(h.label(`SELECT code||' '||name FROM accounts WHERE code='5-1001'`))
+	h.expect("Paid from?")
+	// No account is flagged as cash, so every active asset is offered.
+	if !h.hasButton("1-1100") {
+		t.Error("cash fallback should offer all active assets")
+	}
+	h.tap(h.label(`SELECT code||' '||name FROM accounts WHERE code='1-1001'`))
+	// No active vehicles: the vehicle step is skipped.
+	h.expect("Date?")
+	h.tap("Today")
+	if strings.Contains(h.last().Text, "Vehicle:") && !strings.Contains(h.last().Text, "No vehicle") {
+		t.Errorf("review shows a vehicle: %s", h.last().Text)
+	}
+
+	if _, err := h.db.Exec(`UPDATE accounts SET is_active=0 WHERE account_type='expense'`); err != nil {
+		t.Fatal(err)
+	}
+	h.tap("Expense account")
+	h.expect("No active accounts")
+}
+
+func TestReconnect(t *testing.T) {
+	h := newHarness(t)
+	oldID, _, _ := h.connect(allScopes...)
+	newID, plaintext, _ := h.connect(allScopes...)
+	revoked := func(id int) bool {
+		return h.int(`SELECT COUNT(*) FROM api_tokens WHERE id=? AND revoked_at IS NOT NULL`, id) == 1
+	}
+	if !revoked(oldID) {
+		t.Error("replaced token was left live")
+	}
+	h.send(plaintext) // pasting the current token again must not revoke it
+	h.expect("Connected as")
+	if revoked(newID) {
+		t.Error("re-pasting the active token revoked it")
+	}
+}
+
+func TestERPUnreachable(t *testing.T) {
+	h := newHarness(t)
+	_, plaintext, _ := h.connect(allScopes...)
+	h.b.apiURL = "http://127.0.0.1:1"
+
+	h.send(plaintext)
+	h.expect("ERP is unreachable")
+	h.send("/logout")
+	h.expect("couldn't reach ERP")
+	if h.b.sessions[userID] != nil {
+		t.Error("session kept after logout")
+	}
+}
+
+func TestLogoutWithRevokedToken(t *testing.T) {
+	h := newHarness(t)
+	tokenID, _, _ := h.connect(allScopes...)
+	h.db.Exec(`UPDATE api_tokens SET revoked_at=datetime('now') WHERE id=?`, tokenID)
+	h.send("/logout")
+	h.expect("token is revoked")
+}
+
+// TestTokenRevokedMidFlow revokes the token at each step that calls the ERP;
+// every one must drop the session and ask to reconnect.
+func TestTokenRevokedMidFlow(t *testing.T) {
+	fuel := `SELECT code||' '||name FROM accounts WHERE code='5-1001'`
+	cash := `SELECT code||' '||name FROM accounts WHERE code='1-1001'`
+	steps := map[string]func(h *harness) func(){
+		"account list": func(h *harness) func() {
+			h.send("/expense")
+			h.tap("+ Add expense")
+			h.send("10000")
+			return func() { h.send("Solar") }
+		},
+		"cash list": func(h *harness) func() {
+			h.send("/expense")
+			h.tap("+ Add expense")
+			h.send("10000")
+			h.send("Solar")
+			return func() { h.tap(h.label(fuel)) }
+		},
+		"vehicle list": func(h *harness) func() {
+			h.send("/expense")
+			h.tap("+ Add expense")
+			h.send("10000")
+			h.send("Solar")
+			h.tap(h.label(fuel))
+			return func() { h.tap(h.label(cash)) }
+		},
+		"save": func(h *harness) func() {
+			h.startIncome("10000")
+			return func() { h.tap("Save") }
+		},
+		"view entry": func(h *harness) func() {
+			h.startIncome("10000")
+			h.tap("Save")
+			h.tap("« Back")
+			return func() { h.tap(time.Now().In(wib).Format("2 Jan")) }
+		},
+		"invoice list": func(h *harness) func() {
+			h.send("/invoices")
+			return func() { h.tap("Draft") }
+		},
+	}
+	for name, setup := range steps {
+		t.Run(name, func(t *testing.T) {
+			h := newHarness(t)
+			tokenID, _, _ := h.connect(allScopes...)
+			act := setup(h)
+			h.db.Exec(`UPDATE api_tokens SET revoked_at=datetime('now') WHERE id=?`, tokenID)
+			act()
+			h.expect("revoked or expired")
+			if h.b.sessions[userID] != nil {
+				t.Error("session kept after token was revoked")
+			}
+		})
+	}
+}
+
+func TestEntryDeletedElsewhere(t *testing.T) {
+	for _, button := range []string{"Edit", "Delete", "« Back"} {
+		t.Run(button, func(t *testing.T) {
+			h := newHarness(t)
+			h.connect(allScopes...)
+			h.startIncome("10000")
+			h.tap("Save")
+			h.expect("Saved.")
+			if button == "« Back" {
+				h.tap("« Back") // list is on screen; the entry goes before it's opened
+			}
+			id := h.int(`SELECT id FROM journal_entries WHERE source_type='income'`)
+			if _, err := journal.New(h.db).DeleteIncome(t.Context(), journal.Actor{UserID: 1, CanManageIncome: true}, id); err != nil {
+				t.Fatal(err)
+			}
+			if button == "« Back" {
+				h.tap(time.Now().In(wib).Format("2 Jan"))
+			} else {
+				h.tap(button)
+			}
+			h.expect("not found")
+			if !h.hasButton("« Menu") {
+				t.Error("error screen has no way back")
+			}
+		})
+	}
+}
+
+// newInvoice creates a draft invoice for a fresh customer.
+func (h *harness) newInvoice(lines int) int {
+	h.t.Helper()
+	res, err := h.db.Exec(`INSERT INTO contacts (name, contact_type, is_active) VALUES ('Sinta', 'customer', 1)`)
+	if err != nil {
+		h.t.Fatal(err)
+	}
+	contactID, _ := res.LastInsertId()
+	var ls []model.InvoiceLine
+	for i := range lines {
+		ls = append(ls, model.InvoiceLine{Description: fmt.Sprintf("Trip %d", i+1), Quantity: 100, UnitPrice: 10000,
+			AccountID: h.int(`SELECT id FROM accounts WHERE code='4-1001'`)})
+	}
+	id, err := testutil.CreateInvoice(h.db, &model.Invoice{ContactID: int(contactID), InvoiceDate: "2026-09-01", DueDate: "2026-09-10"}, ls)
+	if err != nil {
+		h.t.Fatal(err)
+	}
+	return id
+}
+
+func TestInvoiceEdgeCases(t *testing.T) {
+	t.Run("empty and paginated lists", func(t *testing.T) {
+		h := newHarness(t)
+		h.connect(allScopes...)
+		h.send("/invoices")
+		h.tap("Paid")
+		h.expect("No paid invoices.")
+		for range pageSize + 1 {
+			h.newInvoice(1)
+		}
+		h.tap("« Statuses")
+		h.tap("All")
+		h.expect("All invoices (page 1 of 2)")
+		h.tap("Next ›")
+		h.expect("page 2 of 2")
+	})
+
+	t.Run("long invoice is truncated", func(t *testing.T) {
+		h := newHarness(t)
+		h.connect(allScopes...)
+		id := h.newInvoice(25)
+		h.send("/invoices")
+		h.press(h.b.chats[userID].nonce + "|iv|" + fmt.Sprint(id)) // no list to go back to
+		h.expect("…and 5 more lines")
+		h.tap("« Back")
+		h.expect("All invoices")
+	})
+
+	t.Run("sent elsewhere before confirming", func(t *testing.T) {
+		h := newHarness(t)
+		h.connect(allScopes...)
+		id := h.newInvoice(1)
+		h.send("/invoices")
+		h.tap("Draft")
+		h.tap("INV")
+		h.tap("Mark as sent")
+		if _, err := invoicemod.New(h.db).Send(t.Context(), invoicemod.Actor{UserID: 1, CanManage: true}, id); err != nil {
+			t.Fatal(err)
+		}
+		h.tap("Yes, mark as sent")
+		h.expect("ERP says")
+	})
+
+	t.Run("paid elsewhere before paying", func(t *testing.T) {
+		h := newHarness(t)
+		h.connect(allScopes...)
+		id := h.newInvoice(1)
+		h.send("/invoices")
+		h.tap("Draft")
+		h.tap("INV")
+		h.tap("Mark as sent")
+		h.tap("Yes, mark as sent")
+		h.tap("Record payment")
+		h.tap("Full")
+		h.tap(h.label(`SELECT code||' '||name FROM accounts WHERE code='1-1001'`))
+		h.tap("Today")
+		h.db.Exec(`UPDATE invoices SET status='paid', amount_paid=total WHERE id=?`, id)
+		h.tap("Save")
+		h.expect("ERP says")
+		if n := h.int(`SELECT COUNT(*) FROM payments WHERE payment_type='invoice' AND reference_id=?`, id); n != 0 {
+			t.Errorf("payments recorded: %d, want 0", n)
+		}
+		// The stale "Record payment" button re-checks the invoice first.
+		h.send("/invoices")
+		h.tap("Paid")
+		h.tap("INV")
+		h.press(h.b.chats[userID].nonce + "|ip|" + fmt.Sprint(id) + ":paid:1")
+		h.expect("can't take a payment")
+	})
+
+	t.Run("recorded payment is shown even if the ERP then fails", func(t *testing.T) {
+		h := newHarness(t)
+		h.connect(allScopes...)
+		id := h.newInvoice(1)
+		h.send("/invoices")
+		h.tap("Draft")
+		h.tap("INV")
+		h.tap("Mark as sent")
+		next := h.b.apiHTTP.Transport
+		h.b.apiHTTP.Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v1/invoices/") {
+				return nil, errors.New("ERP restarting")
+			}
+			return next.RoundTrip(r)
+		})
+		h.tap("Yes, mark as sent")
+		h.expect("Marked as sent.")
+		h.b.apiHTTP.Transport = next
+		h.tap("Record payment")
+		h.send("4.000")
+		h.tap(h.label(`SELECT code||' '||name FROM accounts WHERE code='1-1001'`))
+		h.tap("Today")
+		h.b.apiHTTP.Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v1/invoices/") {
+				return nil, errors.New("ERP restarting")
+			}
+			return next.RoundTrip(r)
+		})
+		h.tap("Save")
+		h.expect("Payment recorded.")
+		h.expect("Amount due: Rp 6.000")
+		if inv, _ := testutil.GetInvoice(h.db, id); inv.AmountPaid != 4000 {
+			t.Errorf("amount_paid %d, want 4000", inv.AmountPaid)
+		}
+	})
+
+	t.Run("rejected payment refreshes the amount due", func(t *testing.T) {
+		h := newHarness(t)
+		h.connect(allScopes...)
+		id := h.newInvoice(1)
+		if _, err := invoicemod.New(h.db).Send(t.Context(), invoicemod.Actor{UserID: 1, CanManage: true}, id); err != nil {
+			t.Fatal(err)
+		}
+		cash := h.label(`SELECT code||' '||name FROM accounts WHERE code='1-1001'`)
+		h.send("/invoices")
+		h.tap("Sent")
+		h.tap("INV")
+		h.tap("Record payment")
+		h.tap("Full Rp 10.000")
+		h.tap(cash)
+		h.tap("Today")
+		// 6.000 is recorded on the web while the form is open.
+		if _, err := invoicemod.New(h.db).RecordPayment(t.Context(), invoicemod.Actor{UserID: 1, CanManage: true}, id,
+			invoicemod.Payment{Amount: 6000, Date: "2026-09-02", AccountID: h.int(`SELECT id FROM accounts WHERE code='1-1001'`)}); err != nil {
+			t.Fatal(err)
+		}
+		h.tap("Save")
+		h.expect("exceeds remaining balance")
+		h.tap("Amount")
+		h.expect("Amount due: Rp 4.000")
+		h.tap("Full Rp 4.000")
+		h.tap("Save")
+		h.expect("Payment recorded.")
+		h.expect("Status: paid")
+	})
+
+	t.Run("deleted elsewhere", func(t *testing.T) {
+		for _, button := range []string{"Mark as sent", "INV"} {
+			h := newHarness(t)
+			h.connect(allScopes...)
+			id := h.newInvoice(1)
+			h.send("/invoices")
+			h.tap("Draft")
+			if button == "Mark as sent" {
+				h.tap("INV")
+			}
+			h.db.Exec(`DELETE FROM invoice_lines WHERE invoice_id=?`, id)
+			h.db.Exec(`DELETE FROM invoices WHERE id=?`, id)
+			h.tap(button)
+			h.expect("not found")
+		}
+	})
+}
+
+func TestTelegramFailures(t *testing.T) {
+	h := newHarness(t)
+	h.connect(allScopes...)
+	before := len(h.callsTo("sendMessage"))
+
+	// "Not modified" is success: no duplicate message.
+	h.tgReply = map[string]string{"editMessageText": `{"ok":false,"error_code":400,"description":"Bad Request: message is not modified"}`}
+	h.tap("Income")
+	if got := len(h.callsTo("sendMessage")); got != before {
+		t.Errorf("not-modified edit sent %d new messages", got-before)
+	}
+
+	// Any other edit failure falls back to a new message.
+	h.tgReply = map[string]string{"editMessageText": `{"ok":false,"error_code":400,"description":"Bad Request: message to edit not found"}`}
+	h.tap("« Menu")
+	if got := len(h.callsTo("sendMessage")); got != before+1 {
+		t.Errorf("failed edit: %d new messages, want 1", got-before)
+	}
+
+	// Failures of fire-and-forget calls are logged, never fatal.
+	h.tgReply = map[string]string{
+		"sendMessage":         `{"ok":false,"error_code":403,"description":"Forbidden: bot was blocked by the user"}`,
+		"answerCallbackQuery": `{"ok":false,"error_code":400,"description":"query is too old"}`,
+		"deleteMessage":       `{"ok":false,"error_code":400,"description":"message can't be deleted"}`,
+		"getUpdates":          `not json`,
+	}
+	h.send("/menu")
+	h.tap("Income")
+	_, plaintext, _ := h.connect(allScopes...)
+	if s := h.b.sessions[userID]; s == nil || s.Token != plaintext {
+		t.Error("connect must still succeed when the token message can't be deleted")
+	}
+
+	// A broken getUpdates response is retried with backoff until shutdown.
+	ctx, cancel := context.WithTimeout(t.Context(), 1500*time.Millisecond)
+	defer cancel()
+	if err := h.b.run(ctx); err != nil {
+		t.Errorf("run: got %v, want clean exit on shutdown", err)
+	}
+	if n := len(h.callsTo("getUpdates")); n != 2 {
+		t.Errorf("getUpdates calls: got %d, want 2 (first try + one retry after 1s)", n)
+	}
+}
+
+func TestTransportErrorsHideBotToken(t *testing.T) {
+	b := newBot("http://127.0.0.1:1/bot123:SECRET", "", "")
+	err := b.tg("getMe", nil, nil)
+	if err == nil || strings.Contains(err.Error(), "SECRET") {
+		t.Errorf("tg error %v: want a failure without the bot token", err)
+	}
+}
+
+func TestSessionFile(t *testing.T) {
+	dir := t.TempDir()
+	b := newBot("", "", filepath.Join(dir, "missing.json"))
+	if err := b.loadSessions(); err != nil || len(b.sessions) != 0 {
+		t.Errorf("missing state file: err=%v sessions=%v, want a clean start", err, b.sessions)
+	}
+
+	corrupt := filepath.Join(dir, "corrupt.json")
+	os.WriteFile(corrupt, []byte("{"), 0o600)
+	if err := newBot("", "", corrupt).loadSessions(); err == nil {
+		t.Error("corrupt state file loaded without error")
+	}
+
+	b = newBot("", "", filepath.Join(dir, "no-such-dir", "sessions.json"))
+	b.sessions[1] = &session{Token: "lat_x"}
+	if err := b.writeSessions(); err == nil {
+		t.Error("write into a missing directory succeeded")
+	}
+	b.saveSessions() // logs, doesn't panic
+}
+
+func TestHelpers(t *testing.T) {
+	t.Setenv("BOT_TEST_ENV", "set")
+	if envOr("BOT_TEST_ENV", "x") != "set" || envOr("BOT_TEST_UNSET", "x") != "x" {
+		t.Error("envOr")
+	}
+	for err, want := range map[error]string{
+		&apiErr{Status: 502}:                    "ERP error (502)",
+		&apiErr{Status: 409}:                    "ERP error (409)",
+		&apiErr{Status: 409, Message: "locked"}: "ERP says: locked",
+	} {
+		if got := errText(err); !strings.Contains(got, want) {
+			t.Errorf("errText(%v) = %q, want %q", err, got, want)
+		}
+	}
+	if (&tgError{Code: 400, Description: "bad"}).Error() != "telegram error 400: bad" {
+		t.Error("tgError.Error")
+	}
+	if fmtDate("soon") != "soon" || shortDate("soon") != "soon" {
+		t.Error("unparseable dates should pass through")
+	}
+	if got := clipRunes("ééééé", 3); got != "éé…" {
+		t.Errorf("clipRunes = %q", got)
+	}
+	defer func() {
+		if recover() == nil {
+			t.Error("btn should panic on callback_data over 64 bytes")
+		}
+	}()
+	(&chat{nonce: "abcdef"}).btn("x", "ls", strings.Repeat("9", 60))
+}
+
+// roundTripFunc injects faults between the bot and the ERP.
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
