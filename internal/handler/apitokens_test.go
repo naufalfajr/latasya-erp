@@ -712,6 +712,17 @@ func seedBookkeeperToken(t *testing.T, db *sql.DB) int {
 	return id
 }
 
+func seedAdminToken(t *testing.T, db *sql.DB) int {
+	t.Helper()
+	db.Exec(`INSERT INTO api_tokens (user_id, name, token_prefix, token_hash, scopes)
+		VALUES (1, 'admin-token', 'lat_ADMN', 'hash-admin', '["reports.view"]')`)
+	var id int
+	if err := db.QueryRow(`SELECT id FROM api_tokens WHERE token_hash='hash-admin'`).Scan(&id); err != nil {
+		t.Fatalf("seed token: %v", err)
+	}
+	return id
+}
+
 func tokenRevoked(db *sql.DB, id int) bool {
 	var at sql.NullString
 	db.QueryRow(`SELECT revoked_at FROM api_tokens WHERE id=?`, id).Scan(&at)
@@ -743,61 +754,52 @@ func flashOf(resp *http.Response) string {
 	return ""
 }
 
-func TestListAllAPITokens_ShowsEveryOwner(t *testing.T) {
+func TestListAPITokens_AllTokensShowEveryOwner(t *testing.T) {
 	t.Parallel()
 	ts, db := testServerWithAPITokens(t)
 	loginAsBookkeeper(t, ts, db)
 	tokenID := seedBookkeeperToken(t, db)
 
-	resp, body := sendRequest(t, db, loginAsAdmin(t, ts), "GET", ts.URL+"/users/api-tokens", "")
+	resp, body := sendRequest(t, db, loginAsAdmin(t, ts), "GET", ts.URL+"/settings/api-tokens", "")
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
 	}
-	for _, want := range []string{"bookkeeper", "Bookkeeper User", "lat_BKBK", fmt.Sprintf(`action="/users/api-tokens/%d/revoke"`, tokenID)} {
+	for _, want := range []string{"bookkeeper", "Bookkeeper User", "lat_BKBK", fmt.Sprintf(`action="/settings/api-tokens/all/%d/revoke"`, tokenID)} {
 		if !strings.Contains(body, want) {
-			t.Errorf("all tokens page missing %q", want)
+			t.Errorf("all users' tokens section missing %q", want)
 		}
 	}
 }
 
-func TestListAllAPITokens_ForbiddenWithoutUsersManage(t *testing.T) {
+func TestListAPITokens_AllTokensOnlyForUsersManage(t *testing.T) {
 	t.Parallel()
 	ts, db := testServerWithAPITokens(t)
-	resp, _ := sendRequest(t, db, loginAsBookkeeper(t, ts, db), "GET", ts.URL+"/users/api-tokens", "")
-	if resp.StatusCode != http.StatusForbidden {
-		t.Errorf("expected 403, got %d", resp.StatusCode)
+	bookkeeper := loginAsBookkeeper(t, ts, db)
+	seedAdminToken(t, db)
+	resp, body := sendRequest(t, db, bookkeeper, "GET", ts.URL+"/settings/api-tokens", "")
+	if resp.StatusCode != http.StatusOK || strings.Contains(body, "All Users") || strings.Contains(body, "lat_ADMN") {
+		t.Errorf("bookkeeper sees other users' tokens (status %d)", resp.StatusCode)
+	}
+	if _, body := sendRequest(t, db, loginAsAdmin(t, ts), "GET", ts.URL+"/users", ""); !strings.Contains(body, `href="/settings/api-tokens#all-tokens"`) {
+		t.Error("users page has no link to all tokens")
 	}
 }
 
-func TestListAllAPITokens_LinkedOnlyForUsersManage(t *testing.T) {
-	t.Parallel()
-	ts, db := testServerWithAPITokens(t)
-	admin := loginAsAdmin(t, ts)
-	for _, path := range []string{"/settings/api-tokens", "/users"} {
-		if _, body := sendRequest(t, db, admin, "GET", ts.URL+path, ""); !strings.Contains(body, `href="/users/api-tokens"`) {
-			t.Errorf("admin %s has no link to all tokens", path)
-		}
-	}
-	if _, body := sendRequest(t, db, loginAsBookkeeper(t, ts, db), "GET", ts.URL+"/settings/api-tokens", ""); strings.Contains(body, "/users/api-tokens") {
-		t.Error("bookkeeper's API Tokens page links to all users' tokens")
-	}
-}
-
-func TestListAllAPITokens_LoadError(t *testing.T) {
+func TestListAPITokens_LoadError(t *testing.T) {
 	t.Parallel()
 	ts, db := testServerWithAPITokens(t)
 	admin := loginAsAdmin(t, ts)
 	if _, err := db.Exec(`ALTER TABLE api_tokens RENAME TO api_tokens_gone`); err != nil {
 		t.Fatal(err)
 	}
-	resp, body := sendRequest(t, db, admin, "GET", ts.URL+"/users/api-tokens", "")
-	if resp.StatusCode != http.StatusOK || !strings.Contains(body, "Failed to load tokens") {
-		t.Errorf("expected 200 with an error message, got %d", resp.StatusCode)
+	resp, body := sendRequest(t, db, admin, "GET", ts.URL+"/settings/api-tokens", "")
+	if resp.StatusCode != http.StatusOK || strings.Count(body, "Failed to load tokens") != 2 {
+		t.Errorf("expected 200 with an error in both sections, got %d", resp.StatusCode)
 	}
 }
 
 // Called directly: the auth middleware itself needs the roles table.
-func TestListAllAPITokens_RolesLoadError(t *testing.T) {
+func TestListAPITokens_RolesLoadError(t *testing.T) {
 	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	h := testutil.SetupTestHandler(t, db)
@@ -807,10 +809,10 @@ func TestListAllAPITokens_RolesLoadError(t *testing.T) {
 	}
 	admin := &model.User{ID: 1, Username: "admin", Role: model.RoleAdmin}
 	rec := httptest.NewRecorder()
-	h.ListAllAPITokens(rec, httptest.NewRequest("GET", "/users/api-tokens", nil).WithContext(auth.WithUser(context.Background(), admin)))
+	h.ListAPITokens(rec, httptest.NewRequest("GET", "/settings/api-tokens", nil).WithContext(auth.WithUser(context.Background(), admin)))
 	body := rec.Body.String()
-	if !strings.Contains(body, "Failed to load roles") || !strings.Contains(body, "lat_OPSX") || strings.Contains(body, "/revoke") {
-		t.Errorf("expected the tokens listed, an error, and no revoke buttons (status %d)", rec.Code)
+	if !strings.Contains(body, "Failed to load roles") || !strings.Contains(body, "lat_OPSX") || strings.Contains(body, "/all/") {
+		t.Errorf("expected the tokens listed, an error, and no Revoke on other users' tokens (status %d)", rec.Code)
 	}
 }
 
@@ -821,9 +823,9 @@ func TestRevokeAnyAPIToken_HappyPath(t *testing.T) {
 	tokenID := seedBookkeeperToken(t, db)
 	admin := loginAsAdmin(t, ts)
 
-	resp, _ := sendRequest(t, db, admin, "POST", fmt.Sprintf("%s/users/api-tokens/%d/revoke", ts.URL, tokenID), "")
-	if resp.StatusCode != http.StatusSeeOther || resp.Header.Get("Location") != "/users/api-tokens" || flashOf(resp) != "Token revoked" {
-		t.Errorf("expected 303 to /users/api-tokens with \"Token revoked\", got %d → %q flash %q",
+	resp, _ := sendRequest(t, db, admin, "POST", fmt.Sprintf("%s/settings/api-tokens/all/%d/revoke", ts.URL, tokenID), "")
+	if resp.StatusCode != http.StatusSeeOther || resp.Header.Get("Location") != "/settings/api-tokens#all-tokens" || flashOf(resp) != "Token revoked" {
+		t.Errorf("expected 303 to /settings/api-tokens#all-tokens with \"Token revoked\", got %d → %q flash %q",
 			resp.StatusCode, resp.Header.Get("Location"), flashOf(resp))
 	}
 	if !tokenRevoked(db, tokenID) {
@@ -834,7 +836,7 @@ func TestRevokeAnyAPIToken_HappyPath(t *testing.T) {
 	if actor != "admin" || !strings.Contains(metadata, `"owner_username":"bookkeeper"`) {
 		t.Errorf("audit: actor %q metadata %s, want admin revoking bookkeeper's token", actor, metadata)
 	}
-	if _, body := sendRequest(t, db, admin, "GET", ts.URL+"/users/api-tokens", ""); !strings.Contains(body, `badge-error badge-sm">Revoked`) {
+	if _, body := sendRequest(t, db, admin, "GET", ts.URL+"/settings/api-tokens", ""); !strings.Contains(body, `badge-error badge-sm">Revoked`) {
 		t.Error("revoked token not marked on the list")
 	}
 }
@@ -843,12 +845,9 @@ func TestRevokeAnyAPIToken_ForbiddenWithoutUsersManage(t *testing.T) {
 	t.Parallel()
 	ts, db := testServerWithAPITokens(t)
 	bookkeeper := loginAsBookkeeper(t, ts, db)
-	db.Exec(`INSERT INTO api_tokens (user_id, name, token_prefix, token_hash, scopes)
-		VALUES (1, 'admin-token', 'lat_ADMN', 'hash-admin', '["reports.view"]')`)
-	var tokenID int
-	db.QueryRow(`SELECT id FROM api_tokens WHERE token_hash='hash-admin'`).Scan(&tokenID)
+	tokenID := seedAdminToken(t, db)
 
-	resp, _ := sendRequest(t, db, bookkeeper, "POST", fmt.Sprintf("%s/users/api-tokens/%d/revoke", ts.URL, tokenID), "")
+	resp, _ := sendRequest(t, db, bookkeeper, "POST", fmt.Sprintf("%s/settings/api-tokens/all/%d/revoke", ts.URL, tokenID), "")
 	if resp.StatusCode != http.StatusForbidden || tokenRevoked(db, tokenID) {
 		t.Errorf("expected 403 and the token kept, got %d revoked=%v", resp.StatusCode, tokenRevoked(db, tokenID))
 	}
@@ -858,12 +857,9 @@ func TestRevokeAnyAPIToken_AdminTokenOutOfReach(t *testing.T) {
 	t.Parallel()
 	ts, db := testServerWithAPITokens(t)
 	manager, _ := loginAsUserManager(t, ts, db)
-	db.Exec(`INSERT INTO api_tokens (user_id, name, token_prefix, token_hash, scopes)
-		VALUES (1, 'admin-token', 'lat_ADMN', 'hash-admin', '["reports.view"]')`)
-	var tokenID int
-	db.QueryRow(`SELECT id FROM api_tokens WHERE token_hash='hash-admin'`).Scan(&tokenID)
+	tokenID := seedAdminToken(t, db)
 
-	resp, _ := sendRequest(t, db, manager, "POST", fmt.Sprintf("%s/users/api-tokens/%d/revoke", ts.URL, tokenID), "")
+	resp, _ := sendRequest(t, db, manager, "POST", fmt.Sprintf("%s/settings/api-tokens/all/%d/revoke", ts.URL, tokenID), "")
 	if resp.StatusCode != http.StatusSeeOther || flashOf(resp) != "Cannot revoke a token of a user with more permissions than you" {
 		t.Errorf("expected 303 with a refusal flash, got %d %q", resp.StatusCode, flashOf(resp))
 	}
@@ -872,27 +868,26 @@ func TestRevokeAnyAPIToken_AdminTokenOutOfReach(t *testing.T) {
 	}
 }
 
-func TestListAllAPITokens_HidesRevokeBeyondOwnPermissions(t *testing.T) {
+func TestListAPITokens_HidesRevokeBeyondOwnPermissions(t *testing.T) {
 	t.Parallel()
 	ts, db := testServerWithAPITokens(t)
 	manager, _ := loginAsUserManager(t, ts, db)
 	peerID := testutil.CreateTestUser(t, db, "peer", "pw", "manager-role")
-	db.Exec(`INSERT INTO api_tokens (user_id, name, token_prefix, token_hash, scopes) VALUES
-		(1, 'admin-token', 'lat_ADMN', 'hash-admin', '["reports.view"]'),
-		(?, 'peer-token', 'lat_PEER', 'hash-peer', '["users.manage"]')`, peerID)
-	var adminTokenID, peerTokenID int
-	db.QueryRow(`SELECT id FROM api_tokens WHERE token_hash='hash-admin'`).Scan(&adminTokenID)
+	adminTokenID := seedAdminToken(t, db)
+	db.Exec(`INSERT INTO api_tokens (user_id, name, token_prefix, token_hash, scopes)
+		VALUES (?, 'peer-token', 'lat_PEER', 'hash-peer', '["users.manage"]')`, peerID)
+	var peerTokenID int
 	db.QueryRow(`SELECT id FROM api_tokens WHERE token_hash='hash-peer'`).Scan(&peerTokenID)
-	revokeAction := func(id int) string { return fmt.Sprintf(`action="/users/api-tokens/%d/revoke"`, id) }
+	revokeAction := func(id int) string { return fmt.Sprintf(`action="/settings/api-tokens/all/%d/revoke"`, id) }
 
-	_, body := sendRequest(t, db, manager, "GET", ts.URL+"/users/api-tokens", "")
+	_, body := sendRequest(t, db, manager, "GET", ts.URL+"/settings/api-tokens", "")
 	if !strings.Contains(body, "lat_ADMN") || !strings.Contains(body, revokeAction(peerTokenID)) {
 		t.Error("manager should see every token and be able to revoke the peer's")
 	}
 	if strings.Contains(body, revokeAction(adminTokenID)) {
 		t.Error("manager is shown Revoke on the admin's token")
 	}
-	if _, body := sendRequest(t, db, loginAsAdmin(t, ts), "GET", ts.URL+"/users/api-tokens", ""); !strings.Contains(body, revokeAction(adminTokenID)) || !strings.Contains(body, revokeAction(peerTokenID)) {
+	if _, body := sendRequest(t, db, loginAsAdmin(t, ts), "GET", ts.URL+"/settings/api-tokens", ""); !strings.Contains(body, revokeAction(adminTokenID)) || !strings.Contains(body, revokeAction(peerTokenID)) {
 		t.Error("admin should see Revoke on every active token")
 	}
 }
@@ -903,7 +898,7 @@ func TestRevokeAnyAPIToken_NoCSRF(t *testing.T) {
 	loginAsBookkeeper(t, ts, db)
 	tokenID := seedBookkeeperToken(t, db)
 
-	req, _ := http.NewRequest("POST", fmt.Sprintf("%s/users/api-tokens/%d/revoke", ts.URL, tokenID), nil)
+	req, _ := http.NewRequest("POST", fmt.Sprintf("%s/settings/api-tokens/all/%d/revoke", ts.URL, tokenID), nil)
 	for _, c := range loginAsAdmin(t, ts) {
 		req.AddCookie(c)
 	}
@@ -920,9 +915,9 @@ func TestRevokeAnyAPIToken_NoCSRF(t *testing.T) {
 func TestRevokeAnyAPIToken_NonexistentID(t *testing.T) {
 	t.Parallel()
 	ts, db := testServerWithAPITokens(t)
-	resp, _ := sendRequest(t, db, loginAsAdmin(t, ts), "POST", ts.URL+"/users/api-tokens/99999/revoke", "")
-	if resp.StatusCode != http.StatusSeeOther || resp.Header.Get("Location") != "/users/api-tokens" || flashOf(resp) != "Token not found" {
-		t.Errorf("expected 303 to /users/api-tokens with \"Token not found\", got %d → %q flash %q",
+	resp, _ := sendRequest(t, db, loginAsAdmin(t, ts), "POST", ts.URL+"/settings/api-tokens/all/99999/revoke", "")
+	if resp.StatusCode != http.StatusSeeOther || resp.Header.Get("Location") != "/settings/api-tokens#all-tokens" || flashOf(resp) != "Token not found" {
+		t.Errorf("expected 303 to /settings/api-tokens#all-tokens with \"Token not found\", got %d → %q flash %q",
 			resp.StatusCode, resp.Header.Get("Location"), flashOf(resp))
 	}
 }
@@ -932,7 +927,7 @@ func TestRevokeAPIToken_InvalidID(t *testing.T) {
 	ts, db := testServerWithAPITokens(t)
 	admin := loginAsAdmin(t, ts)
 	for _, path := range []string{"/settings/api-tokens/abc/revoke", "/settings/api-tokens/0/revoke",
-		"/users/api-tokens/abc/revoke", "/users/api-tokens/-1/revoke"} {
+		"/settings/api-tokens/all/abc/revoke", "/settings/api-tokens/all/-1/revoke"} {
 		if resp, _ := sendRequest(t, db, admin, "POST", ts.URL+path, ""); resp.StatusCode != http.StatusBadRequest {
 			t.Errorf("POST %s: expected 400, got %d", path, resp.StatusCode)
 		}
@@ -940,7 +935,7 @@ func TestRevokeAPIToken_InvalidID(t *testing.T) {
 }
 
 // A database failure is reported as such, not as "not found", and each route
-// returns to its own list.
+// returns to its own table.
 func TestRevokeAPIToken_DatabaseError(t *testing.T) {
 	t.Parallel()
 	ts, db := testServerWithAPITokens(t)
@@ -948,7 +943,7 @@ func TestRevokeAPIToken_DatabaseError(t *testing.T) {
 	if _, err := db.Exec(`ALTER TABLE api_tokens RENAME TO api_tokens_gone`); err != nil {
 		t.Fatal(err)
 	}
-	for path, back := range map[string]string{"/settings/api-tokens/1/revoke": "/settings/api-tokens", "/users/api-tokens/1/revoke": "/users/api-tokens"} {
+	for path, back := range map[string]string{"/settings/api-tokens/1/revoke": "/settings/api-tokens", "/settings/api-tokens/all/1/revoke": "/settings/api-tokens#all-tokens"} {
 		resp, _ := sendRequest(t, db, admin, "POST", ts.URL+path, "")
 		if resp.StatusCode != http.StatusSeeOther || resp.Header.Get("Location") != back || flashOf(resp) != "Failed to revoke token" {
 			t.Errorf("POST %s: expected 303 to %s with \"Failed to revoke token\", got %d → %q flash %q",
@@ -962,7 +957,7 @@ func TestRevokeAPIToken_DatabaseError(t *testing.T) {
 func TestAPITokenHandlers_NoUser(t *testing.T) {
 	t.Parallel()
 	h := testutil.SetupTestHandler(t, testutil.SetupTestDB(t))
-	for name, handle := range map[string]http.HandlerFunc{"own revoke": h.RevokeAPIToken, "any revoke": h.RevokeAnyAPIToken, "all list": h.ListAllAPITokens} {
+	for name, handle := range map[string]http.HandlerFunc{"own revoke": h.RevokeAPIToken, "any revoke": h.RevokeAnyAPIToken, "list": h.ListAPITokens} {
 		rec := httptest.NewRecorder()
 		handle(rec, httptest.NewRequest("POST", "/revoke", nil))
 		if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/login" {
