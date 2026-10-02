@@ -3,12 +3,7 @@
 {{$data := .Data}}
 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
     <h1 class="text-2xl font-bold">API Tokens</h1>
-    <div class="flex gap-2">
-        {{if $.User.HasCapability "users.manage"}}
-        <a href="{{$.BasePath}}/users/api-tokens" class="btn btn-ghost btn-sm">All API Tokens</a>
-        {{end}}
-        <a href="{{$.BasePath}}/settings/api-tokens/new" class="btn btn-primary btn-sm">Create new token</a>
-    </div>
+    <a href="{{$.BasePath}}/settings/api-tokens/new" class="btn btn-primary btn-sm">Create new token</a>
 </div>
 
 {{if $data.Errors.general}}
@@ -33,19 +28,7 @@
             {{range $tokens}}
             <tr>
                 <td class="font-semibold">{{.Name}}</td>
-                <td><code class="text-xs">{{.TokenPrefix}}</code></td>
-                <td>
-                    <div class="flex flex-wrap gap-1">
-                        {{range .Scopes}}<span class="badge badge-info badge-sm">{{.}}</span>{{end}}
-                    </div>
-                </td>
-                <td class="text-sm">{{.CreatedAt.Format "Jan 2, 2006"}}</td>
-                <td class="text-sm">
-                    {{if .LastUsedAt}}{{.LastUsedAt.Format "Jan 2, 2006 15:04"}}{{else}}<span class="opacity-50">Never</span>{{end}}
-                </td>
-                <td class="text-sm">
-                    {{if .ExpiresAt}}{{.ExpiresAt.Format "Jan 2, 2006"}}{{else}}<span class="opacity-50">Never</span>{{end}}
-                </td>
+                {{template "api-token-cells" .}}
                 <td>
                     {{if not .RevokedAt}}
                     <form method="POST" action="{{$.BasePath}}/settings/api-tokens/{{.ID}}/revoke" class="inline" onsubmit="return confirm('Revoke this token? This cannot be undone.')">
@@ -81,4 +64,72 @@
         <p class="text-sm opacity-60 mt-2">Token scopes are intersected with your current role capabilities at request time. If your role is downgraded, your tokens immediately lose the lost capabilities. Tokens cannot gain capabilities beyond their original scope set.</p>
     </div>
 </div>
+
+{{if $.User.HasCapability "users.manage"}}
+<div id="all-tokens" class="divider mt-6">All Users' Tokens</div>
+<p class="text-sm opacity-60 mb-4">Every user's tokens, including the Telegram bot's. Revoke one to cut it off without deactivating its owner.</p>
+
+{{if $data.Errors.all}}
+<div class="alert alert-error mb-4">{{$data.Errors.all}}</div>
+{{end}}
+
+<div class="overflow-x-auto">
+    <table class="table table-sm">
+        <thead>
+            <tr>
+                <th>Owner</th>
+                <th>Name</th>
+                <th>Prefix</th>
+                <th>Scopes</th>
+                <th>Created</th>
+                <th>Last Used</th>
+                <th>Expires</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range $data.AllTokens}}
+            <tr>
+                <td>
+                    <div class="font-semibold">{{.OwnerUsername}}</div>
+                    <div class="text-xs opacity-60">{{.OwnerName}}</div>
+                </td>
+                <td>{{.Name}}</td>
+                {{template "api-token-cells" .}}
+                <td>
+                    {{if .RevokedAt}}
+                    <span class="badge badge-error badge-sm">Revoked</span>
+                    {{else if index $data.Manageable .OwnerRole}}
+                    <form method="POST" action="{{$.BasePath}}/settings/api-tokens/all/{{.ID}}/revoke" class="inline" onsubmit="return confirm('Revoke this token? Anything using it, such as the Telegram bot, stops working immediately.')">
+                        {{template "csrf" $}}
+                        <button type="submit" class="btn btn-error btn-xs">Revoke</button>
+                    </form>
+                    {{end}}
+                </td>
+            </tr>
+            {{else}}
+            <tr>
+                <td colspan="8" class="text-center py-8 opacity-60">No API tokens yet.</td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+{{end}}
+{{end}}
+
+{{define "api-token-cells"}}
+<td><code class="text-xs">{{.TokenPrefix}}</code></td>
+<td>
+    <div class="flex flex-wrap gap-1">
+        {{range .Scopes}}<span class="badge badge-info badge-sm">{{.}}</span>{{end}}
+    </div>
+</td>
+<td class="text-sm">{{.CreatedAt.Format "Jan 2, 2006"}}</td>
+<td class="text-sm">
+    {{if .LastUsedAt}}{{.LastUsedAt.Format "Jan 2, 2006 15:04"}}{{else}}<span class="opacity-50">Never</span>{{end}}
+</td>
+<td class="text-sm">
+    {{if .ExpiresAt}}{{.ExpiresAt.Format "Jan 2, 2006"}}{{else}}<span class="opacity-50">Never</span>{{end}}
+</td>
 {{end}}

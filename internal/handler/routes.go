@@ -14,8 +14,7 @@ func (h *Handler) RegisterAuthRoutes(mux *http.ServeMux, loginMiddleware func(ht
 	mux.HandleFunc("POST "+h.BasePath+"/logout", h.Logout)
 }
 
-// RegisterAccessRoutes installs user, role, all-users API token, and self-service
-// password routes.
+// RegisterAccessRoutes installs user, role, and self-service password routes.
 func (h *Handler) RegisterAccessRoutes(mux *http.ServeMux) {
 	users := http.NewServeMux()
 	users.HandleFunc("GET /users", h.ListUsers)
@@ -24,8 +23,6 @@ func (h *Handler) RegisterAccessRoutes(mux *http.ServeMux) {
 	users.HandleFunc("GET /users/{id}/edit", h.EditUser)
 	users.HandleFunc("POST /users/{id}", h.UpdateUser)
 	users.HandleFunc("DELETE /users/{id}", h.DeleteUser)
-	users.HandleFunc("GET /users/api-tokens", h.ListAllAPITokens)
-	users.HandleFunc("POST /users/api-tokens/{id}/revoke", h.RevokeAnyAPIToken)
 	mux.Handle("/users", auth.RequireCapability(model.CapUsersManage)(users))
 	mux.Handle("/users/", auth.RequireCapability(model.CapUsersManage)(users))
 
@@ -45,13 +42,14 @@ func (h *Handler) RegisterAccessRoutes(mux *http.ServeMux) {
 
 // RegisterSettingsRoutes installs administrative settings, integrations, and audit routes.
 func (h *Handler) RegisterSettingsRoutes(mux *http.ServeMux) {
-	// API tokens are self-service: every user manages only their own tokens,
-	// scoped to capabilities they already hold (enforced by apitoken.Module).
+	// Every user manages their own tokens within their capabilities (apitoken.Module);
+	// users.manage holders also see and revoke everyone's in a section of the same page.
 	mux.HandleFunc("GET /settings/api-tokens", h.ListAPITokens)
 	mux.HandleFunc("GET /settings/api-tokens/new", h.NewAPIToken)
 	mux.HandleFunc("GET /settings/api-tokens/created", h.CreatedAPIToken)
 	mux.HandleFunc("POST /settings/api-tokens", h.CreateAPIToken)
 	mux.HandleFunc("POST /settings/api-tokens/{id}/revoke", h.RevokeAPIToken)
+	mux.HandleFunc("POST /settings/api-tokens/all/{id}/revoke", auth.CapabilityOnly(model.CapUsersManage, h.RevokeAnyAPIToken))
 
 	h.RegisterCompanyRoutes(mux)
 	mux.HandleFunc("GET /settings/school-calendar", auth.AdminOnly(h.SchoolCalendarPage))

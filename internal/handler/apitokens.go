@@ -16,6 +16,7 @@ import (
 
 type apiTokenFormData struct {
 	Tokens          []model.APIToken
+	AllTokens       []model.APIToken
 	AvailableScopes []string
 	SelectedScopes  map[string]bool
 	Errors          map[string]string
@@ -83,21 +84,35 @@ func (h *Handler) ListAPITokens(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	data := apiTokenFormData{AvailableScopes: availableScopes(user), Errors: map[string]string{}}
 	tokens, err := h.APITokens.List(ctx, tokenActor(user))
 	if err != nil {
 		slog.Error("api_token: list", "user_id", user.ID, "error", err)
-		h.render(w, r, "templates/settings/api_tokens.html", "API Tokens", apiTokenFormData{
-			AvailableScopes: availableScopes(user),
-			Errors:          map[string]string{"general": "Failed to load tokens"},
-		})
+		data.Errors["general"] = "Failed to load tokens"
+	}
+	data.Tokens = tokens
+	if user.HasCapability(model.CapUsersManage) {
+		h.loadAllAPITokens(r, user, &data)
+	}
+	h.render(w, r, "templates/settings/api_tokens.html", "API Tokens", data)
+}
+
+// loadAllAPITokens fills the users.manage section: every token, plus the owner
+// roles whose tokens the user may revoke.
+func (h *Handler) loadAllAPITokens(r *http.Request, user *model.User, data *apiTokenFormData) {
+	all, err := h.APITokens.ListAll(r.Context(), tokenActor(user))
+	if err != nil {
+		slog.Error("api_token: list all", "user_id", user.ID, "error", err)
+		data.Errors["all"] = "Failed to load tokens"
 		return
 	}
-
-	h.render(w, r, "templates/settings/api_tokens.html", "API Tokens", apiTokenFormData{
-		Tokens:          tokens,
-		AvailableScopes: availableScopes(user),
-		Errors:          map[string]string{},
-	})
+	data.AllTokens = all
+	manageable, err := h.manageableRoles(r)
+	if err != nil {
+		slog.Error("api_token: manageable roles", "user_id", user.ID, "error", err)
+		data.Errors["all"] = "Failed to load roles; revoking is unavailable"
+	}
+	data.Manageable = manageable
 }
 
 func (h *Handler) NewAPIToken(w http.ResponseWriter, r *http.Request) {
@@ -233,30 +248,8 @@ func (h *Handler) RevokeAPIToken(w http.ResponseWriter, r *http.Request) {
 	h.revokeAPIToken(w, r, h.APITokens.Revoke, "/settings/api-tokens")
 }
 
-func (h *Handler) ListAllAPITokens(w http.ResponseWriter, r *http.Request) {
-	user := auth.UserFromContext(r.Context())
-	if user == nil {
-		http.Redirect(w, r, h.BasePath+"/login", http.StatusSeeOther)
-		return
-	}
-
-	data := apiTokenFormData{Errors: map[string]string{}}
-	tokens, err := h.APITokens.ListAll(r.Context(), tokenActor(user))
-	if err != nil {
-		slog.Error("api_token: list all", "user_id", user.ID, "error", err)
-		data.Errors["general"] = "Failed to load tokens"
-	}
-	data.Tokens = tokens
-	data.Manageable, err = h.manageableRoles(r)
-	if err != nil {
-		slog.Error("api_token: manageable roles", "user_id", user.ID, "error", err)
-		data.Errors["general"] = "Failed to load roles; revoking is unavailable"
-	}
-	h.render(w, r, "templates/users/api_tokens.html", "All API Tokens", data)
-}
-
 func (h *Handler) RevokeAnyAPIToken(w http.ResponseWriter, r *http.Request) {
-	h.revokeAPIToken(w, r, h.APITokens.RevokeAny, "/users/api-tokens")
+	h.revokeAPIToken(w, r, h.APITokens.RevokeAny, "/settings/api-tokens#all-tokens")
 }
 
 func (h *Handler) revokeAPIToken(w http.ResponseWriter, r *http.Request, revoke func(context.Context, apitoken.Actor, int) (*model.APIToken, error), back string) {
