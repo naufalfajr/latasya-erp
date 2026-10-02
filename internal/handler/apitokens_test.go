@@ -697,3 +697,213 @@ func TestAPITokens_NonAdminSelfService(t *testing.T) {
 		t.Errorf("token owner: got %q, want bookkeeper", owner)
 	}
 }
+
+// seedBookkeeperToken gives the bookkeeper (see loginAsBookkeeper) a token.
+func seedBookkeeperToken(t *testing.T, db *sql.DB) int {
+	t.Helper()
+	db.Exec(`INSERT INTO api_tokens (user_id, name, token_prefix, token_hash, scopes)
+		SELECT id, 'telegram', 'lat_BKBK', 'hash-bk', '["income.manage"]' FROM users WHERE username='bookkeeper'`)
+	var id int
+	if err := db.QueryRow(`SELECT id FROM api_tokens WHERE token_hash='hash-bk'`).Scan(&id); err != nil {
+		t.Fatalf("seed token: %v", err)
+	}
+	return id
+}
+
+func tokenRevoked(db *sql.DB, id int) bool {
+	var at sql.NullString
+	db.QueryRow(`SELECT revoked_at FROM api_tokens WHERE id=?`, id).Scan(&at)
+	return at.Valid
+}
+
+// sendRequest makes a CSRF-carrying request without following redirects.
+func sendRequest(t *testing.T, db *sql.DB, cookies []*http.Cookie, method, url string) (*http.Response, string) {
+	t.Helper()
+	req, err := requestWithCookies(db, method, url, cookies, "")
+	if err != nil {
+		t.Fatalf("requestWithCookies: %v", err)
+	}
+	resp, err := noRedirectClient().Do(req)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	return resp, string(body)
+}
+
+func flashOf(resp *http.Response) string {
+	for _, c := range resp.Cookies() {
+		if c.Name == "flash" {
+			return c.Value
+		}
+	}
+	return ""
+}
+
+func TestListAllAPITokens_ShowsEveryOwner(t *testing.T) {
+	t.Parallel()
+	ts, db := testServerWithAPITokens(t)
+	loginAsBookkeeper(t, ts, db)
+	tokenID := seedBookkeeperToken(t, db)
+
+	resp, body := sendRequest(t, db, loginAsAdmin(t, ts), "GET", ts.URL+"/users/api-tokens")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	for _, want := range []string{"bookkeeper", "Bookkeeper User", "lat_BKBK", fmt.Sprintf(`action="/users/api-tokens/%d/revoke"`, tokenID)} {
+		if !strings.Contains(body, want) {
+			t.Errorf("all tokens page missing %q", want)
+		}
+	}
+}
+
+func TestListAllAPITokens_ForbiddenWithoutUsersManage(t *testing.T) {
+	t.Parallel()
+	ts, db := testServerWithAPITokens(t)
+	resp, _ := sendRequest(t, db, loginAsBookkeeper(t, ts, db), "GET", ts.URL+"/users/api-tokens")
+	if resp.StatusCode != http.StatusForbidden {
+		t.Errorf("expected 403, got %d", resp.StatusCode)
+	}
+}
+
+func TestListAllAPITokens_LinkedOnlyForUsersManage(t *testing.T) {
+	t.Parallel()
+	ts, db := testServerWithAPITokens(t)
+	admin := loginAsAdmin(t, ts)
+	for _, path := range []string{"/settings/api-tokens", "/users"} {
+		if _, body := sendRequest(t, db, admin, "GET", ts.URL+path); !strings.Contains(body, `href="/users/api-tokens"`) {
+			t.Errorf("admin %s has no link to all tokens", path)
+		}
+	}
+	if _, body := sendRequest(t, db, loginAsBookkeeper(t, ts, db), "GET", ts.URL+"/settings/api-tokens"); strings.Contains(body, "/users/api-tokens") {
+		t.Error("bookkeeper's API Tokens page links to all users' tokens")
+	}
+}
+
+func TestListAllAPITokens_LoadError(t *testing.T) {
+	t.Parallel()
+	ts, db := testServerWithAPITokens(t)
+	admin := loginAsAdmin(t, ts)
+	if _, err := db.Exec(`ALTER TABLE api_tokens RENAME TO api_tokens_gone`); err != nil {
+		t.Fatal(err)
+	}
+	resp, body := sendRequest(t, db, admin, "GET", ts.URL+"/users/api-tokens")
+	if resp.StatusCode != http.StatusOK || !strings.Contains(body, "Failed to load tokens") {
+		t.Errorf("expected 200 with an error message, got %d", resp.StatusCode)
+	}
+}
+
+func TestRevokeAnyAPIToken_HappyPath(t *testing.T) {
+	t.Parallel()
+	ts, db := testServerWithAPITokens(t)
+	loginAsBookkeeper(t, ts, db)
+	tokenID := seedBookkeeperToken(t, db)
+	admin := loginAsAdmin(t, ts)
+
+	resp, _ := sendRequest(t, db, admin, "POST", fmt.Sprintf("%s/users/api-tokens/%d/revoke", ts.URL, tokenID))
+	if resp.StatusCode != http.StatusSeeOther || resp.Header.Get("Location") != "/users/api-tokens" || flashOf(resp) != "Token revoked" {
+		t.Errorf("expected 303 to /users/api-tokens with \"Token revoked\", got %d → %q flash %q",
+			resp.StatusCode, resp.Header.Get("Location"), flashOf(resp))
+	}
+	if !tokenRevoked(db, tokenID) {
+		t.Fatal("token not revoked")
+	}
+	var actor, metadata string
+	db.QueryRow(`SELECT actor_username, metadata FROM audit_log WHERE action='api_token.revoke' AND target_id=?`, tokenID).Scan(&actor, &metadata)
+	if actor != "admin" || !strings.Contains(metadata, `"owner_username":"bookkeeper"`) {
+		t.Errorf("audit: actor %q metadata %s, want admin revoking bookkeeper's token", actor, metadata)
+	}
+	if _, body := sendRequest(t, db, admin, "GET", ts.URL+"/users/api-tokens"); !strings.Contains(body, `badge-error badge-sm">Revoked`) {
+		t.Error("revoked token not marked on the list")
+	}
+}
+
+func TestRevokeAnyAPIToken_ForbiddenWithoutUsersManage(t *testing.T) {
+	t.Parallel()
+	ts, db := testServerWithAPITokens(t)
+	bookkeeper := loginAsBookkeeper(t, ts, db)
+	db.Exec(`INSERT INTO api_tokens (user_id, name, token_prefix, token_hash, scopes)
+		VALUES (1, 'admin-token', 'lat_ADMN', 'hash-admin', '["reports.view"]')`)
+	var tokenID int
+	db.QueryRow(`SELECT id FROM api_tokens WHERE token_hash='hash-admin'`).Scan(&tokenID)
+
+	resp, _ := sendRequest(t, db, bookkeeper, "POST", fmt.Sprintf("%s/users/api-tokens/%d/revoke", ts.URL, tokenID))
+	if resp.StatusCode != http.StatusForbidden || tokenRevoked(db, tokenID) {
+		t.Errorf("expected 403 and the token kept, got %d revoked=%v", resp.StatusCode, tokenRevoked(db, tokenID))
+	}
+}
+
+func TestRevokeAnyAPIToken_NoCSRF(t *testing.T) {
+	t.Parallel()
+	ts, db := testServerWithAPITokens(t)
+	loginAsBookkeeper(t, ts, db)
+	tokenID := seedBookkeeperToken(t, db)
+
+	req, _ := http.NewRequest("POST", fmt.Sprintf("%s/users/api-tokens/%d/revoke", ts.URL, tokenID), nil)
+	for _, c := range loginAsAdmin(t, ts) {
+		req.AddCookie(c)
+	}
+	resp, err := noRedirectClient().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden || tokenRevoked(db, tokenID) {
+		t.Errorf("expected 403 (CSRF required) and the token kept, got %d", resp.StatusCode)
+	}
+}
+
+func TestRevokeAnyAPIToken_NonexistentID(t *testing.T) {
+	t.Parallel()
+	ts, db := testServerWithAPITokens(t)
+	resp, _ := sendRequest(t, db, loginAsAdmin(t, ts), "POST", ts.URL+"/users/api-tokens/99999/revoke")
+	if resp.StatusCode != http.StatusSeeOther || resp.Header.Get("Location") != "/users/api-tokens" || flashOf(resp) != "Token not found" {
+		t.Errorf("expected 303 to /users/api-tokens with \"Token not found\", got %d → %q flash %q",
+			resp.StatusCode, resp.Header.Get("Location"), flashOf(resp))
+	}
+}
+
+func TestRevokeAPIToken_InvalidID(t *testing.T) {
+	t.Parallel()
+	ts, db := testServerWithAPITokens(t)
+	admin := loginAsAdmin(t, ts)
+	for _, path := range []string{"/settings/api-tokens/abc/revoke", "/settings/api-tokens/0/revoke",
+		"/users/api-tokens/abc/revoke", "/users/api-tokens/-1/revoke"} {
+		if resp, _ := sendRequest(t, db, admin, "POST", ts.URL+path); resp.StatusCode != http.StatusBadRequest {
+			t.Errorf("POST %s: expected 400, got %d", path, resp.StatusCode)
+		}
+	}
+}
+
+// A database failure is reported as such, not as "not found", and each route
+// returns to its own list.
+func TestRevokeAPIToken_DatabaseError(t *testing.T) {
+	t.Parallel()
+	ts, db := testServerWithAPITokens(t)
+	admin := loginAsAdmin(t, ts)
+	if _, err := db.Exec(`ALTER TABLE api_tokens RENAME TO api_tokens_gone`); err != nil {
+		t.Fatal(err)
+	}
+	for path, back := range map[string]string{"/settings/api-tokens/1/revoke": "/settings/api-tokens", "/users/api-tokens/1/revoke": "/users/api-tokens"} {
+		resp, _ := sendRequest(t, db, admin, "POST", ts.URL+path)
+		if resp.StatusCode != http.StatusSeeOther || resp.Header.Get("Location") != back || flashOf(resp) != "Failed to revoke token" {
+			t.Errorf("POST %s: expected 303 to %s with \"Failed to revoke token\", got %d → %q flash %q",
+				path, back, resp.StatusCode, resp.Header.Get("Location"), flashOf(resp))
+		}
+	}
+}
+
+// The handlers send a request without a user to the login page. The auth
+// middleware normally catches this first; the handlers must not panic.
+func TestAPITokenHandlers_NoUser(t *testing.T) {
+	t.Parallel()
+	h := testutil.SetupTestHandler(t, testutil.SetupTestDB(t))
+	for name, handle := range map[string]http.HandlerFunc{"own revoke": h.RevokeAPIToken, "any revoke": h.RevokeAnyAPIToken, "all list": h.ListAllAPITokens} {
+		rec := httptest.NewRecorder()
+		handle(rec, httptest.NewRequest("POST", "/revoke", nil))
+		if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/login" {
+			t.Errorf("%s: %d → %q, want 303 to /login", name, rec.Code, rec.Header().Get("Location"))
+		}
+	}
+}

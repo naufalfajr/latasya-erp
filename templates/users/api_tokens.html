@@ -2,24 +2,22 @@
 {{define "content"}}
 {{$data := .Data}}
 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-    <h1 class="text-2xl font-bold">API Tokens</h1>
-    <div class="flex gap-2">
-        {{if $.User.HasCapability "users.manage"}}
-        <a href="{{$.BasePath}}/users/api-tokens" class="btn btn-ghost btn-sm">All API Tokens</a>
-        {{end}}
-        <a href="{{$.BasePath}}/settings/api-tokens/new" class="btn btn-primary btn-sm">Create new token</a>
+    <div>
+        <h1 class="text-2xl font-bold">All API Tokens</h1>
+        <p class="text-sm opacity-60">Every user's tokens, including the Telegram bot's. Revoke one to cut it off without deactivating its owner.</p>
     </div>
+    <a href="{{$.BasePath}}/users" class="btn btn-ghost btn-sm">Back</a>
 </div>
 
 {{if $data.Errors.general}}
 <div class="alert alert-error mb-4">{{$data.Errors.general}}</div>
 {{end}}
 
-{{$tokens := $data.Tokens}}
 <div class="overflow-x-auto">
     <table class="table table-sm">
         <thead>
             <tr>
+                <th>Owner</th>
                 <th>Name</th>
                 <th>Prefix</th>
                 <th>Scopes</th>
@@ -30,9 +28,13 @@
             </tr>
         </thead>
         <tbody>
-            {{range $tokens}}
+            {{range $data.Tokens}}
             <tr>
-                <td class="font-semibold">{{.Name}}</td>
+                <td>
+                    <div class="font-semibold">{{.OwnerUsername}}</div>
+                    <div class="text-xs opacity-60">{{.OwnerName}}</div>
+                </td>
+                <td>{{.Name}}</td>
                 <td><code class="text-xs">{{.TokenPrefix}}</code></td>
                 <td>
                     <div class="flex flex-wrap gap-1">
@@ -48,7 +50,7 @@
                 </td>
                 <td>
                     {{if not .RevokedAt}}
-                    <form method="POST" action="{{$.BasePath}}/settings/api-tokens/{{.ID}}/revoke" class="inline" onsubmit="return confirm('Revoke this token? This cannot be undone.')">
+                    <form method="POST" action="{{$.BasePath}}/users/api-tokens/{{.ID}}/revoke" class="inline" onsubmit="return confirm('Revoke this token? Anything using it, such as the Telegram bot, stops working immediately.')">
                         {{template "csrf" $}}
                         <button type="submit" class="btn btn-error btn-xs">Revoke</button>
                     </form>
@@ -59,26 +61,10 @@
             </tr>
             {{else}}
             <tr>
-                <td colspan="7">
-                    <div class="card bg-base-200 my-4">
-                        <div class="card-body items-center text-center">
-                            <p class="opacity-60">No API tokens yet.</p>
-                            <p class="text-sm opacity-50">Create a token to use with bots, scripts, or MCP integrations.</p>
-                        </div>
-                    </div>
-                </td>
+                <td colspan="8" class="text-center py-8 opacity-60">No API tokens yet.</td>
             </tr>
             {{end}}
         </tbody>
     </table>
-</div>
-
-<div class="divider mt-6">Token Usage</div>
-<div class="card bg-base-200">
-    <div class="card-body">
-        <p class="text-sm">Use this token in the <code>Authorization</code> header:</p>
-        <pre class="bg-base-300 p-2 rounded text-xs overflow-x-auto"><code>Authorization: Bearer lat_yourtokenhere</code></pre>
-        <p class="text-sm opacity-60 mt-2">Token scopes are intersected with your current role capabilities at request time. If your role is downgraded, your tokens immediately lose the lost capabilities. Tokens cannot gain capabilities beyond their original scope set.</p>
-    </div>
 </div>
 {{end}}

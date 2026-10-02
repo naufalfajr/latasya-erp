@@ -12,4 +12,7 @@ type APIToken struct {
 	LastUsedAt  *time.Time
 	RevokedAt   *time.Time
 	CreatedAt   time.Time
+
+	OwnerUsername string
+	OwnerName     string
 }

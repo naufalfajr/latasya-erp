@@ -14,7 +14,8 @@ func (h *Handler) RegisterAuthRoutes(mux *http.ServeMux, loginMiddleware func(ht
 	mux.HandleFunc("POST "+h.BasePath+"/logout", h.Logout)
 }
 
-// RegisterAccessRoutes installs user, role, and self-service password routes.
+// RegisterAccessRoutes installs user, role, all-users API token, and self-service
+// password routes.
 func (h *Handler) RegisterAccessRoutes(mux *http.ServeMux) {
 	users := http.NewServeMux()
 	users.HandleFunc("GET /users", h.ListUsers)
@@ -23,6 +24,8 @@ func (h *Handler) RegisterAccessRoutes(mux *http.ServeMux) {
 	users.HandleFunc("GET /users/{id}/edit", h.EditUser)
 	users.HandleFunc("POST /users/{id}", h.UpdateUser)
 	users.HandleFunc("DELETE /users/{id}", h.DeleteUser)
+	users.HandleFunc("GET /users/api-tokens", h.ListAllAPITokens)
+	users.HandleFunc("POST /users/api-tokens/{id}/revoke", h.RevokeAnyAPIToken)
 	mux.Handle("/users", auth.RequireCapability(model.CapUsersManage)(users))
 	mux.Handle("/users/", auth.RequireCapability(model.CapUsersManage)(users))
 

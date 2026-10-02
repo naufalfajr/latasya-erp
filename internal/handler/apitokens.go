@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -228,6 +229,31 @@ func (h *Handler) CreatedAPIToken(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) RevokeAPIToken(w http.ResponseWriter, r *http.Request) {
+	h.revokeAPIToken(w, r, h.APITokens.Revoke, "/settings/api-tokens")
+}
+
+func (h *Handler) ListAllAPITokens(w http.ResponseWriter, r *http.Request) {
+	user := auth.UserFromContext(r.Context())
+	if user == nil {
+		http.Redirect(w, r, h.BasePath+"/login", http.StatusSeeOther)
+		return
+	}
+
+	data := apiTokenFormData{Errors: map[string]string{}}
+	tokens, err := h.APITokens.ListAll(r.Context(), tokenActor(user))
+	if err != nil {
+		slog.Error("api_token: list all", "user_id", user.ID, "error", err)
+		data.Errors["general"] = "Failed to load tokens"
+	}
+	data.Tokens = tokens
+	h.render(w, r, "templates/users/api_tokens.html", "All API Tokens", data)
+}
+
+func (h *Handler) RevokeAnyAPIToken(w http.ResponseWriter, r *http.Request) {
+	h.revokeAPIToken(w, r, h.APITokens.RevokeAny, "/users/api-tokens")
+}
+
+func (h *Handler) revokeAPIToken(w http.ResponseWriter, r *http.Request, revoke func(context.Context, apitoken.Actor, int) (*model.APIToken, error), back string) {
 	ctx := r.Context()
 	user := auth.UserFromContext(ctx)
 	if user == nil {
@@ -242,7 +268,7 @@ func (h *Handler) RevokeAPIToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = h.APITokens.Revoke(ctx, tokenActor(user), tokenID)
+	_, err = revoke(ctx, tokenActor(user), tokenID)
 	if err != nil {
 		if errors.Is(err, apitoken.ErrNotFound) {
 			h.setFlash(w, "Token not found")
@@ -250,14 +276,15 @@ func (h *Handler) RevokeAPIToken(w http.ResponseWriter, r *http.Request) {
 			slog.Error("api_token: revoke", "user_id", user.ID, "token_id", tokenID, "error", err)
 			h.setFlash(w, "Failed to revoke token")
 		}
-		http.Redirect(w, r, h.BasePath+"/settings/api-tokens", http.StatusSeeOther)
+		http.Redirect(w, r, h.BasePath+back, http.StatusSeeOther)
 		return
 	}
 
 	h.setFlash(w, "Token revoked")
-	http.Redirect(w, r, h.BasePath+"/settings/api-tokens", http.StatusSeeOther)
+	http.Redirect(w, r, h.BasePath+back, http.StatusSeeOther)
 }
 
 func tokenActor(user *model.User) apitoken.Actor {
-	return apitoken.Actor{UserID: user.ID, Username: user.Username, IsAdmin: user.IsAdmin(), Capabilities: user.Capabilities}
+	return apitoken.Actor{UserID: user.ID, Username: user.Username, IsAdmin: user.IsAdmin(), Capabilities: user.Capabilities,
+		CanManageUsers: user.HasCapability(model.CapUsersManage)}
 }
