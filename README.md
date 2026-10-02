@@ -84,7 +84,7 @@ curl -s -X DELETE \
 | Method | Use Case | How |
 |--------|----------|-----|
 | Session cookie | Browser / SPA | Login via `/api/v1/auth/login`, cookie set automatically |
-| Bearer token | Bots, MCP, Telegram, scripts | Create at `/settings/api-tokens` (any user), use `Authorization: Bearer lat_...`; `DELETE /api/v1/auth/token` revokes the calling token |
+| Bearer token | Bots, MCP, Telegram, scripts | Create at `/settings/api-tokens` (any user), use `Authorization: Bearer lat_...`; `DELETE /api/v1/auth/token` revokes the calling token; `users.manage` holders can revoke anyone's at `/users/api-tokens` |
 
 Bearer tokens are scoped (subset of your capabilities) and revocable. They skip CSRF validation.
 

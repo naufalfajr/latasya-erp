@@ -17,7 +17,7 @@ import (
 )
 
 var (
-	ErrForbidden = errors.New("api token owner required")
+	ErrForbidden = errors.New("api token access denied")
 	ErrNotFound  = errors.New("api token not found")
 )
 
@@ -30,10 +30,11 @@ type ConflictError struct{ Message string }
 func (e *ConflictError) Error() string { return e.Message }
 
 type Actor struct {
-	UserID       int
-	Username     string
-	IsAdmin      bool
-	Capabilities []string
+	UserID         int
+	Username       string
+	IsAdmin        bool
+	Capabilities   []string
+	CanManageUsers bool
 }
 
 type Draft struct {
@@ -123,7 +124,7 @@ func (m *Module) List(ctx context.Context, actor Actor) ([]model.APIToken, error
 	defer rows.Close()
 	result := []model.APIToken{}
 	for rows.Next() {
-		token, err := scanToken(rows)
+		token, err := scanToken(rows, false)
 		if err != nil {
 			return nil, err
 		}
@@ -135,8 +136,33 @@ func (m *Module) List(ctx context.Context, actor Actor) ([]model.APIToken, error
 	return result, nil
 }
 
+// ListAll returns every user's tokens, active ones first.
+// ponytail: unpaginated; fine for a small staff, page it if tokens reach the hundreds.
+func (m *Module) ListAll(ctx context.Context, actor Actor) ([]model.APIToken, error) {
+	if err := requireUserManager(actor); err != nil {
+		return nil, err
+	}
+	rows, err := m.db.QueryContext(ctx, `SELECT `+ownedColumns+` FROM api_tokens t JOIN users u ON u.id=t.user_id ORDER BY t.revoked_at IS NOT NULL, t.created_at DESC, t.id DESC`)
+	if err != nil {
+		return nil, fmt.Errorf("list all api tokens: %w", err)
+	}
+	defer rows.Close()
+	result := []model.APIToken{}
+	for rows.Next() {
+		token, err := scanToken(rows, true)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, *token)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate all api tokens: %w", err)
+	}
+	return result, nil
+}
+
 func (m *Module) LookupByHash(ctx context.Context, hash string) (*model.APIToken, error) {
-	token, err := scanToken(m.db.QueryRowContext(ctx, `SELECT id,user_id,name,token_prefix,scopes,expires_at,last_used_at,revoked_at,created_at FROM api_tokens WHERE token_hash=? AND revoked_at IS NULL AND (expires_at IS NULL OR datetime(expires_at)>datetime('now'))`, hash))
+	token, err := scanToken(m.db.QueryRowContext(ctx, `SELECT id,user_id,name,token_prefix,scopes,expires_at,last_used_at,revoked_at,created_at FROM api_tokens WHERE token_hash=? AND revoked_at IS NULL AND (expires_at IS NULL OR datetime(expires_at)>datetime('now'))`, hash), false)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -157,16 +183,37 @@ func (m *Module) Revoke(ctx context.Context, actor Actor, tokenID int) (*model.A
 	if actor.UserID <= 0 {
 		return nil, ErrForbidden
 	}
+	return m.revoke(ctx, actor, actor.UserID, tokenID)
+}
+
+// RevokeAny revokes any user's token, e.g. after a password reset, without
+// deactivating the whole account.
+func (m *Module) RevokeAny(ctx context.Context, actor Actor, tokenID int) (*model.APIToken, error) {
+	if err := requireUserManager(actor); err != nil {
+		return nil, err
+	}
+	var ownerID int
+	err := m.db.QueryRowContext(ctx, `SELECT user_id FROM api_tokens WHERE id=?`, tokenID).Scan(&ownerID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get api token owner: %w", err)
+	}
+	return m.revoke(ctx, actor, ownerID, tokenID)
+}
+
+func (m *Module) revoke(ctx context.Context, actor Actor, ownerID, tokenID int) (*model.APIToken, error) {
 	tx, err := m.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("begin api token revoke: %w", err)
 	}
 	defer tx.Rollback()
-	token, err := getOwnedWith(ctx, tx, actor.UserID, tokenID)
+	token, err := getOwnedWith(ctx, tx, ownerID, tokenID)
 	if err != nil {
 		return nil, err
 	}
-	result, err := tx.ExecContext(ctx, `UPDATE api_tokens SET revoked_at=datetime('now') WHERE id=? AND user_id=? AND revoked_at IS NULL`, tokenID, actor.UserID)
+	result, err := tx.ExecContext(ctx, `UPDATE api_tokens SET revoked_at=datetime('now') WHERE id=? AND user_id=? AND revoked_at IS NULL`, tokenID, ownerID)
 	if err != nil {
 		return nil, fmt.Errorf("revoke api token: %w", err)
 	}
@@ -176,17 +223,31 @@ func (m *Module) Revoke(ctx context.Context, actor Actor, tokenID int) (*model.A
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("commit api token revoke: %w", err)
 	}
-	audit.Log(ctx, m.db, audit.Event{Action: "api_token.revoke", ActorID: int64(actor.UserID), ActorUsername: actor.Username, TargetType: "api_token", TargetID: int64(token.ID), TargetLabel: token.Name, Metadata: map[string]any{"token_id": token.ID, "name": token.Name}})
+	audit.Log(ctx, m.db, audit.Event{Action: "api_token.revoke", ActorID: int64(actor.UserID), ActorUsername: actor.Username, TargetType: "api_token", TargetID: int64(token.ID), TargetLabel: token.Name, Metadata: map[string]any{"token_id": token.ID, "name": token.Name, "owner_user_id": ownerID, "owner_username": token.OwnerUsername}})
 	return token, nil
 }
 
 type scanner interface{ Scan(...any) error }
 
-func scanToken(row scanner) (*model.APIToken, error) {
+func requireUserManager(actor Actor) error {
+	if actor.UserID <= 0 || !actor.CanManageUsers {
+		return ErrForbidden
+	}
+	return nil
+}
+
+// ownedColumns are scanToken's columns plus the owner, for api_tokens t JOIN users u.
+const ownedColumns = "t.id,t.user_id,t.name,t.token_prefix,t.scopes,t.expires_at,t.last_used_at,t.revoked_at,t.created_at,u.username,u.full_name"
+
+func scanToken(row scanner, withOwner bool) (*model.APIToken, error) {
 	var token model.APIToken
 	var scopes string
 	var expires, used, revoked, created sql.NullString
-	if err := row.Scan(&token.ID, &token.UserID, &token.Name, &token.TokenPrefix, &scopes, &expires, &used, &revoked, &created); err != nil {
+	dest := []any{&token.ID, &token.UserID, &token.Name, &token.TokenPrefix, &scopes, &expires, &used, &revoked, &created}
+	if withOwner {
+		dest = append(dest, &token.OwnerUsername, &token.OwnerName)
+	}
+	if err := row.Scan(dest...); err != nil {
 		return nil, err
 	}
 	if err := json.Unmarshal([]byte(scopes), &token.Scopes); err != nil {
@@ -206,7 +267,7 @@ type rowQueryer interface {
 }
 
 func getOwnedWith(ctx context.Context, q rowQueryer, userID, tokenID int) (*model.APIToken, error) {
-	token, err := scanToken(q.QueryRowContext(ctx, `SELECT id,user_id,name,token_prefix,scopes,expires_at,last_used_at,revoked_at,created_at FROM api_tokens WHERE id=? AND user_id=?`, tokenID, userID))
+	token, err := scanToken(q.QueryRowContext(ctx, `SELECT `+ownedColumns+` FROM api_tokens t JOIN users u ON u.id=t.user_id WHERE t.id=? AND t.user_id=?`, tokenID, userID), true)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}

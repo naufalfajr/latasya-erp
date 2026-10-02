@@ -22,6 +22,7 @@ Passwords never go into Telegram. Bot chats are not end-to-end encrypted, and a 
 
 - `/logout` in the bot revokes the token in the ERP.
 - Revoking the token under ERP → API Tokens, or deactivating the user, cuts the bot off on the next tap.
+- Anyone with `users.manage` (admins) can revoke any user's token under **Users → All API Tokens**, for example after a password reset, without deactivating the user.
 
 ## Commands
 

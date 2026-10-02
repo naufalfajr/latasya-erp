@@ -3,6 +3,7 @@ package apitoken_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -97,5 +98,87 @@ func TestAdminStillRejectsUnknownScope(t *testing.T) {
 	var validation *apitoken.ValidationError
 	if !errors.As(err, &validation) {
 		t.Fatalf("error=%v", err)
+	}
+}
+
+func TestListAllAndRevokeAny(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	module := apitoken.New(db)
+	ctx := context.Background()
+	staffID := testutil.CreateTestUser(t, db, "staff", "password", model.RoleBookkeeper)
+	staff := apitoken.Actor{UserID: staffID, Username: "staff", Capabilities: []string{model.CapIncomeManage}}
+	manager := apitoken.Actor{UserID: 1, Username: "admin", IsAdmin: true, CanManageUsers: true}
+
+	first, err := module.Create(ctx, staff, apitoken.Draft{Name: "telegram", Scopes: []string{model.CapIncomeManage}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// No actor at all is always refused.
+	anonymous := apitoken.Actor{CanManageUsers: true}
+	if _, err := module.ListAll(ctx, anonymous); !errors.Is(err, apitoken.ErrForbidden) {
+		t.Errorf("ListAll without a user: error=%v, want ErrForbidden", err)
+	}
+	if _, err := module.RevokeAny(ctx, anonymous, first.Token.ID); !errors.Is(err, apitoken.ErrForbidden) {
+		t.Errorf("RevokeAny without a user: error=%v, want ErrForbidden", err)
+	}
+	if _, err := module.Revoke(ctx, apitoken.Actor{}, first.Token.ID); !errors.Is(err, apitoken.ErrForbidden) {
+		t.Errorf("Revoke without a user: error=%v, want ErrForbidden", err)
+	}
+
+	// Without users.manage nobody sees or revokes other users' tokens, admin role or not.
+	for _, actor := range []apitoken.Actor{staff, {UserID: 1, Username: "admin", IsAdmin: true}} {
+		if _, err := module.ListAll(ctx, actor); !errors.Is(err, apitoken.ErrForbidden) {
+			t.Errorf("ListAll as %+v: error=%v, want ErrForbidden", actor, err)
+		}
+		if _, err := module.RevokeAny(ctx, actor, first.Token.ID); !errors.Is(err, apitoken.ErrForbidden) {
+			t.Errorf("RevokeAny as %+v: error=%v, want ErrForbidden", actor, err)
+		}
+	}
+
+	all, err := module.ListAll(ctx, manager)
+	if err != nil || len(all) != 1 || all[0].OwnerUsername != "staff" || all[0].OwnerName == "" || all[0].Name != "telegram" {
+		t.Fatalf("ListAll = %+v, err=%v", all, err)
+	}
+
+	if _, err := module.RevokeAny(ctx, manager, first.Token.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := module.Authenticate(ctx, first.Plaintext); !errors.Is(err, apitoken.ErrNotFound) {
+		t.Errorf("revoked token still authenticates: error=%v", err)
+	}
+	var actor, metadata string
+	db.QueryRow(`SELECT actor_username, metadata FROM audit_log WHERE action='api_token.revoke'`).Scan(&actor, &metadata)
+	if actor != "admin" || !strings.Contains(metadata, fmt.Sprintf(`"owner_user_id":%d`, staffID)) || !strings.Contains(metadata, `"owner_username":"staff"`) {
+		t.Errorf("audit: actor=%q metadata=%s, want admin revoking staff's token", actor, metadata)
+	}
+
+	// Active tokens are listed before revoked ones, even older ones.
+	second, err := module.Create(ctx, staff, apitoken.Draft{Name: "script", Scopes: []string{model.CapIncomeManage}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.Exec(`UPDATE api_tokens SET created_at=datetime('now','-1 day') WHERE id=?`, second.Token.ID)
+	all, _ = module.ListAll(ctx, manager)
+	if len(all) != 2 || all[0].ID != second.Token.ID || all[1].RevokedAt == nil {
+		t.Errorf("ListAll order: %+v, want the active token first", all)
+	}
+
+	for _, id := range []int{first.Token.ID, 99999} {
+		if _, err := module.RevokeAny(ctx, manager, id); !errors.Is(err, apitoken.ErrNotFound) {
+			t.Errorf("RevokeAny(%d): error=%v, want ErrNotFound", id, err)
+		}
+	}
+
+	// Database failures surface as errors, not as "not found" or an empty list.
+	db.Close()
+	if _, err := module.ListAll(ctx, manager); err == nil {
+		t.Error("ListAll on a closed database: want an error")
+	}
+	if _, err := module.RevokeAny(ctx, manager, second.Token.ID); err == nil || errors.Is(err, apitoken.ErrNotFound) {
+		t.Errorf("RevokeAny on a closed database: error=%v, want a database error", err)
+	}
+	if _, err := module.Revoke(ctx, staff, second.Token.ID); err == nil || errors.Is(err, apitoken.ErrNotFound) {
+		t.Errorf("Revoke on a closed database: error=%v, want a database error", err)
 	}
 }
