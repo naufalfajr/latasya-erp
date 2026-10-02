@@ -182,3 +182,41 @@ func TestListAllAndRevokeAny(t *testing.T) {
 		t.Errorf("Revoke on a closed database: error=%v, want a database error", err)
 	}
 }
+
+func TestRevokeAnyFollowsRoleHierarchy(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	module := apitoken.New(db)
+	ctx := context.Background()
+	if err := testutil.CreateRole(db, &model.Role{Name: "hr", Capabilities: []string{model.CapUsersManage}}); err != nil {
+		t.Fatal(err)
+	}
+	managerID := testutil.CreateTestUser(t, db, "manager", "password", "hr")
+	peerID := testutil.CreateTestUser(t, db, "peer", "password", "hr")
+	manager := apitoken.Actor{UserID: managerID, Username: "manager", CanManageUsers: true, Capabilities: []string{model.CapUsersManage}}
+
+	adminToken, err := module.Create(ctx, apitoken.Actor{UserID: 1, Username: "admin", IsAdmin: true}, apitoken.Draft{Name: "ops", Scopes: []string{model.CapReportsView}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	peerToken, err := module.Create(ctx, apitoken.Actor{UserID: peerID, Username: "peer", Capabilities: []string{model.CapUsersManage}}, apitoken.Draft{Name: "bot", Scopes: []string{model.CapUsersManage}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// A non-admin manager sees the admin's token but cannot revoke it.
+	all, err := module.ListAll(ctx, manager)
+	if err != nil || len(all) != 2 {
+		t.Fatalf("ListAll = %d tokens, err=%v; want both", len(all), err)
+	}
+	if _, err := module.RevokeAny(ctx, manager, adminToken.Token.ID); !errors.Is(err, apitoken.ErrForbidden) {
+		t.Errorf("revoke admin's token: error=%v, want ErrForbidden", err)
+	}
+	if _, err := module.Authenticate(ctx, adminToken.Plaintext); err != nil {
+		t.Errorf("admin's token stopped working: %v", err)
+	}
+
+	// A peer whose role is within the manager's permissions is fair game.
+	if _, err := module.RevokeAny(ctx, manager, peerToken.Token.ID); err != nil {
+		t.Errorf("revoke peer's token: %v", err)
+	}
+}

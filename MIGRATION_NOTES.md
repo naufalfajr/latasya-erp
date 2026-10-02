@@ -146,12 +146,13 @@ May be removed when the SPA can display all five reports with date range filters
 
 HTML routes: `/users`, `/users/new`, `/users/{id}/edit`, `/users/{id}` (delete), `/users/api-tokens`, `/users/api-tokens/{id}/revoke`
 
-May be removed when the SPA has user management (admin-only):
+May be removed when the SPA has user management (`users.manage`):
 - List users
 - Create a new user with role assignment
 - Edit a user's details and role
 - Delete a user
 - List and revoke any user's API tokens (HTML-only: bearer tokens cannot revoke other tokens)
+- For non-admins, offer only roles within their own capabilities and hide actions on users beyond them
 
 ### roles
 

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/naufal/latasya-erp/internal/access"
 	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/model"
 )
@@ -48,9 +49,12 @@ type Created struct {
 	Plaintext string
 }
 
-type Module struct{ db *sql.DB }
+type Module struct {
+	db     *sql.DB
+	access *access.Module
+}
 
-func New(db *sql.DB) *Module { return &Module{db: db} }
+func New(db *sql.DB) *Module { return &Module{db: db, access: access.New(db, nil)} }
 
 func (m *Module) Create(ctx context.Context, actor Actor, draft Draft) (*Created, error) {
 	if actor.UserID <= 0 {
@@ -183,27 +187,37 @@ func (m *Module) Revoke(ctx context.Context, actor Actor, tokenID int) (*model.A
 	if actor.UserID <= 0 {
 		return nil, ErrForbidden
 	}
-	return m.revoke(ctx, actor, actor.UserID, tokenID)
+	return m.revoke(ctx, actor, actor.UserID, "", tokenID)
 }
 
-// RevokeAny revokes any user's token, e.g. after a password reset, without
-// deactivating the whole account.
+// RevokeAny revokes another user's token, e.g. after a password reset, without
+// deactivating them; like user management, only for owners the actor may manage.
 func (m *Module) RevokeAny(ctx context.Context, actor Actor, tokenID int) (*model.APIToken, error) {
 	if err := requireUserManager(actor); err != nil {
 		return nil, err
 	}
 	var ownerID int
-	err := m.db.QueryRowContext(ctx, `SELECT user_id FROM api_tokens WHERE id=?`, tokenID).Scan(&ownerID)
+	var ownerRole string
+	err := m.db.QueryRowContext(ctx, `SELECT t.user_id, u.role FROM api_tokens t JOIN users u ON u.id=t.user_id WHERE t.id=?`, tokenID).Scan(&ownerID, &ownerRole)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get api token owner: %w", err)
 	}
-	return m.revoke(ctx, actor, ownerID, tokenID)
+	manager := access.Actor{UserID: actor.UserID, CanManageUsers: actor.CanManageUsers, IsAdmin: actor.IsAdmin, Capabilities: actor.Capabilities}
+	if err := m.access.CheckManageable(ctx, manager, ownerRole); err != nil {
+		if errors.Is(err, access.ErrForbidden) {
+			return nil, ErrForbidden
+		}
+		return nil, err
+	}
+	return m.revoke(ctx, actor, ownerID, ownerRole, tokenID)
 }
 
-func (m *Module) revoke(ctx context.Context, actor Actor, ownerID, tokenID int) (*model.APIToken, error) {
+// revoke refuses when approvedRole is set and the owner's role changed since it
+// was approved, so a promotion can't race RevokeAny's check.
+func (m *Module) revoke(ctx context.Context, actor Actor, ownerID int, approvedRole string, tokenID int) (*model.APIToken, error) {
 	tx, err := m.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("begin api token revoke: %w", err)
@@ -212,6 +226,9 @@ func (m *Module) revoke(ctx context.Context, actor Actor, ownerID, tokenID int) 
 	token, err := getOwnedWith(ctx, tx, ownerID, tokenID)
 	if err != nil {
 		return nil, err
+	}
+	if approvedRole != "" && token.OwnerRole != approvedRole {
+		return nil, ErrForbidden
 	}
 	result, err := tx.ExecContext(ctx, `UPDATE api_tokens SET revoked_at=datetime('now') WHERE id=? AND user_id=? AND revoked_at IS NULL`, tokenID, ownerID)
 	if err != nil {
@@ -237,7 +254,7 @@ func requireUserManager(actor Actor) error {
 }
 
 // ownedColumns are scanToken's columns plus the owner, for api_tokens t JOIN users u.
-const ownedColumns = "t.id,t.user_id,t.name,t.token_prefix,t.scopes,t.expires_at,t.last_used_at,t.revoked_at,t.created_at,u.username,u.full_name"
+const ownedColumns = "t.id,t.user_id,t.name,t.token_prefix,t.scopes,t.expires_at,t.last_used_at,t.revoked_at,t.created_at,u.username,u.full_name,u.role"
 
 func scanToken(row scanner, withOwner bool) (*model.APIToken, error) {
 	var token model.APIToken
@@ -245,7 +262,7 @@ func scanToken(row scanner, withOwner bool) (*model.APIToken, error) {
 	var expires, used, revoked, created sql.NullString
 	dest := []any{&token.ID, &token.UserID, &token.Name, &token.TokenPrefix, &scopes, &expires, &used, &revoked, &created}
 	if withOwner {
-		dest = append(dest, &token.OwnerUsername, &token.OwnerName)
+		dest = append(dest, &token.OwnerUsername, &token.OwnerName, &token.OwnerRole)
 	}
 	if err := row.Scan(dest...); err != nil {
 		return nil, err

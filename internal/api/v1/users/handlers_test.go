@@ -35,9 +35,11 @@ func adminToken(t *testing.T, db *sql.DB) string {
 	if err := db.QueryRow("SELECT id FROM users WHERE username = 'admin'").Scan(&adminID); err != nil {
 		t.Fatalf("get admin: %v", err)
 	}
+	// Every scope, so the token can assign every non-admin role; a token never
+	// counts as admin.
 	_, tok, err := testutil.CreateAPIToken(db, adminID,
 		fmt.Sprintf("test-users-%d", time.Now().UnixNano()),
-		[]string{model.CapUsersManage}, nil)
+		model.AllCapabilities, nil)
 	if err != nil {
 		t.Fatalf("create token: %v", err)
 	}
@@ -221,7 +223,7 @@ func TestCreateUser(t *testing.T) {
 		body := map[string]any{
 			"username":  "admin",
 			"full_name": "Admin Dup",
-			"role":      "admin",
+			"role":      "viewer",
 			"password":  "pass1234",
 		}
 		resp := doReq(t, ts, http.MethodPost, "/api/v1/users", tok, body)
@@ -435,17 +437,18 @@ func TestUpdateUser(t *testing.T) {
 	})
 
 	t.Run("self password change does not force must_change_password", func(t *testing.T) {
-		// The self user must hold a role that actually carries users.manage
-		// for the effective-capability intersection to allow the request;
-		// only the admin role bypasses intersection entirely.
-		selfID := testutil.CreateTestUser(t, db, "update-self-pwd", "pw", "admin")
+		// A non-admin user manager: a token can never manage an admin account.
+		if err := testutil.CreateRole(db, &model.Role{Name: "usermgr", Capabilities: []string{model.CapUsersManage}}); err != nil {
+			t.Fatal(err)
+		}
+		selfID := testutil.CreateTestUser(t, db, "update-self-pwd", "pw", "usermgr")
 		_, selfTok, err := testutil.CreateAPIToken(db, selfID, "self-pwd-tok", []string{model.CapUsersManage}, nil)
 		if err != nil {
 			t.Fatalf("create token: %v", err)
 		}
 		body := map[string]any{
 			"full_name": "Self Pwd",
-			"role":      "admin",
+			"role":      "usermgr",
 			"password":  "newpassword123",
 		}
 		resp := doReq(t, ts, http.MethodPut, fmt.Sprintf("/api/v1/users/%d", selfID), selfTok, body)
@@ -567,6 +570,103 @@ func TestSelfProtection(t *testing.T) {
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusConflict {
 			t.Errorf("expected 409, got %d", resp.StatusCode)
+		}
+	})
+}
+
+func TestUserManagerCannotEscalate(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	ts := newTestServer(t, db)
+	if err := testutil.CreateRole(db, &model.Role{Name: "hr", Capabilities: []string{model.CapUsersManage}}); err != nil {
+		t.Fatal(err)
+	}
+	managerID := testutil.CreateTestUser(t, db, "manager", "pw", "hr")
+	_, tok, err := testutil.CreateAPIToken(db, managerID, "manager-tok", []string{model.CapUsersManage}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	status := func(method, path string, body any) (int, map[string]any) {
+		t.Helper()
+		resp := doReq(t, ts, method, path, tok, body)
+		defer resp.Body.Close()
+		var env map[string]any
+		json.NewDecoder(resp.Body).Decode(&env) //nolint:errcheck
+		return resp.StatusCode, env
+	}
+
+	t.Run("create admin returns 422", func(t *testing.T) {
+		code, env := status(http.MethodPost, "/api/v1/users", map[string]any{"username": "sneaky", "full_name": "S", "role": "admin", "password": "pass1234"})
+		fields, _ := env["fields"].(map[string]any)
+		if code != http.StatusUnprocessableEntity || fields["role"] != "outside your capabilities" {
+			t.Errorf("expected 422 on role, got %d %v", code, env)
+		}
+	})
+
+	t.Run("promote self returns 422", func(t *testing.T) {
+		code, _ := status(http.MethodPut, fmt.Sprintf("/api/v1/users/%d", managerID), map[string]any{"full_name": "M", "role": "admin", "is_active": true})
+		if code != http.StatusUnprocessableEntity {
+			t.Errorf("expected 422, got %d", code)
+		}
+	})
+
+	adminUnchanged := func(t *testing.T) {
+		t.Helper()
+		var role string
+		var active bool
+		if err := db.QueryRow(`SELECT role, is_active FROM users WHERE id=1`).Scan(&role, &active); err != nil {
+			t.Fatal(err)
+		}
+		if role != model.RoleAdmin || !active {
+			t.Errorf("admin changed: role=%s active=%v", role, active)
+		}
+	}
+
+	t.Run("update admin returns 403", func(t *testing.T) {
+		if code, _ := status(http.MethodPut, "/api/v1/users/1", map[string]any{"full_name": "Owned", "role": "hr", "is_active": true, "password": "owned1234"}); code != http.StatusForbidden {
+			t.Errorf("expected 403, got %d", code)
+		}
+		adminUnchanged(t)
+	})
+
+	t.Run("delete admin returns 403", func(t *testing.T) {
+		if code, _ := status(http.MethodDelete, "/api/v1/users/1", nil); code != http.StatusForbidden {
+			t.Errorf("expected 403, got %d", code)
+		}
+		adminUnchanged(t)
+	})
+}
+
+// An admin's token, even with every scope, cannot create admins or take over an
+// admin account (e.g. reset its password without the current one).
+func TestAdminTokenCannotManageAdmins(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	ts := newTestServer(t, db)
+	tok := adminToken(t, db)
+	var hash string
+	if err := db.QueryRow(`SELECT password FROM users WHERE id=1`).Scan(&hash); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("create admin returns 422", func(t *testing.T) {
+		resp := doReq(t, ts, http.MethodPost, "/api/v1/users", tok, map[string]any{"username": "second-admin", "full_name": "A", "role": "admin", "password": "pass1234"})
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusUnprocessableEntity {
+			t.Errorf("expected 422, got %d", resp.StatusCode)
+		}
+	})
+
+	t.Run("reset admin password returns 403", func(t *testing.T) {
+		resp := doReq(t, ts, http.MethodPut, "/api/v1/users/1", tok, map[string]any{"full_name": "Admin", "role": "admin", "is_active": true, "password": "owned1234"})
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusForbidden {
+			t.Errorf("expected 403, got %d", resp.StatusCode)
+		}
+		var after string
+		if err := db.QueryRow(`SELECT password FROM users WHERE id=1`).Scan(&after); err != nil {
+			t.Fatal(err)
+		}
+		if after != hash {
+			t.Error("admin password changed through a token")
 		}
 	})
 }

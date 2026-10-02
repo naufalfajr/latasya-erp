@@ -8,5 +8,7 @@ Cookie-versus-bearer restrictions are transport concerns. Ownership, expiry,
 revocation, hashing, and audit metadata are enforced here.
 
 Users list and revoke only their own tokens. Holders of `users.manage` can also
-list every user's tokens (`ListAll`) and revoke any of them (`RevokeAny`); the
-audit entry records the revoking actor and the token's `owner_user_id`.
+list every user's tokens (`ListAll`) and revoke those of users they may manage
+(`RevokeAny`, via `access.Module.CheckManageable`: non-admins only for users whose
+role is within their own capabilities); the audit entry records the revoking
+actor and the owner.
