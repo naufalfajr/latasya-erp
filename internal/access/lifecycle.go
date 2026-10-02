@@ -55,10 +55,7 @@ func (m *Module) CreateUser(ctx context.Context, actor Actor, d UserDraft) (*mod
 		return nil, fmt.Errorf("begin user create: %w", err)
 	}
 	defer tx.Rollback()
-	if _, err := getRoleWith(ctx, tx, d.Role); err != nil {
-		if err == ErrNotFound {
-			return nil, &ValidationError{Fields: map[string]string{"role": "invalid role"}}
-		}
+	if err := requireAssignable(ctx, tx, actor, d.Role); err != nil {
 		return nil, err
 	}
 	result, err := tx.ExecContext(ctx, "INSERT INTO users (username,password,full_name,role,is_active,must_change_password) VALUES (?,?,?,?,?,1)", strings.TrimSpace(d.Username), hash, strings.TrimSpace(d.FullName), d.Role, d.IsActive)
@@ -87,11 +84,19 @@ func (m *Module) UpdateUser(ctx context.Context, actor Actor, id int, d UserDraf
 	if err := require(actor, actor.CanManageUsers); err != nil {
 		return nil, err
 	}
-	if err := validateUser(d, false); err != nil {
-		return nil, err
-	}
 	if actor.UserID == id && !d.IsActive {
 		return nil, &ConflictError{Message: "cannot deactivate your own account"}
+	}
+	// Refuse before validating or hashing; re-checked inside the transaction.
+	target, err := getUserWith(ctx, m.db, "id", id, false)
+	if err != nil {
+		return nil, err
+	}
+	if err := requireManageable(ctx, m.db, actor, target.Role); err != nil {
+		return nil, err
+	}
+	if err := validateUser(d, false); err != nil {
+		return nil, err
 	}
 	var passwordHash string
 	if d.Password != "" {
@@ -116,10 +121,10 @@ func (m *Module) UpdateUser(ctx context.Context, actor Actor, id int, d UserDraf
 	if err != nil {
 		return nil, err
 	}
-	if _, err := getRoleWith(ctx, tx, d.Role); err != nil {
-		if err == ErrNotFound {
-			return nil, &ValidationError{Fields: map[string]string{"role": "invalid role"}}
-		}
+	if err := requireManageable(ctx, tx, actor, old.Role); err != nil {
+		return nil, err
+	}
+	if err := requireAssignable(ctx, tx, actor, d.Role); err != nil {
 		return nil, err
 	}
 	if _, err := tx.ExecContext(ctx, "UPDATE users SET full_name=?,role=?,is_active=?,updated_at=datetime('now') WHERE id=?", strings.TrimSpace(d.FullName), d.Role, d.IsActive, id); err != nil {
@@ -168,6 +173,9 @@ func (m *Module) DeactivateUser(ctx context.Context, actor Actor, id int) (*mode
 	}
 	old, err := getUserWith(ctx, tx, "id", id, false)
 	if err != nil {
+		return nil, err
+	}
+	if err := requireManageable(ctx, tx, actor, old.Role); err != nil {
 		return nil, err
 	}
 	if _, err := tx.ExecContext(ctx, "UPDATE users SET is_active=0,updated_at=datetime('now') WHERE id=?", id); err != nil {

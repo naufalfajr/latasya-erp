@@ -15,4 +15,5 @@ type APIToken struct {
 
 	OwnerUsername string
 	OwnerName     string
+	OwnerRole     string
 }

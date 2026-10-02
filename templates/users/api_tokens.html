@@ -49,13 +49,13 @@
                     {{if .ExpiresAt}}{{.ExpiresAt.Format "Jan 2, 2006"}}{{else}}<span class="opacity-50">Never</span>{{end}}
                 </td>
                 <td>
-                    {{if not .RevokedAt}}
+                    {{if .RevokedAt}}
+                    <span class="badge badge-error badge-sm">Revoked</span>
+                    {{else if index $data.Manageable .OwnerRole}}
                     <form method="POST" action="{{$.BasePath}}/users/api-tokens/{{.ID}}/revoke" class="inline" onsubmit="return confirm('Revoke this token? Anything using it, such as the Telegram bot, stops working immediately.')">
                         {{template "csrf" $}}
                         <button type="submit" class="btn btn-error btn-xs">Revoke</button>
                     </form>
-                    {{else}}
-                    <span class="badge badge-error badge-sm">Revoked</span>
                     {{end}}
                 </td>
             </tr>

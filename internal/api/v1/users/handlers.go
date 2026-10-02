@@ -26,7 +26,10 @@ func actor(r *http.Request) access.Actor {
 	if u == nil {
 		return access.Actor{}
 	}
-	return access.Actor{UserID: u.ID, CanManageUsers: v1.HasEffectiveCapability(r.Context(), model.CapUsersManage)}
+	// Like HasEffectiveCapability: a bearer token never counts as admin and can only
+	// hand out roles within its effective scopes.
+	return access.Actor{UserID: u.ID, CanManageUsers: v1.HasEffectiveCapability(r.Context(), model.CapUsersManage),
+		IsAdmin: u.IsAdmin() && !v1.IsBearerAuth(r.Context()), Capabilities: v1.EffectiveCapabilitiesFromContext(r.Context())}
 }
 
 func authorize(w http.ResponseWriter, r *http.Request) bool {

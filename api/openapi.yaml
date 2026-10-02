@@ -3148,7 +3148,8 @@ paths:
   /users:
     get:
       operationId: listUsers
-      summary: List all users (admin-only)
+      summary: List all users
+      description: Requires users.manage.
       parameters:
         - $ref: '#/components/parameters/PageParam'
         - $ref: '#/components/parameters/PerPageParam'
@@ -3172,7 +3173,11 @@ paths:
           $ref: '#/components/responses/Forbidden'
     post:
       operationId: createUser
-      summary: Create a user (admin-only)
+      summary: Create a user
+      description: |
+        Requires users.manage. Callers that are not admins, including every
+        bearer token, may only assign non-admin roles within their own
+        capabilities (a token's effective scopes); anything else is 422 on `role`.
       requestBody:
         required: true
         content:
@@ -3201,7 +3206,8 @@ paths:
   /users/{id}:
     get:
       operationId: getUser
-      summary: Get a single user (admin-only)
+      summary: Get a single user
+      description: Requires users.manage.
       parameters:
         - name: id
           in: path
@@ -3226,7 +3232,11 @@ paths:
           $ref: '#/components/responses/NotFound'
     put:
       operationId: updateUser
-      summary: Update a user (admin-only)
+      summary: Update a user
+      description: |
+        Requires users.manage. Callers that are not admins, including every
+        bearer token, get 403 for users whose role exceeds their own
+        capabilities (including admins), and 422 on `role` for such a role.
       parameters:
         - name: id
           in: path
@@ -3261,7 +3271,11 @@ paths:
           $ref: '#/components/responses/ValidationFailed'
     delete:
       operationId: deleteUser
-      summary: Deactivate a user (admin-only; cannot deactivate self)
+      summary: Deactivate a user (cannot deactivate self)
+      description: |
+        Requires users.manage. Callers that are not admins, including every
+        bearer token, get 403 for users whose role exceeds their own
+        capabilities (including admins).
       parameters:
         - name: id
           in: path

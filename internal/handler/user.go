@@ -22,16 +22,52 @@ func accessActor(r *http.Request) access.Actor {
 	if u == nil {
 		return access.Actor{}
 	}
-	return access.Actor{UserID: u.ID, CanManageUsers: u.HasCapability(model.CapUsersManage), CanManageRoles: u.HasCapability(model.CapRolesManage)}
+	return access.Actor{UserID: u.ID, CanManageUsers: u.HasCapability(model.CapUsersManage), CanManageRoles: u.HasCapability(model.CapRolesManage),
+		IsAdmin: u.IsAdmin(), Capabilities: u.Capabilities}
+}
+
+type userListData struct {
+	Users      []model.User
+	Manageable map[string]bool
+}
+
+// assignableRoles lists the roles the current user may hand out, and so whose
+// holders (and their tokens) they may manage.
+func (h *Handler) assignableRoles(r *http.Request) ([]model.Role, error) {
+	actor := accessActor(r)
+	roles, err := h.Access.ListRoles(r.Context(), actor, access.ListFilter{})
+	if err != nil {
+		return nil, err
+	}
+	assignable := []model.Role{}
+	for _, role := range roles.Roles {
+		if actor.CanAssign(role) {
+			assignable = append(assignable, role)
+		}
+	}
+	return assignable, nil
+}
+
+// manageableRoles is assignableRoles keyed by name, for hiding row actions.
+func (h *Handler) manageableRoles(r *http.Request) (map[string]bool, error) {
+	roles, err := h.assignableRoles(r)
+	if err != nil {
+		return nil, err
+	}
+	names := map[string]bool{}
+	for _, role := range roles {
+		names[role.Name] = true
+	}
+	return names, nil
 }
 
 func (h *Handler) userForm(w http.ResponseWriter, r *http.Request, title string, u *model.User, fields map[string]string, edit bool) {
-	roles, err := h.Access.ListRoles(r.Context(), accessActor(r), access.ListFilter{})
+	roles, err := h.assignableRoles(r)
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
-	h.render(w, r, "templates/users/form.html", title, userFormData{User: u, Roles: roles.Roles, Errors: fields, IsEdit: edit})
+	h.render(w, r, "templates/users/form.html", title, userFormData{User: u, Roles: roles, Errors: fields, IsEdit: edit})
 }
 
 func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
@@ -40,7 +76,12 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
-	h.render(w, r, "templates/users/index.html", "Users", result.Users)
+	manageable, err := h.manageableRoles(r)
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	h.render(w, r, "templates/users/index.html", "Users", userListData{Users: result.Users, Manageable: manageable})
 }
 
 func (h *Handler) NewUser(w http.ResponseWriter, r *http.Request) {
@@ -74,9 +115,18 @@ func (h *Handler) EditUser(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	u, err := h.Access.GetUser(r.Context(), accessActor(r), id)
+	actor := accessActor(r)
+	u, err := h.Access.GetUser(r.Context(), actor, id)
 	if err != nil {
 		http.NotFound(w, r)
+		return
+	}
+	if err := h.Access.CheckManageable(r.Context(), actor, u.Role); err != nil {
+		if errors.Is(err, access.ErrForbidden) {
+			http.Error(w, "Cannot edit a user with more permissions than you", http.StatusForbidden)
+			return
+		}
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 	h.userForm(w, r, "Edit User", u, map[string]string{}, true)
@@ -105,6 +155,10 @@ func (h *Handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 			h.userForm(w, r, "Edit User", u, userFormErrors(validation.Fields), true)
 			return
 		}
+		if errors.Is(err, access.ErrForbidden) {
+			http.Error(w, "Cannot edit a user with more permissions than you", http.StatusForbidden)
+			return
+		}
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
@@ -121,7 +175,11 @@ func userFormErrors(fields map[string]string) map[string]string {
 		case "full_name":
 			result[field] = "Full name is required"
 		case "role":
-			result[field] = "Invalid role"
+			if message == "outside your capabilities" {
+				result[field] = "You can only assign roles within your own permissions"
+			} else {
+				result[field] = "Invalid role"
+			}
 		case "password":
 			if message == "required" {
 				result[field] = "Password is required"
@@ -146,6 +204,11 @@ func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 		var conflict *access.ConflictError
 		if errors.As(err, &conflict) {
 			h.setFlash(w, "Cannot delete your own account")
+			http.Redirect(w, r, h.BasePath+"/users", http.StatusSeeOther)
+			return
+		}
+		if errors.Is(err, access.ErrForbidden) {
+			h.setFlash(w, "Cannot delete a user with more permissions than you")
 			http.Redirect(w, r, h.BasePath+"/users", http.StatusSeeOther)
 			return
 		}

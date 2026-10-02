@@ -8,7 +8,7 @@
     </div>
 </div>
 
-{{$users := .Data}}
+{{$data := .Data}}
 
 <div class="overflow-x-auto">
     <table class="table table-sm">
@@ -23,7 +23,7 @@
             </tr>
         </thead>
         <tbody>
-            {{range $users}}
+            {{range $data.Users}}
             <tr id="user-{{.ID}}" class="{{if not .IsActive}}opacity-50{{end}}">
                 <td class="font-semibold">{{.Username}}</td>
                 <td>{{.FullName}}</td>
@@ -37,6 +37,7 @@
                 </td>
                 <td class="text-sm">{{formatDate .CreatedAt}}</td>
                 <td>
+                    {{if index $data.Manageable .Role}}
                     <div class="flex gap-1">
                         <a href="{{$.BasePath}}/users/{{.ID}}/edit" class="btn btn-ghost btn-xs">Edit</a>
                         {{if .IsActive}}
@@ -47,6 +48,7 @@
                             hx-confirm="Deactivate user {{.Username}}?">Deactivate</button>
                         {{end}}
                     </div>
+                    {{end}}
                 </td>
             </tr>
             {{else}}

@@ -22,6 +22,7 @@ type apiTokenFormData struct {
 	Token           string
 	Name            string
 	ExpiresAt       string
+	Manageable      map[string]bool
 }
 
 // IsScopeChecked reports whether a scope was selected (used by templates for
@@ -246,6 +247,11 @@ func (h *Handler) ListAllAPITokens(w http.ResponseWriter, r *http.Request) {
 		data.Errors["general"] = "Failed to load tokens"
 	}
 	data.Tokens = tokens
+	data.Manageable, err = h.manageableRoles(r)
+	if err != nil {
+		slog.Error("api_token: manageable roles", "user_id", user.ID, "error", err)
+		data.Errors["general"] = "Failed to load roles; revoking is unavailable"
+	}
 	h.render(w, r, "templates/users/api_tokens.html", "All API Tokens", data)
 }
 
@@ -272,6 +278,8 @@ func (h *Handler) revokeAPIToken(w http.ResponseWriter, r *http.Request, revoke 
 	if err != nil {
 		if errors.Is(err, apitoken.ErrNotFound) {
 			h.setFlash(w, "Token not found")
+		} else if errors.Is(err, apitoken.ErrForbidden) {
+			h.setFlash(w, "Cannot revoke a token of a user with more permissions than you")
 		} else {
 			slog.Error("api_token: revoke", "user_id", user.ID, "token_id", tokenID, "error", err)
 			h.setFlash(w, "Failed to revoke token")
