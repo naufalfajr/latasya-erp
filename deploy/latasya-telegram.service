@@ -1,0 +1,56 @@
+[Unit]
+Description=Latasya ERP Telegram bot
+# Talks to the ERP over http://127.0.0.1:8080; it retries on its own if the
+# ERP is restarting, so ordering is enough and no hard dependency is needed.
+After=network-online.target latasya-erp.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/latasya-telegram-bot
+Restart=on-failure
+RestartSec=5
+
+# Ephemeral user with its own state dir (/var/lib/latasya-telegram). The bot
+# cannot read the ERP database, and the ERP user cannot read the bot's tokens.
+DynamicUser=yes
+StateDirectory=latasya-telegram
+Environment=BOT_STATE_PATH=/var/lib/latasya-telegram/sessions.json
+Environment=LATASYA_API_URL=http://127.0.0.1:8080
+
+# TELEGRAM_BOT_TOKEN lives here (root:root 0600). No leading dash: the unit
+# must fail loudly rather than start without a token.
+EnvironmentFile=/etc/latasya/latasya-telegram.env
+
+# Filesystem & process hardening (mirrors latasya-erp.service; no
+# ReadWritePaths because StateDirectory is the only writable path).
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectHostname=true
+ProtectClock=true
+ProtectProc=invisible
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+
+# Outbound only: HTTPS to api.telegram.org and HTTP to the local ERP.
+RestrictAddressFamilies=AF_INET AF_INET6
+
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

@@ -6,6 +6,7 @@ type Middleware func(http.Handler) http.Handler
 
 func (h *Handler) RegisterRoutes(mux *http.ServeMux, idempotency Middleware) {
 	mux.HandleFunc("GET /api/v1/expenses", h.List)
+	mux.HandleFunc("GET /api/v1/expenses/vehicles", h.Vehicles)
 	mux.HandleFunc("GET /api/v1/expenses/{id}", h.Get)
 	mux.Handle("POST /api/v1/expenses", idempotency(http.HandlerFunc(h.Create)))
 	mux.Handle("PUT /api/v1/expenses/{id}", idempotency(http.HandlerFunc(h.Update)))

@@ -39,11 +39,14 @@ jobs:
       - name: Build CSS
         run: ./bin/tailwindcss -i static/css/input.css -o static/css/app.css --minify
 
-      - name: Build binary
+      - name: Build binaries
         run: |
           GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build \
             -ldflags "-X main.version=${GITHUB_SHA}" \
             -o latasya-erp ./cmd/server
+          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build \
+            -ldflags "-X main.version=${GITHUB_SHA}" \
+            -o latasya-telegram-bot ./cmd/telegram-bot
 
       - name: Set up SSH
         run: |
@@ -61,6 +64,7 @@ jobs:
           scp -o BatchMode=yes -o ConnectTimeout=15 \
             -i ~/.ssh/deploy_key \
             latasya-erp deploy/latasya-erp.service \
+            latasya-telegram-bot deploy/latasya-telegram.service \
             "$VPS_USER@$VPS_HOST:/tmp/"
 
       - name: Backup, install and restart
@@ -118,4 +122,38 @@ jobs:
 
           echo "healthz: $body"
           echo "deploy verified: correct build ($EXPECTED_SHA) is live"
+          EOF
+
+      # Runs only after the ERP is verified, since the bot depends on its API.
+      # A bot failure fails the job but never touches the ERP or its rollback.
+      # ponytail: no bot rollback; add one if the bot becomes business-critical.
+      - name: Install and restart Telegram bot
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          ssh -o BatchMode=yes -o ConnectTimeout=15 \
+            -i ~/.ssh/deploy_key "$VPS_USER@$VPS_HOST" \
+            "bash -s" <<'EOF'
+          set -euo pipefail
+
+          sudo install -m 755 /tmp/latasya-telegram-bot /usr/local/bin/latasya-telegram-bot
+          sudo install -m 644 /tmp/latasya-telegram.service /etc/systemd/system/latasya-telegram.service
+          sudo systemctl daemon-reload
+
+          # One-time opt-in per host: create /etc/latasya/latasya-telegram.env,
+          # then `sudo systemctl enable --now latasya-telegram`.
+          if ! systemctl is-enabled --quiet latasya-telegram; then
+            echo "latasya-telegram is not enabled on this host; installed but not started"
+            exit 0
+          fi
+
+          sudo systemctl restart latasya-telegram
+          sleep 5
+          if ! systemctl is-active --quiet latasya-telegram; then
+            echo "FAIL: Telegram bot did not stay up (ERP is unaffected)"
+            sudo journalctl -u latasya-telegram -n 50 --no-pager
+            exit 1
+          fi
+          echo "telegram bot running"
           EOF

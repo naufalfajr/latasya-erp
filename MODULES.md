@@ -19,6 +19,7 @@ This file is the entry point for the architecture. Detailed behavior lives besid
 | Document numbers | Atomic monthly business-document sequences | [`internal/documentnumber/README.md`](internal/documentnumber/README.md) |
 | Audit | Best-effort business and security event recording | [`internal/audit/README.md`](internal/audit/README.md) |
 | JSON API | Versioned JSON transport, authentication, errors, pagination, and idempotency | [`internal/api/README.md`](internal/api/README.md) |
+| Telegram bot | Staff bookkeeping from Telegram; a JSON API client using each user's own token | [`cmd/telegram-bot/README.md`](cmd/telegram-bot/README.md) |
 | Templates | Full-page and HTMX fragment rendering conventions | [`templates/README.md`](templates/README.md) |
 | Invoice templates | Invoice pages and HTMX fragment contracts | [`templates/invoices/README.md`](templates/invoices/README.md) |
 

@@ -47,8 +47,10 @@ components:
       type: http
       scheme: bearer
       description: |
-        Bearer token created via /settings/api-tokens or POST /api/v1/api-tokens.
+        Bearer token created via /settings/api-tokens (any user, for their own
+        capabilities) or POST /api/v1/api-tokens.
         Format: `lat_<32-base62-chars>`. Scoped to a subset of user capabilities.
+        A token can revoke itself with DELETE /api/v1/auth/token.
     CookieAuth:
       type: apiKey
       in: cookie
@@ -144,6 +146,13 @@ components:
             token_id:
               type: integer
               nullable: true
+            token_scopes:
+              type: array
+              items:
+                type: string
+              description: |
+                Capabilities the calling bearer token can exercise (its scopes
+                intersected with the user's current role). Empty for cookie sessions.
 
     Account:
       type: object
@@ -769,6 +778,17 @@ components:
           type: string
           example: "School Bus Contract"
 
+    VehicleRef:
+      type: object
+      description: Compact vehicle reference embedded in expense responses.
+      required: [id, code]
+      properties:
+        id:
+          type: integer
+        code:
+          type: string
+          example: "LA001"
+
     IncomeEntry:
       type: object
       description: An income journal entry (source_type=income). Debit deposit account, credit revenue account.
@@ -827,6 +847,8 @@ components:
           $ref: '#/components/schemas/AccountRef'
         payment_account:
           $ref: '#/components/schemas/AccountRef'
+        vehicle:
+          $ref: '#/components/schemas/VehicleRef'
         created_at:
           $ref: '#/components/schemas/Instant'
 
@@ -846,6 +868,11 @@ components:
         payment_account:
           type: integer
           description: Account ID of the payment account (type=asset).
+        vehicle_id:
+          type: integer
+          description: |
+            Optional vehicle tag (see GET /expenses/vehicles). On update, omitting
+            it keeps the current tag and 0 clears it. Unknown IDs return 422.
 
     TrialBalanceRow:
       type: object
@@ -1634,6 +1661,24 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
+  /auth/token:
+    delete:
+      operationId: revokeCurrentToken
+      summary: Revoke the bearer token making this request
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          description: Token revoked. Further requests with it return 401.
+        '400':
+          description: Caller is not authenticated with a bearer token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
   /auth/password/change:
     post:
       operationId: changePassword
@@ -1991,6 +2036,26 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/ValidationFailed'
+
+  /expenses/vehicles:
+    get:
+      operationId: listExpenseVehicles
+      summary: List active vehicles an expense can be tagged with
+      responses:
+        '200':
+          description: Active vehicles ordered by code.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/VehicleRef'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
 
   /expenses/{id}:
     parameters:

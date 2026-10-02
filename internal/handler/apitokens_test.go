@@ -556,8 +556,8 @@ func TestRevokeAPIToken_NotOwner(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusForbidden {
-		t.Errorf("expected 403 (middleware blocks non-admin), got %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("expected 303 redirect (token not found for this owner), got %d", resp.StatusCode)
 	}
 
 	// Token should NOT have been revoked (bug #9 regression guard)
@@ -635,7 +635,7 @@ func TestRevokeAPIToken_NoCSRF(t *testing.T) {
 	}
 }
 
-func TestAPITokens_NonAdminForbidden(t *testing.T) {
+func TestAPITokens_NonAdminSelfService(t *testing.T) {
 	t.Parallel()
 	ts, db := testServerWithAPITokens(t)
 	cookies := loginAsBookkeeper(t, ts, db)
@@ -644,35 +644,56 @@ func TestAPITokens_NonAdminForbidden(t *testing.T) {
 		return http.ErrUseLastResponse
 	}}
 
-	getRoutes := []string{
-		"/settings/api-tokens",
-		"/settings/api-tokens/new",
-		"/settings/api-tokens/created",
-	}
-	for _, route := range getRoutes {
+	for _, route := range []string{"/settings/api-tokens", "/settings/api-tokens/new"} {
 		req, _ := requestWithCookies(db, "GET", ts.URL+route, cookies, "")
 		resp, err := client.Do(req)
 		if err != nil {
 			t.Fatalf("%s: %v", route, err)
 		}
+		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
-		if resp.StatusCode != http.StatusForbidden {
-			t.Errorf("GET %s: expected 403, got %d", route, resp.StatusCode)
+		if resp.StatusCode != http.StatusOK {
+			t.Errorf("GET %s: expected 200, got %d", route, resp.StatusCode)
+		}
+		if route == "/settings/api-tokens/new" {
+			if !strings.Contains(string(body), `value="income.manage"`) {
+				t.Error("new token form should offer the bookkeeper's own income.manage scope")
+			}
+			if strings.Contains(string(body), `value="users.manage"`) {
+				t.Error("new token form must not offer users.manage to a bookkeeper")
+			}
 		}
 	}
 
-	form := "name=hack&scopes=reports.view"
-	req, _ := requestWithCookies(db, "POST", ts.URL+"/settings/api-tokens", cookies, form)
-	resp, _ := client.Do(req)
+	// A scope outside the bookkeeper's role is rejected and no token is created.
+	req, _ := requestWithCookies(db, "POST", ts.URL+"/settings/api-tokens", cookies, "name=hack&scopes=users.manage")
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("POST forbidden scope: %v", err)
+	}
 	resp.Body.Close()
-	if resp.StatusCode != http.StatusForbidden {
-		t.Errorf("POST /settings/api-tokens: expected 403, got %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("POST with users.manage: expected 200 form re-render, got %d", resp.StatusCode)
+	}
+	var count int
+	db.QueryRow("SELECT COUNT(*) FROM api_tokens WHERE name='hack'").Scan(&count)
+	if count != 0 {
+		t.Errorf("expected no token for unauthorized scope, got %d", count)
 	}
 
-	req2, _ := requestWithCookies(db, "POST", ts.URL+"/settings/api-tokens/1/revoke", cookies, "")
-	resp2, _ := client.Do(req2)
-	resp2.Body.Close()
-	if resp2.StatusCode != http.StatusForbidden {
-		t.Errorf("POST /settings/api-tokens/1/revoke: expected 403, got %d", resp2.StatusCode)
+	// An own scope succeeds and the token belongs to the bookkeeper.
+	req, _ = requestWithCookies(db, "POST", ts.URL+"/settings/api-tokens", cookies, "name=Telegram&scopes=income.manage")
+	resp, err = client.Do(req)
+	if err != nil {
+		t.Fatalf("POST own scope: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("POST with income.manage: expected 303, got %d", resp.StatusCode)
+	}
+	var owner string
+	db.QueryRow("SELECT u.username FROM api_tokens t JOIN users u ON u.id=t.user_id WHERE t.name='Telegram'").Scan(&owner)
+	if owner != "bookkeeper" {
+		t.Errorf("token owner: got %q, want bookkeeper", owner)
 	}
 }

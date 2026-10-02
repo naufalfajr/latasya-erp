@@ -1,4 +1,4 @@
-.PHONY: dev run build build-linux css css-watch clean test
+.PHONY: dev run run-bot build build-linux css css-watch clean test
 
 # Tailwind standalone CLI
 TAILWIND := ./bin/tailwindcss
@@ -36,6 +36,10 @@ css-watch: $(TAILWIND) $(DAISYUI) $(DAISYUI_THEME)
 # Run in development mode
 run:
 	DEV_MODE=true go run ./cmd/server
+
+# Run the Telegram bot against the local server (needs TELEGRAM_BOT_TOKEN)
+run-bot:
+	go run ./cmd/telegram-bot
 
 # Build identity, surfaced at /healthz. CI overrides with the commit SHA;
 # local builds stay "dev".

@@ -422,3 +422,86 @@ func TestPasswordChange_BearerNotBlockedByMustChange(t *testing.T) {
 		t.Fatalf("bearer password change blocked: status=%d body=%s", resp.StatusCode, body)
 	}
 }
+
+func TestMe_BearerTokenScopes(t *testing.T) {
+	srv, db, _ := newTestServer(t)
+	userID := testutil.CreateTestUser(t, db, "fay", "pw", model.RoleViewer)
+	// Viewer role lacks income.manage, so only reports.view is effective.
+	_, plaintext, err := testutil.CreateAPIToken(db, userID, "t", []string{model.CapReportsView, model.CapIncomeManage}, nil)
+	if err != nil {
+		t.Fatalf("CreateAPIToken: %v", err)
+	}
+
+	resp := doJSON(t, srv, http.MethodGet, "/api/v1/auth/me", nil, func(req *http.Request) {
+		req.Header.Set("Authorization", "Bearer "+plaintext)
+	})
+	var got struct {
+		Data struct {
+			TokenScopes []string `json:"token_scopes"`
+		} `json:"data"`
+	}
+	decodeBody(t, resp, &got)
+	if len(got.Data.TokenScopes) != 1 || got.Data.TokenScopes[0] != model.CapReportsView {
+		t.Errorf("token_scopes: got %v, want [reports.view]", got.Data.TokenScopes)
+	}
+}
+
+func TestMe_CookieTokenScopesEmpty(t *testing.T) {
+	srv, db, _ := newTestServer(t)
+	userID := testutil.CreateTestUser(t, db, "gus", "pw", model.RoleBookkeeper)
+	sessionID := testutil.CreateTestSession(t, db, userID)
+
+	resp := doJSON(t, srv, http.MethodGet, "/api/v1/auth/me", nil, func(req *http.Request) {
+		req.AddCookie(&http.Cookie{Name: "session_id", Value: sessionID})
+	})
+	var got struct {
+		Data map[string]any `json:"data"`
+	}
+	decodeBody(t, resp, &got)
+	scopes, ok := got.Data["token_scopes"].([]any)
+	if !ok || len(scopes) != 0 {
+		t.Errorf("token_scopes: got %v, want []", got.Data["token_scopes"])
+	}
+}
+
+func TestRevokeToken_BearerRevokesItself(t *testing.T) {
+	srv, db, _ := newTestServer(t)
+	userID := testutil.CreateTestUser(t, db, "hana", "pw", model.RoleBookkeeper)
+	tok, plaintext, err := testutil.CreateAPIToken(db, userID, "bot", []string{model.CapIncomeManage}, nil)
+	if err != nil {
+		t.Fatalf("CreateAPIToken: %v", err)
+	}
+	bearer := func(req *http.Request) { req.Header.Set("Authorization", "Bearer "+plaintext) }
+
+	resp := doJSON(t, srv, http.MethodDelete, "/api/v1/auth/token", nil, bearer)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("status: got %d, want 204", resp.StatusCode)
+	}
+
+	resp = doJSON(t, srv, http.MethodGet, "/api/v1/auth/me", nil, bearer)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("revoked token on /auth/me: got %d, want 401", resp.StatusCode)
+	}
+
+	var audits int
+	db.QueryRow("SELECT COUNT(*) FROM audit_log WHERE action='api_token.revoke' AND target_id=?", tok.ID).Scan(&audits)
+	if audits != 1 {
+		t.Errorf("api_token.revoke audit rows: got %d, want 1", audits)
+	}
+}
+
+func TestRevokeToken_CookieRejected(t *testing.T) {
+	srv, db, _ := newTestServer(t)
+	userID := testutil.CreateTestUser(t, db, "ivan", "pw", model.RoleBookkeeper)
+	sessionID := testutil.CreateTestSession(t, db, userID)
+
+	resp := doJSON(t, srv, http.MethodDelete, "/api/v1/auth/token", nil, func(req *http.Request) {
+		req.AddCookie(&http.Cookie{Name: "session_id", Value: sessionID})
+	})
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("status: got %d, want 400", resp.StatusCode)
+	}
+}

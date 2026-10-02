@@ -42,11 +42,13 @@ func (h *Handler) RegisterAccessRoutes(mux *http.ServeMux) {
 
 // RegisterSettingsRoutes installs administrative settings, integrations, and audit routes.
 func (h *Handler) RegisterSettingsRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /settings/api-tokens", auth.AdminOnly(h.ListAPITokens))
-	mux.HandleFunc("GET /settings/api-tokens/new", auth.AdminOnly(h.NewAPIToken))
-	mux.HandleFunc("GET /settings/api-tokens/created", auth.AdminOnly(h.CreatedAPIToken))
-	mux.HandleFunc("POST /settings/api-tokens", auth.AdminOnly(h.CreateAPIToken))
-	mux.HandleFunc("POST /settings/api-tokens/{id}/revoke", auth.AdminOnly(h.RevokeAPIToken))
+	// API tokens are self-service: every user manages only their own tokens,
+	// scoped to capabilities they already hold (enforced by apitoken.Module).
+	mux.HandleFunc("GET /settings/api-tokens", h.ListAPITokens)
+	mux.HandleFunc("GET /settings/api-tokens/new", h.NewAPIToken)
+	mux.HandleFunc("GET /settings/api-tokens/created", h.CreatedAPIToken)
+	mux.HandleFunc("POST /settings/api-tokens", h.CreateAPIToken)
+	mux.HandleFunc("POST /settings/api-tokens/{id}/revoke", h.RevokeAPIToken)
 
 	h.RegisterCompanyRoutes(mux)
 	mux.HandleFunc("GET /settings/school-calendar", auth.AdminOnly(h.SchoolCalendarPage))
