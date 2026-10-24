@@ -17,12 +17,15 @@
     <a href="{{$.BasePath}}/credit-notes?status=draft" class="tab {{if eq (index $data "Filter") "draft"}}tab-active{{end}}">Draft</a>
     <a href="{{$.BasePath}}/credit-notes?status=issued" class="tab {{if eq (index $data "Filter") "issued"}}tab-active{{end}}">Issued</a>
     <a href="{{$.BasePath}}/credit-notes?status=void" class="tab {{if eq (index $data "Filter") "void"}}tab-active{{end}}">Void</a>
-</div>
+{{$data := .Data}}
+{{$pg := index $data "Pagination"}}
+{{$n := add (mul (sub $pg.Page 1) $pg.PageSize) 1}}
 
 <div class="overflow-x-auto">
     <table class="table table-sm">
         <thead>
             <tr>
+                <th class="w-8">#</th>
                 <th>Number</th>
                 <th>Customer</th>
                 <th>Date</th>
@@ -36,6 +39,7 @@
         <tbody>
             {{range (index $data "CreditNotes")}}
             <tr id="cn-{{.ID}}">
+                <td class="text-sm opacity-60">{{$n}}</td>
                 <td class="font-mono text-sm">{{.CNNumber}}</td>
                 <td>{{.ContactName}}</td>
                 <td class="text-sm">{{formatDate .CNDate}}</td>
@@ -55,9 +59,10 @@
                     <a href="{{$.BasePath}}/credit-notes/{{.ID}}" class="btn btn-ghost btn-xs">View</a>
                 </td>
             </tr>
+            {{$n = add $n 1}}
             {{else}}
             <tr>
-                <td colspan="8" class="text-center py-8 opacity-60">No credit notes yet</td>
+                <td colspan="9" class="text-center py-8 opacity-60">No credit notes yet</td>
             </tr>
             {{end}}
         </tbody>

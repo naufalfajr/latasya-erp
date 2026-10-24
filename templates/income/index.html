@@ -9,11 +9,14 @@
 
 {{$data := .Data}}
 {{$entries := index $data "Entries"}}
+{{$pg := index $data "Pagination"}}
+{{$n := add (mul (sub $pg.Page 1) $pg.PageSize) 1}}
 
 <div id="income-table" class="overflow-x-auto">
     <table class="table table-sm">
         <thead>
             <tr>
+                <th class="w-8">#</th>
                 <th>Date</th>
                 <th>Reference</th>
                 <th>Description</th>
@@ -25,6 +28,7 @@
         <tbody>
             {{range $entries}}
             <tr id="income-{{.ID}}">
+                <td class="text-sm opacity-60">{{$n}}</td>
                 <td class="text-sm">{{formatDate .EntryDate}}</td>
                 <td><span class="font-mono text-sm">{{.Reference}}</span></td>
                 <td>{{.Description}}</td>
@@ -34,9 +38,10 @@
                     <a href="{{$.BasePath}}/journals/{{.ID}}?return_to={{urlquery $data.ReturnTo}}" class="btn btn-ghost btn-xs">View</a>
                 </td>
             </tr>
+            {{$n = add $n 1}}
             {{else}}
             <tr>
-                <td colspan="6" class="text-center py-8 opacity-60">No income recorded yet</td>
+                <td colspan="7" class="text-center py-8 opacity-60">No income recorded yet</td>
             </tr>
             {{end}}
         </tbody>

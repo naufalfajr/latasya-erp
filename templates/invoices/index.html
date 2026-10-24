@@ -24,6 +24,8 @@
 </div>
 
 {{$data := .Data}}
+{{$pg := index $data "Pagination"}}
+{{$n := add (mul (sub $pg.Page 1) $pg.PageSize) 1}}
 
 <!-- Status filter tabs -->
 <div class="tabs tabs-box mb-4 flex-wrap">
@@ -40,6 +42,7 @@
     <table class="table table-sm">
         <thead>
             <tr>
+                <th class="w-8">#</th>
                 {{if $canManage}}<th><input type="checkbox" id="select-all-drafts" class="checkbox checkbox-xs" aria-label="Select all draft invoices"></th>{{end}}
                 <th>Number</th>
                 <th>Customer</th>
@@ -55,6 +58,7 @@
         <tbody>
             {{range (index $data "Invoices")}}
             <tr id="invoice-{{.ID}}">
+                <td class="text-sm opacity-60">{{$n}}</td>
                 {{if $canManage}}<td>{{if eq .Status "draft"}}<input type="checkbox" name="ids" value="{{.ID}}" class="checkbox checkbox-xs" aria-label="Select invoice {{.InvoiceNumber}}">{{end}}</td>{{end}}
                 <td class="font-mono text-sm">{{.InvoiceNumber}}</td>
                 <td>{{.ContactName}}</td>
@@ -80,9 +84,10 @@
                     {{end}}
                 </td>
             </tr>
+            {{$n = add $n 1}}
             {{else}}
             <tr>
-                <td colspan="{{if $canManage}}10{{else}}9{{end}}" class="text-center py-8 opacity-60">No invoices found</td>
+                <td colspan="{{if $canManage}}11{{else}}10{{end}}" class="text-center py-8 opacity-60">No invoices found</td>
             </tr>
             {{end}}
         </tbody>

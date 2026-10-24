@@ -25,6 +25,10 @@ func where(f Filter) (string, []any) {
 		clause += " AND c.is_active=?"
 		args = append(args, *f.IsActive)
 	}
+	if f.RouteID > 0 {
+		clause += " AND c.route_id=?"
+		args = append(args, f.RouteID)
+	}
 	if f.Search != "" {
 		clause += " AND (c.name LIKE ? OR c.phone LIKE ? OR c.email LIKE ?)"
 		s := "%" + f.Search + "%"

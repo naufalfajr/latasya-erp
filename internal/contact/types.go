@@ -5,6 +5,7 @@ import "github.com/naufal/latasya-erp/internal/model"
 type Filter struct {
 	Type     string
 	IsActive *bool
+	RouteID  int
 	Search   string
 	Sort     string
 	Order    string
