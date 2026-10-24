@@ -23,6 +23,7 @@ func FuncMap() template.FuncMap {
 		},
 		"add": func(a, b int) int { return a + b },
 		"sub": func(a, b int) int { return a - b },
+		"mul": func(a, b int) int { return a * b },
 		// Go templates have built-in eq that handles multiple types
 		"seq": func(n int) []int {
 			s := make([]int, n)

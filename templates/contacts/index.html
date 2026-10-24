@@ -30,28 +30,53 @@
     <a href="{{$.BasePath}}/contacts?type=supplier" class="tab {{if eq $data.Filter "supplier"}}tab-active{{end}}">Suppliers</a>
 </div>
 
-<!-- Search -->
-<div class="flex flex-col gap-1 mb-4">
-    <input type="text" placeholder="Search contacts..."
-        class="input input-sm w-full max-w-xs"
-        hx-get="{{$.BasePath}}/contacts{{if $data.Filter}}?type={{$data.Filter}}{{end}}"
-        hx-trigger="keyup changed delay:300ms"
-        hx-target="#contact-table"
-		hx-swap="outerHTML"
-        hx-push-url="false"
-        name="search"
-        value="{{$data.Search}}">
-</div>
-
-<!-- Contact table -->
+<!-- Contact table (includes filter bar so HTMX updates keep filter state) -->
 {{template "contact-table" .}}
 {{end}}
 {{define "contact-table"}}
 {{$data := .Data}}
-<div id="contact-table" class="overflow-x-auto">
+<div id="contact-table">
+    <div class="flex flex-wrap gap-2 mb-4 items-center">
+        <select name="active" class="select select-sm" aria-label="Filter by status"
+            hx-get="{{$.BasePath}}/contacts{{if $data.Filter}}?type={{$data.Filter}}{{end}}"
+            hx-trigger="change"
+            hx-target="#contact-table"
+            hx-swap="outerHTML"
+            hx-include="[name='route'],[name='search']"
+            hx-push-url="true">
+            <option value="">All statuses</option>
+            <option value="1" {{if eq $data.Active "1"}}selected{{end}}>Active only</option>
+            <option value="0" {{if eq $data.Active "0"}}selected{{end}}>Inactive only</option>
+        </select>
+        <select name="route" class="select select-sm" aria-label="Filter by route"
+            hx-get="{{$.BasePath}}/contacts{{if $data.Filter}}?type={{$data.Filter}}{{end}}"
+            hx-trigger="change"
+            hx-target="#contact-table"
+            hx-swap="outerHTML"
+            hx-include="[name='active'],[name='search']"
+            hx-push-url="true">
+            <option value="">All routes</option>
+            {{range $data.Routes}}
+            <option value="{{.ID}}" {{if eq .ID $data.RouteID}}selected{{end}}>{{.Name}}</option>
+            {{end}}
+        </select>
+        <input type="text" name="search" placeholder="Search contacts..."
+            class="input input-sm w-full max-w-xs"
+            hx-get="{{$.BasePath}}/contacts{{if $data.Filter}}?type={{$data.Filter}}{{end}}"
+            hx-trigger="keyup changed delay:300ms"
+            hx-target="#contact-table"
+            hx-swap="outerHTML"
+            hx-include="[name='active'],[name='route']"
+            hx-push-url="false"
+            value="{{$data.Search}}">
+        <a href="{{$.BasePath}}/contacts{{if $data.Filter}}?type={{$data.Filter}}{{end}}" class="btn btn-ghost btn-sm">Reset filters</a>
+    </div>
+
+    <div class="overflow-x-auto">
     <table class="table table-sm">
         <thead>
             <tr>
+                <th class="w-8">#</th>
                 <th><a class="link link-hover" href="{{index $data.SortURLs "name"}}">Name{{if eq $data.Sort "name"}} {{if eq $data.Order "desc"}}↓{{else}}↑{{end}}{{end}}</a></th>
                 <th>Maps</th>
                 <th><a class="link link-hover" href="{{index $data.SortURLs "class"}}">Class{{if eq $data.Sort "class"}} {{if eq $data.Order "desc"}}↓{{else}}↑{{end}}{{end}}</a></th>
@@ -64,8 +89,10 @@
             </tr>
         </thead>
         <tbody>
+            {{$n := 1}}
             {{range $data.Contacts}}
             <tr id="contact-{{.ID}}"{{if not .IsActive}} class="opacity-60"{{end}}>
+                <td class="text-sm opacity-60">{{$n}}</td>
                 <td class="font-semibold">{{.Name}}</td>
                 <td class="text-sm">
                     {{if .MapsLink}}<a href="{{.MapsLink}}" target="_blank" rel="noopener noreferrer"
@@ -95,12 +122,14 @@
                 </td>
                 {{end}}
             </tr>
+            {{$n = add $n 1}}
             {{else}}
             <tr>
-                <td colspan="{{if $.User.HasCapability "contacts.manage"}}9{{else}}8{{end}}" class="text-center py-8 opacity-60">No contacts found. Add your first contact.</td>
+                <td colspan="{{if $.User.HasCapability "contacts.manage"}}10{{else}}9{{end}}" class="text-center py-8 opacity-60">No contacts found. Add your first contact.</td>
             </tr>
             {{end}}
         </tbody>
     </table>
+    </div>
 </div>
 {{end}}

@@ -16,7 +16,10 @@ import (
 type contactPageData struct {
 	Contacts      []model.Contact
 	RouteCapacity []contactModule.RouteCapacity
+	Routes        []contactModule.Route
 	Filter        string
+	Active        string
+	RouteID       int
 	Search        string
 	Sort          string
 	Order         string
@@ -25,13 +28,22 @@ type contactPageData struct {
 
 func (h *Handler) ListContacts(w http.ResponseWriter, r *http.Request) {
 	f := contactModule.Filter{Type: r.URL.Query().Get("type"), Search: r.URL.Query().Get("search"), Sort: r.URL.Query().Get("sort"), Order: r.URL.Query().Get("order")}
+	switch r.URL.Query().Get("active") {
+	case "1":
+		isActive := true
+		f.IsActive = &isActive
+	case "0":
+		isActive := false
+		f.IsActive = &isActive
+	}
+	f.RouteID, _ = strconv.Atoi(r.URL.Query().Get("route"))
 	result, err := h.Contacts.List(r.Context(), f)
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 	capacity, _ := h.Contacts.ListRouteCapacity(r.Context())
-	data := contactPageData{Contacts: result.Contacts, RouteCapacity: capacity, Filter: f.Type, Search: f.Search, Sort: f.Sort, Order: f.Order, SortURLs: h.contactSortURLs(r, f.Sort, f.Order)}
+	data := contactPageData{Contacts: result.Contacts, RouteCapacity: capacity, Routes: h.contactRoutes(r.Context()), Filter: f.Type, Active: r.URL.Query().Get("active"), RouteID: f.RouteID, Search: f.Search, Sort: f.Sort, Order: f.Order, SortURLs: h.contactSortURLs(r, f.Sort, f.Order)}
 	if isHTMXTarget(r, "contact-table") {
 		h.renderFragment(w, r, "templates/contacts/index.html", "contact-table", data)
 		return
