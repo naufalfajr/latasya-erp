@@ -1,10 +1,12 @@
 {{template "base" .}}
 {{define "content"}}
 {{$canManage := .User.HasCapability "invoices.manage"}}
+{{$draftMode := and $canManage (eq (index .Data "Filter") "draft")}}
 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
     <h1 class="text-2xl font-bold">Invoices</h1>
     {{if $canManage}}
     <div class="flex gap-2 flex-wrap">
+        {{if $draftMode}}
         <button type="submit" form="bulk-invoice-form" hidden
             class="btn btn-info btn-sm bulk-action-btn" data-label="Mark as sent"
             formaction="{{$.BasePath}}/invoices/bulk-send"
@@ -13,6 +15,7 @@
             class="btn btn-error btn-sm bulk-action-btn" data-label="Delete selected"
             formaction="{{$.BasePath}}/invoices/bulk-delete"
             onclick="return confirm('Delete the selected draft invoices? This cannot be undone.')">Delete selected</button>
+        {{end}}
         <form method="POST" action="{{$.BasePath}}/invoices/generate-recurring" class="inline">
             {{template "csrf" $}}
             <button type="submit" class="btn btn-secondary btn-sm"
@@ -38,12 +41,12 @@
 </div>
 
 <div class="overflow-x-auto">
-    {{if $canManage}}<form id="bulk-invoice-form" method="POST" action="{{$.BasePath}}/invoices/bulk-send">{{template "csrf" $}}{{end}}
+    {{if $draftMode}}<form id="bulk-invoice-form" method="POST" action="{{$.BasePath}}/invoices/bulk-send">{{template "csrf" $}}{{end}}
     <table class="table table-sm">
         <thead>
             <tr>
                 <th class="w-8">#</th>
-                {{if $canManage}}<th><input type="checkbox" id="select-all-drafts" class="checkbox checkbox-xs" aria-label="Select all draft invoices"></th>{{end}}
+                {{if $draftMode}}<th><input type="checkbox" id="select-all-drafts" class="checkbox checkbox-xs" aria-label="Select all draft invoices"></th>{{end}}
                 <th>Number</th>
                 <th>Customer</th>
                 <th>Date</th>
@@ -59,7 +62,7 @@
             {{range (index $data "Invoices")}}
             <tr id="invoice-{{.ID}}">
                 <td class="text-sm opacity-60">{{$n}}</td>
-                {{if $canManage}}<td>{{if eq .Status "draft"}}<input type="checkbox" name="ids" value="{{.ID}}" class="checkbox checkbox-xs" aria-label="Select invoice {{.InvoiceNumber}}">{{end}}</td>{{end}}
+                {{if $draftMode}}<td><input type="checkbox" name="ids" value="{{.ID}}" class="checkbox checkbox-xs" aria-label="Select invoice {{.InvoiceNumber}}"></td>{{end}}
                 <td class="font-mono text-sm">{{.InvoiceNumber}}</td>
                 <td>{{.ContactName}}</td>
                 <td class="text-sm">{{formatDate .InvoiceDate}}</td>
@@ -87,12 +90,12 @@
             {{$n = add $n 1}}
             {{else}}
             <tr>
-                <td colspan="{{if $canManage}}11{{else}}10{{end}}" class="text-center py-8 opacity-60">No invoices found</td>
+                <td colspan="{{if $draftMode}}11{{else}}10{{end}}" class="text-center py-8 opacity-60">No invoices found</td>
             </tr>
             {{end}}
         </tbody>
     </table>
-    {{if $canManage}}</form>{{end}}
+    {{if $draftMode}}</form>{{end}}
 </div>
 
 {{template "pagination" (index $data "Pagination")}}
