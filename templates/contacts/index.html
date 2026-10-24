@@ -67,7 +67,7 @@
             hx-target="#contact-table"
             hx-swap="outerHTML"
             hx-include="[name='active'],[name='route']"
-            hx-push-url="true"
+            hx-push-url="false"
             value="{{$data.Search}}">
         <a href="{{$.BasePath}}/contacts{{if $data.Filter}}?type={{$data.Filter}}{{end}}" class="btn btn-ghost btn-sm">Reset filters</a>
     </div>
