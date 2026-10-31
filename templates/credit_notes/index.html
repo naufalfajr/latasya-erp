@@ -17,6 +17,7 @@
     <a href="{{$.BasePath}}/credit-notes?status=draft" class="tab {{if eq (index $data "Filter") "draft"}}tab-active{{end}}">Draft</a>
     <a href="{{$.BasePath}}/credit-notes?status=issued" class="tab {{if eq (index $data "Filter") "issued"}}tab-active{{end}}">Issued</a>
     <a href="{{$.BasePath}}/credit-notes?status=void" class="tab {{if eq (index $data "Filter") "void"}}tab-active{{end}}">Void</a>
+</div>
 {{$data := .Data}}
 {{$pg := index $data "Pagination"}}
 {{$n := add (mul (sub $pg.Page 1) $pg.PageSize) 1}}
