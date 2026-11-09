@@ -1,6 +1,11 @@
 # Migration Notes: HTML-to-API Strangler-Fig
-
 This document is the single source of truth for the ongoing migration from a pure HTML/HTMX app to a dual-surface architecture: HTML routes for the browser UI and JSON API routes at `/api/v1/*` for bots, scripts, MCP servers, and Telegram integrations.
+
+The API surface now has two first-party clients: the Telegram bot
+(`cmd/telegram-bot`) and the MCP client (`cmd/mcp-server`, which exposes
+every API operation as an MCP tool via a browser-approved device login —
+see `MCP_PLAN.md`). Both are plain Bearer-token consumers; the server knows
+nothing special about either.
 
 The migration follows the strangler-fig pattern: the HTML surface stays fully functional while the API surface grows alongside it. No HTML routes are removed until the SPA reaches parity for that domain.
 
