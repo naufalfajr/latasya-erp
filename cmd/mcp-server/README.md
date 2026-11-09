@@ -26,6 +26,12 @@ the server's.
    { "mcpServers": { "latasya": { "command": "/usr/local/bin/latasya-mcp" } } }
    ```
 
+**Remote alternative (no binary):** the ERP also serves MCP directly at
+`https://<erp>/mcp` with OAuth 2.1 browser login — add it as a remote MCP
+server URL in clients that support them (Claude Desktop connectors, Cursor,
+…). This stdio binary remains the offline-capable option; both use the same
+generated tools and the same tokens.
+
 Each person connects with their **own** token, so every tool call is
 authorized and audited as that ERP user (`audit_log.actor_token_id`).
 

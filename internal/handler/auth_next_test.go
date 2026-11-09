@@ -147,3 +147,28 @@ func TestLogin_MustChangePassword_IgnoresNext(t *testing.T) {
 		t.Errorf("Location: got %q, want /password/change (rotation outranks next)", loc)
 	}
 }
+
+func TestLogin_NextParam_OAuthAuthorizeSurvivesBasePath(t *testing.T) {
+	// Regression: /oauth/authorize lives unprefixed on the outer mux, so its
+	// bounce-back must stay bare even under BasePath — a prefixed-only
+	// allowlist dropped the authorize URL and lost the client's flow.
+	t.Parallel()
+	ts, _ := testServer(t, "/dashboard")
+
+	resp := postLogin(t, ts.URL+"/dashboard/login", "/oauth/authorize?client_id=c&state=s")
+	if loc := resp.Header.Get("Location"); loc != "/oauth/authorize?client_id=c&state=s" {
+		t.Errorf("Location: got %q, want the bare authorize URL", loc)
+	}
+
+	// The device-flow consent page keeps its prefixed form under BasePath.
+	resp = postLogin(t, ts.URL+"/dashboard/login", "/dashboard/mcp/authorize?code=X")
+	if loc := resp.Header.Get("Location"); loc != "/dashboard/mcp/authorize?code=X" {
+		t.Errorf("Location: got %q, want the prefixed device consent URL", loc)
+	}
+
+	// And a bare device-consent path does not smuggle through under BasePath.
+	resp = postLogin(t, ts.URL+"/dashboard/login", "/mcp/authorize?code=X")
+	if loc := resp.Header.Get("Location"); loc != "/dashboard/" {
+		t.Errorf("Location: got %q, want \"/dashboard/\" fallback", loc)
+	}
+}

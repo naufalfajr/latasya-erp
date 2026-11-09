@@ -38,6 +38,7 @@ func testServer(t *testing.T, basePath ...string) (*httptest.Server, *sql.DB) {
 
 	protected := http.NewServeMux()
 	h.RegisterProtectedRoutes(protected)
+	h.RegisterOAuthRoutes(mux)
 
 	authChain := auth.RequireAuth(db, access.New(db, nil), auth.CSRFProtect(h.EnforcePasswordChange(protected)))
 	if bp == "" {

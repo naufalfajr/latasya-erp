@@ -3,7 +3,9 @@ package v1
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"strings"
 
@@ -46,18 +48,18 @@ func BearerOrCookie(db *sql.DB) func(http.Handler) http.Handler {
 				}
 				plaintext := strings.TrimPrefix(authHeader, "Bearer ")
 				if plaintext == "" {
-					WriteError(w, r, http.StatusUnauthorized, CodeInvalidToken, "invalid or expired token", nil)
+					writeBearerUnauthorized(w, r)
 					return
 				}
 				token, err := tokenModule.Authenticate(r.Context(), plaintext)
 				if err != nil {
-					WriteError(w, r, http.StatusUnauthorized, CodeInvalidToken, "invalid or expired token", nil)
+					writeBearerUnauthorized(w, r)
 					return
 				}
 
 				user, err := accessModule.LookupUserByIDForAuth(r.Context(), token.UserID)
 				if err != nil || !user.IsActive {
-					WriteError(w, r, http.StatusUnauthorized, CodeInvalidToken, "token user not found or inactive", nil)
+					writeBearerUnauthorized(w, r)
 					return
 				}
 
@@ -84,9 +86,19 @@ func BearerOrCookie(db *sql.DB) func(http.Handler) http.Handler {
 				return
 			}
 
-			WriteError(w, r, http.StatusUnauthorized, CodeUnauthorized, "authentication required", nil)
+			writeBearerUnauthorized(w, r)
 		})
 	}
+}
+
+// writeBearerUnauthorized emits the standard 401 envelope plus the
+// WWW-Authenticate header MCP clients follow (RFC 9728) to discover the
+// OAuth authorization server.
+func writeBearerUnauthorized(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("WWW-Authenticate",
+		fmt.Sprintf(`Bearer error="invalid_token", resource_metadata=%q`,
+			ExternalScheme(r)+"://"+r.Host+"/.well-known/oauth-protected-resource"))
+	WriteError(w, r, http.StatusUnauthorized, CodeInvalidToken, "invalid or expired token", nil)
 }
 
 // intersectScopes returns the subset of tokenScopes that the user currently
@@ -155,4 +167,36 @@ func HasEffectiveCapability(ctx context.Context, cap string) bool {
 		}
 	}
 	return false
+}
+
+// ExternalScheme guesses the scheme clients used to reach this server: the
+// reverse proxy terminates TLS, so anything but loopback or RFC 1918 LAN
+// hosts is treated as https. One helper serves both the 401
+// WWW-Authenticate header and the OAuth discovery documents so they can
+// never disagree.
+func ExternalScheme(r *http.Request) string {
+	if r.TLS != nil {
+		return "https"
+	}
+	host, _, err := net.SplitHostPort(r.Host)
+	if err != nil {
+		host = r.Host
+	}
+	if host == "localhost" || host == "127.0.0.1" || host == "::1" ||
+		strings.HasPrefix(host, "10.") || strings.HasPrefix(host, "192.168.") ||
+		isPrivate172(host) {
+		return "http"
+	}
+	return "https"
+}
+
+func isPrivate172(host string) bool {
+	if !strings.HasPrefix(host, "172.") {
+		return false
+	}
+	var o1 int
+	if _, err := fmt.Sscanf(host, "172.%d.", &o1); err != nil || o1 < 16 || o1 > 31 {
+		return false
+	}
+	return true
 }

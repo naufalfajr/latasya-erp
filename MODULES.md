@@ -14,8 +14,8 @@ This file is the entry point for the architecture. Detailed behavior lives besid
 | Access | Users, roles, password storage, and authorization invariants | [`internal/access/README.md`](internal/access/README.md) |
 | API tokens | Scoped bearer credential issuance, lookup, and revocation | [`internal/apitoken/README.md`](internal/apitoken/README.md) |
 | MCP login | Device-code handoffs and consent-driven token minting for the MCP client | [`internal/mcpauth/README.md`](internal/mcpauth/README.md) |
-| Reporting | Dashboard and financial-report read projections | [`internal/reporting/README.md`](internal/reporting/README.md) |
-| Idempotency | Durable JSON mutation replay records and expiry | [`internal/idempotency/README.md`](internal/idempotency/README.md) |
+| Remote MCP | Streamable-HTTP JSON-RPC at /mcp; protocol shell replaying into the JSON API | [`internal/mcpserver`](../internal/mcpserver/server.go) |
+| OAuth AS | First-party OAuth 2.1 (code+PKCE) for remote MCP clients | [`internal/oauthas`](../internal/oauthas/module.go) |
 | Document numbers | Atomic monthly business-document sequences | [`internal/documentnumber/README.md`](internal/documentnumber/README.md) |
 | Audit | Best-effort business and security event recording | [`internal/audit/README.md`](internal/audit/README.md) |
 | JSON API | Versioned JSON transport, authentication, errors, pagination, and idempotency | [`internal/api/README.md`](internal/api/README.md) |

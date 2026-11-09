@@ -186,3 +186,16 @@ func (sr *statusRecorder) WriteHeader(status int) {
 	sr.status = status
 	sr.ResponseWriter.WriteHeader(status)
 }
+
+// OAuthTokenLimiter throttles authorization-code exchanges per client IP.
+// 10/min with all calls consuming: the exchange is a single manual step, so
+// anything faster is code brute-forcing or a throughput attack on the
+// unauthenticated endpoint's DB access.
+func OAuthTokenLimiter() func(http.Handler) http.Handler {
+	return newRateLimiter(10, time.Minute, unspoofableClientIP,
+		func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusTooManyRequests)
+			_, _ = w.Write([]byte(`{"error":"slow_down","error_description":"too many token requests"}`))
+		}, false)
+}

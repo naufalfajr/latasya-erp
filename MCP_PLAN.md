@@ -401,15 +401,19 @@ and 403 behavior; revoke the token in the UI and watch calls die.
 
 ---
 
-## 8. Phase 2 (deferred): remote MCP transport
+## 8. Remote MCP transport (implemented as Phase 5)
 
-If a **remote/web** AI client (Claude web connectors, ChatGPT connectors)
-becomes a real requirement: mount stateless streamable-HTTP `POST /mcp` on
-the existing binary + a first-party OAuth 2.1 (code + PKCE, RFC 9728
-discovery) authorization server minting the same `lat_` tokens. Everything in
-this plan — capability table, spec extensions, consent UX, token naming,
-bearer rate limiting, PDF/reports gates — is reused; the stdio client keeps
-working unchanged. Do not build it speculatively.
+**Built** after the owner asked to add the ERP as a remote MCP connection in
+AI clients without downloading the stdio binary. Stateless streamable-HTTP
+`POST /mcp` on the existing binary + a first-party OAuth 2.1 (code + PKCE,
+RFC 9728 discovery) authorization server minting the same `lat_` tokens —
+exactly the reuse this section predicted: capability table, spec extensions,
+consent UX, token naming, bearer rate limiting, PDF/reports gates all
+carried over, and the stdio client kept working unchanged (it now shares
+`internal/mcptools` with the server). Connection:
+`https://erp.example.com/mcp` — the client discovers the consent flow from
+the 401's `WWW-Authenticate` header. Design details and decisions: §10
+Phase 5.
 
 ## 9. Decision record: SSR vs API-calling frontend
 
@@ -625,3 +629,75 @@ working unchanged. Do not build it speculatively.
    before exit, not a bare EOF; (e) `make clean` removes `dist/`.
    Round 2 (self): gofmt/vet/full suite green, idempotency e2e still
    replays verbatim.
+
+### Phase 5 — remote MCP transport (POST /mcp + OAuth 2.1)
+
+Chosen interactively after Phase 3: the owner wants to add the ERP as a
+remote MCP connection in AI clients without downloading the stdio binary —
+the §8 deferral trigger materialized.
+
+1. **`/mcp` is a protocol shell over the existing tree.** Stateless
+   JSON-RPC (POST only, `Accept`-insensitive JSON responses, no SSE); tool
+   calls are *replayed* through the apiMux with the caller's Authorization
+   header, so every request re-authenticates, re-intersects scopes, re-runs
+   idempotency and audit. No module-level second surface to drift. Cost: a
+   second token lookup per call — negligible at the 120/min/credential cap.
+2. **The generated table serves both transports.** Request-building and
+   result-shaping moved from `cmd/mcp-server` into `internal/mcptools`, so
+   the stdio client and `/mcp` share one tool definition, one schema
+   builder, one idempotency-key derivation, and one PDF/text result shape.
+3. **OAuth 2.1 first-party AS, one flow, no DCR.** Authorization-code +
+   PKCE S256 only; any client_id accepted (the resource owner consents —
+   same trust model as the device flow); redirect URIs must be loopback
+   (any port, RFC 8252) or same-origin; codes are 32-byte, SHA-256-stored,
+   single-use, 5-minute TTL, lazily swept. No refresh tokens: 30-day
+   access tokens re-authorize through the same consent (browser session
+   makes it one click). Migration 028 adds one table.
+4. **Scope honesty mirrors the device flow**: consent validates against
+   current capabilities; exchange re-derives them from the DB (admin
+   implicitly holds all — the same lesson, caught by tests) and shrunk
+   roles fail with `invalid_scope`; minted names carry a random suffix for
+   the same UNIQUE(user_id, name) reason.
+5. **Consent page sits on the outer mux with its own session handling**
+   (manual session lookup + constant-time CSRF compare) so an
+   unauthenticated authorize can bounce through login with `next` —
+   safeMCPReturnTo's allowlist grew to `/oauth/authorize` (still exactly
+   two paths). Deny never redirects to an unvalidated URI: bad authorize
+   params render an error page instead.
+6. **Browser-origin hardening on `/mcp`**: Origin header, when present,
+   must match the request host; Content-Type must be application/json.
+   Cross-site POSTs cannot satisfy both, and bearer callers are unaffected.
+   401s on any bearer surface now carry RFC 9728 `WWW-Authenticate` with
+   the protected-resource metadata URL, which is how MCP clients find the
+   consent flow. `/oauth/token` is rate-limited 10/min per IP.
+7. **No capability oracle**: a tool the caller lacks and a nonexistent tool
+   return the same `-32602 unknown tool` — tested explicitly.
+
+8. **Review round 1 (independent) found 3 must-fix + 1 should-fix + 2
+   nice-to-have, all applied** — the must-fixes were production-only bugs
+   invisible to the empty-BasePath test suite, proven by the reviewer
+   against the real wiring: (a) the consent form posted to
+   `{{BasePath}}/oauth/authorize`, which 404s through the protected mux —
+   every consent submission died in production; the form now posts to the
+   bare outer-mux route, pinned by a BasePath'd test. (b) the login
+   bounce-back dropped `/oauth/authorize` under BasePath (the allowlist
+   only accepted the prefixed form) — `safeMCPReturnTo` now gives the two
+   pages per-page semantics: `/oauth/authorize` bare always,
+   `/mcp/authorize` bare-only-without-BasePath/prefixed-with-it, pinned by
+   tests on all three cases. (c) `POST /oauth/token` had lost its promised
+   10/min/IP limiter in an edit shuffle — restored inside RegisterRoutes.
+   (d) the 401 discovery header and the metadata documents could disagree
+   on scheme for LAN deployments — both now use one shared
+   `v1.ExternalScheme` helper (also fixing an over-broad `172.` prefix
+   check). (e) code/error params are merged into the redirect URI's
+   existing query instead of string-concatenated. (f) `/api/v1` and `/mcp`
+   mounted two `BearerRateLimiter` instances = two independent 120/min
+   budgets; one shared instance now covers both surfaces. Round 2 (self):
+   gofmt/vet/staticcheck/full suite green; new regression tests for
+   findings 1, 2, and 5.
+
+9. **Deployment confirmation: no Cloudflare Access on this ERP** (owner
+   confirmed). The MCP/OAuth endpoints need no bypass policy; the ERP's own
+   session login plus the endpoint rate limiters (10/min/IP on
+   /oauth/token, 120/min/credential on /mcp, 5/15min on login) are the
+   complete gate. Revisit only if Access is ever enabled on the hostname.

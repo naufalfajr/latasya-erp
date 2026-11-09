@@ -28,6 +28,7 @@ import (
 	v1invoices "github.com/naufal/latasya-erp/internal/api/v1/invoices"
 	v1journals "github.com/naufal/latasya-erp/internal/api/v1/journals"
 	v1mcpauth "github.com/naufal/latasya-erp/internal/api/v1/mcpauth"
+	v1oauthas "github.com/naufal/latasya-erp/internal/api/v1/oauthas"
 	v1reports "github.com/naufal/latasya-erp/internal/api/v1/reports"
 	v1roles "github.com/naufal/latasya-erp/internal/api/v1/roles"
 	v1schoolcalendar "github.com/naufal/latasya-erp/internal/api/v1/school_calendar"
@@ -46,6 +47,8 @@ import (
 	"github.com/naufal/latasya-erp/internal/invoice"
 	"github.com/naufal/latasya-erp/internal/journal"
 	"github.com/naufal/latasya-erp/internal/mcpauth"
+	"github.com/naufal/latasya-erp/internal/mcpserver"
+	"github.com/naufal/latasya-erp/internal/oauthas"
 	"github.com/naufal/latasya-erp/internal/reporting"
 	"github.com/naufal/latasya-erp/internal/schoolcalendar"
 	"github.com/naufal/latasya-erp/internal/tmpl"
@@ -209,14 +212,34 @@ func main() {
 
 	schoolCalendarAPI := &v1schoolcalendar.Handler{Calendar: schoolCalendarModule, GoogleCalendarConfig: h.GoogleCalendarConfig}
 	schoolCalendarAPI.RegisterRoutes(apiMux)
-
-	mux.Handle("/api/v1/", v1.BearerOrCookie(db)(v1.BearerRateLimiter()(apiMux)))
+	// One shared bearer rate limiter across /api/v1 and /mcp: both surfaces
+	// feed the same single SQLite writer, so one 120/min budget per
+	// credential covers them together.
+	bearerLimit := v1.BearerRateLimiter()
+	mux.Handle("/api/v1/", v1.BearerOrCookie(db)(bearerLimit(apiMux)))
 	authAPI.RegisterLoginRoute(mux, v1.LoginRateLimiter())
 
 	// MCP device login: unauthenticated poll endpoint with its own limiter;
 	// the consent page lives inside the protected HTML mux.
 	mcpDeviceAPI := &v1mcpauth.Handler{MCP: mcpauth.New(db)}
 	mux.Handle("POST /api/v1/mcp/device", v1.MCPDeviceLimiter()(http.HandlerFunc(mcpDeviceAPI.DevicePoll)))
+
+	// Remote MCP: stateless JSON-RPC at POST /mcp, riding the same bearer
+	// auth and rate limiter as /api/v1. Tool calls replay through apiMux.
+	mcpserver.Version = version
+	mcpRemote := &mcpserver.Server{API: apiMux}
+	mux.Handle("POST /mcp", v1.BearerOrCookie(db)(bearerLimit(mcpRemote)))
+	mux.HandleFunc("GET /mcp", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Allow", "POST")
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	})
+
+	// OAuth 2.1 for remote MCP clients: browser consent + token exchange +
+	// RFC 9728/8414 discovery.
+	oauthModule := oauthas.New(db)
+	h.OAuth = oauthModule
+	h.RegisterOAuthRoutes(mux)
+	(&v1oauthas.Handler{OAuth: oauthModule}).RegisterRoutes(mux)
 
 	// Public site: company profile at the bare domain, plus the parent
 	// invoice portal. No auth required.

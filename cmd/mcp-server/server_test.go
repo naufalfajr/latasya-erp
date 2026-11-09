@@ -333,7 +333,7 @@ func TestRedactHidesToken(t *testing.T) {
 }
 
 func TestTextResultTruncates(t *testing.T) {
-	res := textResult(bytes.Repeat([]byte("x"), 100_000))
+	res := mcptools.TextResult(bytes.Repeat([]byte("x"), 100_000))
 	text := resultText(res)
 	if len(text) > (64<<10)+64 {
 		t.Fatalf("truncation missing: %d bytes", len(text))
@@ -341,7 +341,7 @@ func TestTextResultTruncates(t *testing.T) {
 }
 
 func TestPDFResultBlobAndLimit(t *testing.T) {
-	small := pdfResult("/api/v1/invoices/1/pdf", []byte("%PDF-1.4 fake"))
+	small := mcptools.PDFResult("/api/v1/invoices/1/pdf", []byte("%PDF-1.4 fake"))
 	content := small["content"].([]any)
 	res, _ := content[1].(map[string]any)
 	resource, _ := res["resource"].(map[string]any)
@@ -349,7 +349,7 @@ func TestPDFResultBlobAndLimit(t *testing.T) {
 		t.Fatalf("resource shape wrong: %v", resource)
 	}
 
-	big := pdfResult("/api/v1/invoices/1/pdf", bytes.Repeat([]byte("x"), (2<<20)+1))
+	big := mcptools.PDFResult("/api/v1/invoices/1/pdf", bytes.Repeat([]byte("x"), (2<<20)+1))
 	if _, isErr := big["isError"]; !isErr {
 		t.Fatal("oversize PDF must be an error result")
 	}

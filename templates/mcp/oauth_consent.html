@@ -1,0 +1,52 @@
+{{template "base" .}}
+{{define "content"}}
+{{$data := .Data}}
+
+<div class="max-w-lg">
+    <h1 class="text-2xl font-bold mb-2">Authorize MCP connection</h1>
+    <p class="text-sm opacity-60 mb-4">An MCP client (<code class="text-xs">{{$data.ClientID}}</code>) is asking to connect to your ERP account.</p>
+
+    <div class="alert alert-warning mb-4">
+        <span>Approve only if YOU just added this MCP server in your AI client.</span>
+    </div>
+
+    {{if index $data.Errors "general"}}
+    <div class="alert alert-error mb-4"><span>{{index $data.Errors "general"}}</span></div>
+    {{end}}
+
+    <form method="POST" action="/oauth/authorize?response_type=code&client_id={{$data.ClientID}}&redirect_uri={{$data.RedirectURI}}&state={{$data.State}}&code_challenge={{$data.CodeChallenge}}&code_challenge_method=S256">
+        <input type="hidden" name="csrf_token" value="{{$data.CSRFToken}}">
+        <div class="card bg-base-100 shadow">
+            <div class="card-body">
+
+                <div class="flex flex-col gap-1">
+                    <span class="label">Client</span>
+                    <code class="text-xs bg-base-200 rounded px-2 py-1 break-all">{{$data.ClientID}}</code>
+                </div>
+
+                <div class="flex flex-col gap-1 mt-4">
+                    <label class="label">Capabilities</label>
+                    <p class="text-xs opacity-60 mb-2">Only your own capabilities can be granted. The token can be revoked any time under API Tokens.</p>
+                    <div class="grid grid-cols-2 gap-2">
+                        {{range $data.AvailableScopes}}
+                        <label class="label cursor-pointer justify-start gap-2">
+                            <input type="checkbox" name="scopes" value="{{.}}" class="checkbox checkbox-sm"
+                                   {{if index $data.Checked .}}checked{{end}}>
+                            <span class="label-text text-xs">{{.}}</span>
+                        </label>
+                        {{end}}
+                    </div>
+                    {{if index $data.Errors "scopes"}}
+                    <span class="text-xs text-error">{{index $data.Errors "scopes"}}</span>
+                    {{end}}
+                </div>
+
+                <div class="card-actions justify-between mt-6">
+                    <button type="submit" name="action" value="deny" class="btn btn-ghost">Deny</button>
+                    <button type="submit" name="action" value="approve" class="btn btn-primary">Authorize</button>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+{{end}}
