@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -170,12 +171,85 @@ func TestWellKnown_Metadata(t *testing.T) {
 	var as struct {
 		AuthorizationEndpoint string `json:"authorization_endpoint"`
 		TokenEndpoint         string `json:"token_endpoint"`
+		RegistrationEndpoint  string `json:"registration_endpoint"`
 	}
 	if err := json.NewDecoder(resp2.Body).Decode(&as); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.HasSuffix(as.AuthorizationEndpoint, "/oauth/authorize") ||
-		!strings.HasSuffix(as.TokenEndpoint, "/oauth/token") {
+		!strings.HasSuffix(as.TokenEndpoint, "/oauth/token") ||
+		!strings.HasSuffix(as.RegistrationEndpoint, "/oauth/register") {
 		t.Fatalf("authorization-server metadata: %+v", as)
+	}
+}
+
+func TestRegister_DynamicClientRegistration(t *testing.T) {
+	ts, _ := newTokenServer(t)
+
+	post := func(body string) (int, string) {
+		resp, err := ts.Client().Post(ts.URL+"/oauth/register", "application/json", strings.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		raw, err := io.ReadAll(resp.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resp.StatusCode, string(raw)
+	}
+
+	status, body := post(`{"client_name":"Claude Code","redirect_uris":["http://localhost:51121/callback"],"token_endpoint_auth_method":"none"}`)
+	if status != http.StatusCreated {
+		t.Fatalf("register: status=%d body=%s", status, body)
+	}
+	var reg struct {
+		ClientID           string   `json:"client_id"`
+		ClientName         string   `json:"client_name"`
+		RedirectUris       []string `json:"redirect_uris"`
+		TokenEndpointAuth  string   `json:"token_endpoint_auth_method"`
+		GrantTypes         []string `json:"grant_types"`
+	}
+	if err := json.Unmarshal([]byte(body), &reg); err != nil {
+		t.Fatal(err)
+	}
+	if len(reg.ClientID) < 16 || reg.ClientName != "Claude Code" ||
+		len(reg.RedirectUris) != 1 || reg.RedirectUris[0] != "http://localhost:51121/callback" ||
+		reg.TokenEndpointAuth != "none" || len(reg.GrantTypes) != 1 {
+		t.Fatalf("registration response: %+v", reg)
+	}
+
+	for _, tc := range []struct{ body, want string }{
+		{`{"redirect_uris":[]}`, "invalid_redirect_uri"},
+		{`{"redirect_uris":[""]}`, "invalid_redirect_uri"},
+		{`{"redirect_uris":["not a uri"]}`, "invalid_redirect_uri"},
+		{`{"redirect_uris":["/callback"]}`, "invalid_redirect_uri"},
+		{`{"redirect_uris":["http://localhost/cb#frag"]}`, "invalid_redirect_uri"},
+		{`{"redirect_uris":["http://localhost/cb"],"token_endpoint_auth_method":"client_secret_basic"}`, "invalid_client_metadata"},
+		{`not json`, "invalid_client_metadata"},
+	} {
+		if status, body := post(tc.body); status != http.StatusBadRequest || !strings.Contains(body, tc.want) {
+			t.Fatalf("%q: status=%d body=%s", tc.body, status, body)
+		}
+	}
+
+	// RFC 7591 §3.1: JSON content type required when declared.
+	resp, err := ts.Client().Post(ts.URL+"/oauth/register", "text/plain", strings.NewReader(`{"redirect_uris":["http://localhost/cb"]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusBadRequest || !strings.Contains(string(raw), "invalid_client_metadata") {
+		t.Fatalf("content type: status=%d body=%s", resp.StatusCode, raw)
+	}
+
+	// Absent client_name stays absent (omitempty).
+	status2, body2 := post(`{"redirect_uris":["http://localhost/cb"]}`)
+	if status2 != http.StatusCreated || strings.Contains(body2, "client_name") {
+		t.Fatalf("absent client_name: status=%d body=%s", status2, body2)
 	}
 }
