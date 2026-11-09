@@ -1,8 +1,9 @@
 // Package oauthas is the ERP's first-party OAuth 2.1 authorization server
 // for the remote MCP endpoint: it issues single-use authorization codes
 // from the browser consent page and exchanges them (PKCE S256) for ordinary
-// lat_ tokens minted through the apitoken module. No refresh tokens, no
-// dynamic client registration — one flow, one purpose.
+// lat_ tokens minted through the apitoken module. No refresh tokens — one
+// flow, one purpose. Dynamic client registration (RFC 7591) mints an
+// unpersisted public client_id; see internal/api/v1/oauthas.Handler.Register.
 package oauthas
 
 import (
