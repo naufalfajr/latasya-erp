@@ -739,3 +739,27 @@ dead code removed (unused JSON-RPC constants, sort-based key
 canonicalization → `maps.Clone`). Known-good unchanged: the review's
 security pass found no exploitable hole in PKCE, codes, redirect matching,
 CSRF ordering, replay, limiter keying, or the `next` allowlist.
+
+### Phase 6 — stdio client removed (owner decision)
+
+The owner will never run the local binary — every AI client in their stack
+is a cloud/remote client — and the industry justification for stdio servers
+(local resources, no public host, privacy) is absent for a cloud-hosted ERP
+behind an existing public HTTPS origin with OAuth. Removed:
+
+- `cmd/mcp-server/` (client) and the device-login flow that existed solely
+  for it: `internal/mcpauth`, `POST /api/v1/mcp/device`, the
+  `/dashboard/mcp/authorize` consent page, migration 027 (the OAuth-codes
+  migration renumbered 028→027; nothing had deployed yet), and
+  `MCPDeviceLimiter`.
+- `safeMCPReturnTo` allowlist tightened to `/oauth/authorize` (bare, in
+  every deployment).
+- Makefile `run-mcp`/`mcp-release`, CI binary builds/artifacts; the CI job
+  is now `mcp-tools` (staleness gate only).
+
+Kept: `cmd/mcp-gen` (the generator, moved from `cmd/mcp-server/gen`) and
+the spec↔tools coverage contract, now in `internal/mcptools` — both serve
+the remote `/mcp` path. Headless use still works: create a token at
+`/settings/api-tokens` and set the `Authorization` header in any client
+config that allows headers. Resurrection, if a stdio-only client ever
+appears, is a `git revert` of this commit plus a regen.

@@ -1,4 +1,4 @@
-.PHONY: dev run run-bot run-mcp mcp-tools build build-linux css css-watch clean test
+.PHONY: dev run run-bot mcp-tools build build-linux css css-watch clean test
 
 # Tailwind standalone CLI
 TAILWIND := ./bin/tailwindcss
@@ -41,13 +41,9 @@ run:
 run-bot:
 	go run ./cmd/telegram-bot
 
-# Run the MCP client against the local server
-run-mcp:
-	go run ./cmd/mcp-server
-
 # Regenerate the MCP tool table from the OpenAPI spec
 mcp-tools:
-	go run ./cmd/mcp-server/gen api/openapi.yaml internal/mcptools/tools_gen.go
+	go run ./cmd/mcp-gen api/openapi.yaml internal/mcptools/tools_gen.go
 	gofmt -w internal/mcptools/tools_gen.go
 
 # Build identity, surfaced at /healthz. CI overrides with the commit SHA;
@@ -71,12 +67,4 @@ test:
 # Clean build artifacts
 clean:
 	rm -f latasya-erp
-	rm -rf dist/
 	rm -f static/css/app.css
-
-# Build MCP client binaries for release (all platforms users run AI clients on)
-mcp-release:
-	CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o dist/latasya-mcp-darwin-arm64 ./cmd/mcp-server
-	GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o dist/latasya-mcp-darwin-amd64 ./cmd/mcp-server
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o dist/latasya-mcp-linux-amd64 ./cmd/mcp-server
-	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o dist/latasya-mcp-linux-arm64 ./cmd/mcp-server

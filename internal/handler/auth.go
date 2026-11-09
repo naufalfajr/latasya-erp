@@ -144,14 +144,8 @@ func safeMCPReturnTo(value, basePath string) string {
 		return p
 	}
 	// /oauth/authorize lives unprefixed on the outer mux: only its bare
-	// form is ever valid, in every deployment. /mcp/authorize lives inside
-	// the base-prefixed protected mux: bare when no base path is set,
-	// prefixed otherwise.
+	// form is ever valid, in every deployment.
 	if path == "/oauth/authorize" {
-		return withQuery(path)
-	}
-	prefixedMCP := strings.TrimSuffix(basePath, "/") + "/mcp/authorize"
-	if (path == "/mcp/authorize" && basePath == "") || (basePath != "" && path == prefixedMCP) {
 		return withQuery(path)
 	}
 	return fallback

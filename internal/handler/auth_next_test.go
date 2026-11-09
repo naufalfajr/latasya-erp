@@ -10,6 +10,8 @@ import (
 	"github.com/naufal/latasya-erp/internal/testutil"
 )
 
+const oauthNextURL = "/oauth/authorize?state=s"
+
 func loginForm(next string) url.Values {
 	form := url.Values{"username": {"admin"}, "password": {adminTestPassword}}
 	if next != "" {
@@ -31,14 +33,13 @@ func postLogin(t *testing.T, tsURL, next string) *http.Response {
 	return resp
 }
 
-func TestLogin_NextParam_AllowlistedConsentURL(t *testing.T) {
+func TestLogin_NextParam_AllowlistedOAuthURL(t *testing.T) {
 	t.Parallel()
 	ts, _ := testServer(t)
 
-	// No base path: the bare consent path is accepted, query preserved.
-	resp := postLogin(t, ts.URL+"/login", "/mcp/authorize?code=AB2C-D3F4")
-	if loc := resp.Header.Get("Location"); loc != "/mcp/authorize?code=AB2C-D3F4" {
-		t.Errorf("Location: got %q, want the consent URL", loc)
+	resp := postLogin(t, ts.URL+"/login", oauthNextURL)
+	if loc := resp.Header.Get("Location"); loc != oauthNextURL {
+		t.Errorf("Location: got %q, want the authorize URL", loc)
 	}
 }
 
@@ -49,8 +50,9 @@ func TestLogin_NextParam_RejectsEverythingElse(t *testing.T) {
 	for _, next := range []string{
 		"https://evil.example.com",
 		"//evil.example.com",
-		"/dashboard",          // not the consent page
-		"/mcp/authorize/evil", // prefix trick
+		"/dashboard",            // not the authorize page
+		"/mcp/authorize?c=1",    // device flow removed; no longer valid
+		"/oauth/authorize/evil", // prefix trick
 		"\\evil",
 	} {
 		resp := postLogin(t, ts.URL+"/login", next)
@@ -60,38 +62,19 @@ func TestLogin_NextParam_RejectsEverythingElse(t *testing.T) {
 	}
 }
 
-func TestLogin_FailedAttempt_PreservesNext(t *testing.T) {
-	t.Parallel()
-	ts, _ := testServer(t)
-
-	client := &http.Client{CheckRedirect: func(r *http.Request, via []*http.Request) error {
-		return http.ErrUseLastResponse
-	}}
-	resp, err := client.PostForm(ts.URL+"/login",
-		url.Values{"username": {"admin"}, "password": {"wrong"}, "next": {"/mcp/authorize?code=AB2C-D3F4"}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer resp.Body.Close()
-
-	body, _ := io.ReadAll(resp.Body)
-	want := `name="next" value="/mcp/authorize?code=AB2C-D3F4"`
-	if !strings.Contains(string(body), want) {
-		t.Errorf("failed-login re-render dropped next: hidden field %q missing", want)
-	}
-}
-
-func TestLogin_NextParam_BasePathConsentURL(t *testing.T) {
+func TestLogin_NextParam_OAuthURLUnderBasePath(t *testing.T) {
 	t.Parallel()
 	ts, _ := testServer(t, "/dashboard")
 
-	resp := postLogin(t, ts.URL+"/dashboard/login", "/dashboard/mcp/authorize?code=X")
-	if loc := resp.Header.Get("Location"); loc != "/dashboard/mcp/authorize?code=X" {
-		t.Errorf("Location: got %q, want the base-prefixed consent URL", loc)
+	// /oauth/authorize lives unprefixed on the outer mux: its bare form is
+	// the only valid spelling, under every deployment.
+	resp := postLogin(t, ts.URL+"/dashboard/login", oauthNextURL)
+	if loc := resp.Header.Get("Location"); loc != oauthNextURL {
+		t.Errorf("Location: got %q, want %q", loc, oauthNextURL)
 	}
 
-	// Without the base prefix it must fall back inside the app.
-	resp = postLogin(t, ts.URL+"/dashboard/login", "/mcp/authorize?code=X")
+	// A BasePath-prefixed spelling must not smuggle through.
+	resp = postLogin(t, ts.URL+"/dashboard/login", "/dashboard"+oauthNextURL)
 	if loc := resp.Header.Get("Location"); loc != "/dashboard/" {
 		t.Errorf("Location: got %q, want \"/dashboard/\" fallback", loc)
 	}
@@ -101,14 +84,15 @@ func TestLoginPage_PreservesNextInForm(t *testing.T) {
 	t.Parallel()
 	ts, _ := testServer(t)
 
-	resp, err := http.Get(ts.URL + "/login?next=/mcp/authorize%3Fcode%3DAB2C-D3F4")
+	encoded := url.QueryEscape(oauthNextURL)
+	resp, err := http.Get(ts.URL + "/login?next=" + encoded)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
-	want := `name="next" value="/mcp/authorize?code=AB2C-D3F4"`
+	want := `name="next" value="` + oauthNextURL + `"`
 	if !strings.Contains(string(body), want) {
 		t.Errorf("login form missing sanitized next hidden field %q", want)
 	}
@@ -125,6 +109,27 @@ func TestLoginPage_PreservesNextInForm(t *testing.T) {
 	}
 }
 
+func TestLogin_FailedAttempt_PreservesNext(t *testing.T) {
+	t.Parallel()
+	ts, _ := testServer(t)
+
+	client := &http.Client{CheckRedirect: func(r *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+	resp, err := client.PostForm(ts.URL+"/login",
+		url.Values{"username": {"admin"}, "password": {"wrong"}, "next": {oauthNextURL}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	want := `name="next" value="` + oauthNextURL + `"`
+	if !strings.Contains(string(body), want) {
+		t.Errorf("failed-login re-render dropped next: hidden field %q missing", want)
+	}
+}
+
 func TestLogin_MustChangePassword_IgnoresNext(t *testing.T) {
 	t.Parallel()
 	ts, db := testServer(t)
@@ -138,37 +143,12 @@ func TestLogin_MustChangePassword_IgnoresNext(t *testing.T) {
 		return http.ErrUseLastResponse
 	}}
 	resp, err := client.PostForm(ts.URL+"/login",
-		url.Values{"username": {"force-rotate"}, "password": {"pw"}, "next": {"/mcp/authorize?code=X"}})
+		url.Values{"username": {"force-rotate"}, "password": {"pw"}, "next": {oauthNextURL}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	resp.Body.Close()
 	if loc := resp.Header.Get("Location"); loc != "/password/change" {
 		t.Errorf("Location: got %q, want /password/change (rotation outranks next)", loc)
-	}
-}
-
-func TestLogin_NextParam_OAuthAuthorizeSurvivesBasePath(t *testing.T) {
-	// Regression: /oauth/authorize lives unprefixed on the outer mux, so its
-	// bounce-back must stay bare even under BasePath — a prefixed-only
-	// allowlist dropped the authorize URL and lost the client's flow.
-	t.Parallel()
-	ts, _ := testServer(t, "/dashboard")
-
-	resp := postLogin(t, ts.URL+"/dashboard/login", "/oauth/authorize?client_id=c&state=s")
-	if loc := resp.Header.Get("Location"); loc != "/oauth/authorize?client_id=c&state=s" {
-		t.Errorf("Location: got %q, want the bare authorize URL", loc)
-	}
-
-	// The device-flow consent page keeps its prefixed form under BasePath.
-	resp = postLogin(t, ts.URL+"/dashboard/login", "/dashboard/mcp/authorize?code=X")
-	if loc := resp.Header.Get("Location"); loc != "/dashboard/mcp/authorize?code=X" {
-		t.Errorf("Location: got %q, want the prefixed device consent URL", loc)
-	}
-
-	// And a bare device-consent path does not smuggle through under BasePath.
-	resp = postLogin(t, ts.URL+"/dashboard/login", "/mcp/authorize?code=X")
-	if loc := resp.Header.Get("Location"); loc != "/dashboard/" {
-		t.Errorf("Location: got %q, want \"/dashboard/\" fallback", loc)
 	}
 }

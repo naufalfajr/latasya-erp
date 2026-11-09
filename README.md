@@ -33,7 +33,7 @@ No Node.js, no npm, no JS framework. Single binary with embedded templates and s
 
 ## API
 
-Latasya ERP exposes a JSON API at `/api/v1/*` alongside the HTML UI. Bots, scripts, MCP servers, and Telegram integrations authenticate via scoped Bearer tokens managed at `/settings/api-tokens`. Every API operation is also exposed as an [MCP](https://modelcontextprotocol.io) tool two ways: the remote endpoint at `https://<host>/mcp` (add it in your AI client as a remote MCP server; OAuth 2.1 browser login, no download) and the local stdio client in [`cmd/mcp-server`](cmd/mcp-server/README.md). Design and decision log: [`MCP_PLAN.md`](MCP_PLAN.md).
+Latasya ERP exposes a JSON API at `/api/v1/*` alongside the HTML UI. Bots, scripts, MCP servers, and Telegram integrations authenticate via scoped Bearer tokens managed at `/settings/api-tokens`. Every API operation is also exposed as an [MCP](https://modelcontextprotocol.io) tool at `https://<host>/mcp` — add it in your AI client as a remote MCP server (Claude Code, Claude Desktop, Codex, Cursor, …); login is OAuth 2.1 in the browser. Design and decision log: [`MCP_PLAN.md`](MCP_PLAN.md).
 
 ### Quick Start
 

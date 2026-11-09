@@ -73,5 +73,4 @@ func (h *Handler) RegisterProtectedRoutes(mux *http.ServeMux) {
 	h.RegisterInvoiceRoutes(mux)
 	h.RegisterAccessRoutes(mux)
 	h.RegisterSettingsRoutes(mux)
-	h.RegisterMCPRoutes(mux)
 }

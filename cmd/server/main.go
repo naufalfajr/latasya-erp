@@ -27,7 +27,6 @@ import (
 	v1income "github.com/naufal/latasya-erp/internal/api/v1/income"
 	v1invoices "github.com/naufal/latasya-erp/internal/api/v1/invoices"
 	v1journals "github.com/naufal/latasya-erp/internal/api/v1/journals"
-	v1mcpauth "github.com/naufal/latasya-erp/internal/api/v1/mcpauth"
 	v1oauthas "github.com/naufal/latasya-erp/internal/api/v1/oauthas"
 	v1reports "github.com/naufal/latasya-erp/internal/api/v1/reports"
 	v1roles "github.com/naufal/latasya-erp/internal/api/v1/roles"
@@ -46,7 +45,6 @@ import (
 	"github.com/naufal/latasya-erp/internal/idempotency"
 	"github.com/naufal/latasya-erp/internal/invoice"
 	"github.com/naufal/latasya-erp/internal/journal"
-	"github.com/naufal/latasya-erp/internal/mcpauth"
 	"github.com/naufal/latasya-erp/internal/mcpserver"
 	"github.com/naufal/latasya-erp/internal/oauthas"
 	"github.com/naufal/latasya-erp/internal/reporting"
@@ -218,15 +216,6 @@ func main() {
 	bearerLimit := v1.BearerRateLimiter()
 	mux.Handle("/api/v1/", v1.BearerOrCookie(db)(bearerLimit(apiMux)))
 	authAPI.RegisterLoginRoute(mux, v1.LoginRateLimiter())
-
-	// One module instance serves both the poll endpoint and the consent
-	// page: h.MCPAuth must be set or the consent handlers hit a nil module
-	// (a production-only crash the handler tests never saw — testutil wires
-	// the field).
-	mcpAuthModule := mcpauth.New(db)
-	h.MCPAuth = mcpAuthModule
-	mcpDeviceAPI := &v1mcpauth.Handler{MCP: mcpAuthModule}
-	mux.Handle("POST /api/v1/mcp/device", v1.MCPDeviceLimiter()(http.HandlerFunc(mcpDeviceAPI.DevicePoll)))
 
 	// Remote MCP: stateless JSON-RPC at POST /mcp, riding the same bearer
 	// auth and rate limiter as /api/v1. Tool calls replay through apiMux.

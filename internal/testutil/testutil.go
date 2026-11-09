@@ -19,7 +19,6 @@ import (
 	"github.com/naufal/latasya-erp/internal/handler"
 	"github.com/naufal/latasya-erp/internal/invoice"
 	"github.com/naufal/latasya-erp/internal/journal"
-	"github.com/naufal/latasya-erp/internal/mcpauth"
 	"github.com/naufal/latasya-erp/internal/model"
 	"github.com/naufal/latasya-erp/internal/oauthas"
 	"github.com/naufal/latasya-erp/internal/reporting"
@@ -157,7 +156,6 @@ func SetupTestHandler(t *testing.T, db *sql.DB) *handler.Handler {
 		Accounts:       account.New(db),
 		Access:         access.New(db, auth.HashPassword),
 		APITokens:      apitoken.New(db),
-		MCPAuth:        mcpauth.New(db),
 		OAuth:          oauthas.New(db),
 		Audit:          audit.New(db),
 		SchoolCalendar: schoolcalendar.New(db),

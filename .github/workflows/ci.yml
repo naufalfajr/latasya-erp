@@ -65,9 +65,9 @@ jobs:
         run: go test -race -timeout=10m ./...
 
 
-  mcp-client:
+  mcp-tools:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 8
     steps:
       - uses: actions/checkout@v7
 
@@ -80,19 +80,6 @@ jobs:
       # diffing catches a stale tools_gen.go the moment the spec changes.
       - name: Generated tools are current
         run: |
-          go run ./cmd/mcp-server/gen api/openapi.yaml internal/mcptools/tools_gen.go
+          go run ./cmd/mcp-gen api/openapi.yaml internal/mcptools/tools_gen.go
           gofmt -w internal/mcptools/tools_gen.go
           git diff --exit-code -- internal/mcptools/tools_gen.go
-
-      - name: Build client binaries
-        run: |
-          mkdir -p dist
-          CGO_ENABLED=0 go build -ldflags "-X main.version=${GITHUB_SHA::7}" -o dist/latasya-mcp-linux-amd64 ./cmd/mcp-server
-          GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -ldflags "-X main.version=${GITHUB_SHA::7}" -o dist/latasya-mcp-darwin-arm64 ./cmd/mcp-server
-
-      - name: Upload client binaries
-        uses: actions/upload-artifact@v5
-        with:
-          name: latasya-mcp-${{ github.sha }}
-          retention-days: 30
-          path: dist/

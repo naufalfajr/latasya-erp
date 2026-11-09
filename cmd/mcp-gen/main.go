@@ -1,7 +1,8 @@
 // gen regenerates internal/mcptools/tools_gen.go from the OpenAPI spec. Run
-// via the Makefile (make mcp-tools) — never edit the output by hand.
+// via the Makefile (make mcp-tools) — never edit the output by hand. The
+// table serves the remote MCP endpoint (/mcp).
 //
-// Usage: go run ./gen <path-to-openapi.yaml> <output.go>
+// Usage: go run ./cmd/mcp-gen <path-to-openapi.yaml> <output.go>
 package main
 
 import (
