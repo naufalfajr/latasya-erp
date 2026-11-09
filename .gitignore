@@ -35,3 +35,7 @@ CLAUDE.md
 .claude/
 docs/
 
+
+# Local MCP client build artifacts
+/mcp-server
+/dist/

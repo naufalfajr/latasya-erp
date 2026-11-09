@@ -701,3 +701,41 @@ the §8 deferral trigger materialized.
    session login plus the endpoint rate limiters (10/min/IP on
    /oauth/token, 120/min/credential on /mcp, 5/15min on login) are the
    complete gate. Revisit only if Access is ever enabled on the hostname.
+
+### PR review round 4 (external, on PR #56)
+
+6 findings, all real, all fixed in this push:
+
+1. **`h.MCPAuth` was never assigned in `cmd/server/main.go`** — the device
+   consent page hit a nil module and panicked; only the poll endpoint got a
+   module instance. Production-only (testutil wires the field). Fixed: one
+   `mcpauth.New(db)` shared by the handler and the poll endpoint.
+2. **OAuth consent issued no code for non-admins** — `oauthSession` loaded
+   the user without role capabilities (the outer mux skips RequireAuth), so
+   bookkeepers/viewers saw an empty scope grid. Fixed: role loading in
+   oauthSession; pinned by a bookkeeper-approves test.
+3. **CSP `form-action 'self'` broke both the OAuth redirect (303 to the
+   client's loopback callback) and Google Calendar connect (303 to
+   accounts.google.com) in Chromium**, which applies form-action to
+   post-submit redirects — a regression vs main for the Calendar flow.
+   Fixed: `form-action 'self' https://accounts.google.com
+   http://127.0.0.1:* http://localhost:*`; `::1` dropped from
+   validRedirectURI (CSP cannot express it).
+4. **`ci.yml` mcp-client job had `go-version`/`cache` outside a `with:`
+   block** — GitHub rejected the workflow, so NO CI ever ran on the branch.
+   Fixed.
+5. **Env-token headless mode hid 55 of 77 tools** — no config file means no
+   scopes/token id. Fixed: runServe bootstraps both via `GET
+   /api/v1/auth/me`; pinned by an e2e test.
+6. **An 8.7 MB compiled binary was committed at the repo root** (a stray
+   `go build` output). Untracked; `/mcp-server` and `/dist/` gitignored.
+   Squash-merge keeps the blob out of main's history.
+
+Also from the same review: anonymous 401s now challenge (`Bearer
+resource_metadata=…`, code `unauthorized`) while bad tokens still report
+`invalid_token` — a distinction my earlier consolidation collapsed (caught
+by the race run); `schemeFor` duplicate replaced by `v1.ExternalScheme`;
+dead code removed (unused JSON-RPC constants, sort-based key
+canonicalization → `maps.Clone`). Known-good unchanged: the review's
+security pass found no exploitable hole in PKCE, codes, redirect matching,
+CSRF ordering, replay, limiter keying, or the `next` allowlist.

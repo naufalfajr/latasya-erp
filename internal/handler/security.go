@@ -23,7 +23,13 @@ var securityHeaders = http.Header{
 			"connect-src 'self'; " +
 			"frame-ancestors 'none'; " +
 			"base-uri 'self'; " +
-			"form-action 'self'"},
+			// Chromium applies form-action to post-submit redirects: the
+			// OAuth consent 303s to the client's loopback callback and
+			// Google Calendar connect 303s to accounts.google.com, so both
+			// must be allowed or the flows die in the browser (invisible to
+			// Go http tests, which don't enforce CSP). ::1 cannot be
+			// expressed as a CSP host-source, so validRedirectURI drops it.
+			"form-action 'self' https://accounts.google.com http://127.0.0.1:* http://localhost:*"},
 }
 
 // SecurityHeaders sets app-wide defensive headers on every response. API

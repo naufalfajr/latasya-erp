@@ -86,7 +86,12 @@ func BearerOrCookie(db *sql.DB) func(http.Handler) http.Handler {
 				return
 			}
 
-			writeBearerUnauthorized(w, r)
+			// Anonymous: challenge (no error=), not invalid_token — scripts and
+			// MCP clients distinguish the two.
+			w.Header().Set("WWW-Authenticate",
+				fmt.Sprintf(`Bearer resource_metadata=%q`,
+					ExternalScheme(r)+"://"+r.Host+"/.well-known/oauth-protected-resource"))
+			WriteError(w, r, http.StatusUnauthorized, CodeUnauthorized, "authentication required", nil)
 		})
 	}
 }

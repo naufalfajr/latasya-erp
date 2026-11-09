@@ -367,3 +367,37 @@ func nonEmptyLines(s string) []string {
 }
 
 var _ = fmt.Sprintf // keep fmt when subtests are trimmed
+
+func TestE2E_EnvTokenBootstrapsScopesViaGetMe(t *testing.T) {
+	// Regression: headless LATASYA_MCP_TOKEN mode has no config file, so
+	// scopes and the token id start empty. Without the getMe bootstrap,
+	// tools/list hid every capability-gated tool (55 of 77) and idempotency
+	// keys derived from token 0.
+	t.Setenv("LATASYA_MCP_TOKEN", "")
+	e := newE2E(t, []string{model.CapAccountsManage, model.CapReportsView})
+
+	cfg := &config{BaseURL: e.erp.URL, Token: e.token}
+	if cfg.TokenID != 0 || cfg.Scopes != nil {
+		t.Fatal("precondition: env-token config starts without scopes")
+	}
+	if err := bootstrapTokenInfo(e.disp.client, cfg); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+	if cfg.TokenID == 0 {
+		t.Fatal("bootstrap did not fill the token id")
+	}
+	if len(cfg.Scopes) != 2 {
+		t.Fatalf("bootstrap scopes: %v", cfg.Scopes)
+	}
+
+	// The scope-filtered tools/list now shows capability-gated tools.
+	e.disp.scopes = cfg.Scopes
+	s := &mcpServer{disp: e.disp}
+	names := map[string]bool{}
+	for _, tl := range s.toolsList()["tools"].([]mcptools.ListEntry) {
+		names[tl.Name] = true
+	}
+	if !names["createAccount"] {
+		t.Fatal("env-token mode must see capability-gated tools after bootstrap")
+	}
+}

@@ -72,8 +72,9 @@ jobs:
       - uses: actions/checkout@v7
 
       - uses: actions/setup-go@v7
-        go-version: stable
-        cache: true
+        with:
+          go-version: stable
+          cache: true
 
       # The generated tool table must match the spec; regenerating and
       # diffing catches a stale tools_gen.go the moment the spec changes.

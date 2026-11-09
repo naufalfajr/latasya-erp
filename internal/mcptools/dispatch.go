@@ -5,8 +5,8 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/url"
-	"sort"
 	"strings"
 )
 
@@ -71,26 +71,16 @@ func BodyArg(tool *ToolDef, args map[string]any) any {
 // identical create inside the 24h window also replays, which for an ERP is
 // duplicate suppression, and the replayed record is visible in the result.
 func IdempotencyKey(tokenID int, op string, args map[string]any) string {
-	clean := map[string]any{}
-	for k, v := range args {
-		if k != "_idempotency_key" {
-			clean[k] = v
-		}
-	}
-	keys := make([]string, 0, len(clean))
-	for k := range clean {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
+	clean := maps.Clone(args)
+	delete(clean, "_idempotency_key")
 	var b strings.Builder
 	fmt.Fprintf(&b, "%d\x00%s", tokenID, op)
+	// json.Marshal sorts map keys, so the encoding is canonical.
 	encoded, _ := json.Marshal(clean)
 	b.Write(encoded)
 	sum := sha256.Sum256([]byte(b.String()))
 	return base64.RawURLEncoding.EncodeToString(sum[:16])
 }
-
-// --- MCP result shapes -----------------------------------------------------
 
 // TextResult wraps a JSON response body as one text content block,
 // truncated at 64 KiB.

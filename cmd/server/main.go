@@ -219,9 +219,13 @@ func main() {
 	mux.Handle("/api/v1/", v1.BearerOrCookie(db)(bearerLimit(apiMux)))
 	authAPI.RegisterLoginRoute(mux, v1.LoginRateLimiter())
 
-	// MCP device login: unauthenticated poll endpoint with its own limiter;
-	// the consent page lives inside the protected HTML mux.
-	mcpDeviceAPI := &v1mcpauth.Handler{MCP: mcpauth.New(db)}
+	// One module instance serves both the poll endpoint and the consent
+	// page: h.MCPAuth must be set or the consent handlers hit a nil module
+	// (a production-only crash the handler tests never saw — testutil wires
+	// the field).
+	mcpAuthModule := mcpauth.New(db)
+	h.MCPAuth = mcpAuthModule
+	mcpDeviceAPI := &v1mcpauth.Handler{MCP: mcpAuthModule}
 	mux.Handle("POST /api/v1/mcp/device", v1.MCPDeviceLimiter()(http.HandlerFunc(mcpDeviceAPI.DevicePoll)))
 
 	// Remote MCP: stateless JSON-RPC at POST /mcp, riding the same bearer

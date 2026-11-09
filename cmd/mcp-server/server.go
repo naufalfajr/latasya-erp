@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/http"
 	"net/url"
 	"os"
 	"strings"
@@ -39,7 +40,6 @@ type jsonrpcResponse struct {
 
 const (
 	codeParseError     = -32700
-	codeInvalidRequest = -32600
 	codeMethodNotFound = -32601
 	codeInvalidParams  = -32602
 	codeInternal       = -32603
@@ -168,7 +168,15 @@ func runServe() error {
 	if err := requireHTTPS(cfg.BaseURL); err != nil {
 		return err
 	}
-	disp := &dispatcher{client: newAPIClient(cfg.BaseURL, cfg.Token), tokenID: cfg.TokenID, scopes: cfg.Scopes}
+	client := newAPIClient(cfg.BaseURL, cfg.Token)
+	// Headless env-token mode has no config file, so scopes and the token id
+	// are unknown — ask the server via getMe.
+	if cfg.TokenID == 0 || cfg.Scopes == nil {
+		if err := bootstrapTokenInfo(client, cfg); err != nil {
+			return err
+		}
+	}
+	disp := &dispatcher{client: client, tokenID: cfg.TokenID, scopes: cfg.Scopes}
 	server := &mcpServer{disp: disp}
 	// Logs must go to stderr: stdout is the protocol channel.
 	log.SetOutput(os.Stderr)
@@ -189,6 +197,31 @@ func requireHTTPS(baseURL string) error {
 	loopback := host == "127.0.0.1" || host == "localhost" || host == "::1"
 	if u.Scheme != "https" && !loopback && os.Getenv("LATASYA_MCP_ALLOW_HTTP") != "true" {
 		return fmt.Errorf("refusing to send credentials over plain HTTP to %s (set LATASYA_MCP_ALLOW_HTTP=true to override for local development)", baseURL)
+	}
+	return nil
+}
+
+// bootstrapTokenInfo fills the config's token id and scopes from the
+// server's getMe endpoint. Needed in headless env-token mode, where no
+// config file exists — without it, tools/list would hide every
+// capability-gated tool and idempotency keys would derive from token 0.
+func bootstrapTokenInfo(client *apiClient, cfg *config) error {
+	data, _, err := client.call(http.MethodGet, "/api/v1/auth/me", nil, "", "")
+	if err != nil {
+		return fmt.Errorf("token check failed (is the ERP reachable?): %w", err)
+	}
+	var me struct {
+		Data struct {
+			TokenID     int      `json:"token_id"`
+			TokenScopes []string `json:"token_scopes"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(data, &me); err != nil {
+		return fmt.Errorf("malformed getMe response: %w", err)
+	}
+	cfg.TokenID = me.Data.TokenID
+	if me.Data.TokenScopes != nil {
+		cfg.Scopes = me.Data.TokenScopes
 	}
 	return nil
 }

@@ -304,3 +304,52 @@ func TestOAuthAuthorize_MergesIntoExistingRedirectQuery(t *testing.T) {
 		t.Fatalf("merged redirect: %q", resp.Header.Get("Location"))
 	}
 }
+
+func TestOAuthAuthorize_BookkeeperApprovesAndGetsCode(t *testing.T) {
+	// Regression: the outer-mux session lookup once returned the user with
+	// nil capabilities (no role loading), so every non-admin saw an empty
+	// scope grid and could never reach Issue.
+	t.Parallel()
+	ts, db := testServer(t)
+	cookies := loginAsBookkeeper(t, ts, db)
+	redirect := "http://127.0.0.1:59123/callback"
+
+	req, _ := requestWithCookies(db, "GET", ts.URL+oauthAuthorizeURL(redirect, oauthChallenge(t)), cookies, "")
+	page, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(page.Body)
+	page.Body.Close()
+	if page.StatusCode != http.StatusOK {
+		t.Fatalf("status: got %d", page.StatusCode)
+	}
+	// Bookkeeper holds these; the grid must render them.
+	if !strings.Contains(string(body), model.CapContactsManage) ||
+		!strings.Contains(string(body), model.CapReportsView) {
+		t.Fatal("bookkeeper consent page must render owned capabilities")
+	}
+
+	form := url.Values{
+		"csrf_token": {csrfFromHTML(string(body))},
+		"action":     {"approve"},
+		"scopes":     {model.CapReportsView},
+	}
+	post, _ := http.NewRequest("POST", ts.URL+oauthAuthorizeURL(redirect, oauthChallenge(t)), strings.NewReader(form.Encode()))
+	post.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	for _, c := range cookies {
+		post.AddCookie(c)
+	}
+	client := &http.Client{CheckRedirect: func(r *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+	resp, err := client.Do(post)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	loc, _ := url.Parse(resp.Header.Get("Location"))
+	if resp.StatusCode != http.StatusSeeOther || loc.Query().Get("code") == "" {
+		t.Fatalf("bookkeeper approval: status=%d location=%q", resp.StatusCode, resp.Header.Get("Location"))
+	}
+}

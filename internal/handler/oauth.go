@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/naufal/latasya-erp/internal/api/v1"
 	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/auth"
 	"github.com/naufal/latasya-erp/internal/model"
@@ -28,21 +29,13 @@ func validRedirectURI(raw string, r *http.Request) bool {
 		return false
 	}
 	host := u.Hostname()
-	if u.Scheme == "http" && (host == "127.0.0.1" || host == "localhost" || host == "::1") {
+	// ::1 is excluded: CSP host-sources cannot express it, so a consent
+	// redirect there would be browser-blocked anyway. "localhost" covers it.
+	if u.Scheme == "http" && (host == "127.0.0.1" || host == "localhost") {
 		return true
 	}
-	sameOrigin := u.Scheme+"//"+u.Host == schemeFor(r)+"//"+r.Host
+	sameOrigin := u.Scheme+"//"+u.Host == v1.ExternalScheme(r)+"//"+r.Host
 	return sameOrigin && (u.Scheme == "https" || u.Scheme == "http")
-}
-
-func schemeFor(r *http.Request) string {
-	if r.TLS != nil {
-		return "https"
-	}
-	if host := r.Host; strings.HasPrefix(host, "localhost") || strings.HasPrefix(host, "127.0.0.1") {
-		return "http"
-	}
-	return "https"
 }
 
 // OAuthAuthorizePage renders the OAuth consent screen. Unauthenticated users
@@ -242,6 +235,15 @@ func (h *Handler) oauthSession(w http.ResponseWriter, r *http.Request) (*model.U
 		if session, serr := auth.GetSession(h.DB, cookie.Value); serr == nil {
 			user, uerr := h.Access.LookupUserByIDForAuth(r.Context(), session.UserID)
 			if uerr == nil && user.IsActive {
+				// This page sits on the outer mux, so RequireAuth's
+				// role-capability loading never runs — without it every
+				// non-admin would see an empty scope grid (the user row
+				// alone carries no capabilities).
+				if user.Role != model.RoleAdmin {
+					if role, rerr := h.Access.LookupRoleForAuth(r.Context(), user.Role); rerr == nil {
+						user.Capabilities = role.Capabilities
+					}
+				}
 				return user, session, true
 			}
 		}
