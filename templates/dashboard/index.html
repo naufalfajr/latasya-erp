@@ -75,7 +75,7 @@
                     <thead><tr><th>Period</th><th class="text-right">Revenue</th><th class="text-right">Expenses</th><th class="text-right">Net income</th></tr></thead>
                     <tbody>{{range $d.Trends}}
                         <tr>
-                            <td><a class="link" href="{{$.BasePath}}/reports/profit-loss?from={{.StartDate}}&to={{.EndDate}}">{{.Label}}{{if .IsPartial}} (in progress){{end}}</a></td>
+                            <td>{{if $.User.HasCapability "reports.view"}}<a class="link" href="{{$.BasePath}}/reports/profit-loss?from={{.StartDate}}&to={{.EndDate}}">{{.Label}}{{if .IsPartial}} (in progress){{end}}</a>{{else}}{{.Label}}{{if .IsPartial}} (in progress){{end}}{{end}}</td>
                             <td class="text-right font-mono">{{formatIDR .Revenue}}</td>
                             <td class="text-right font-mono">{{formatIDR .Expenses}}</td>
                             <td class="text-right font-mono {{if lt .NetIncome 0}}text-error{{end}}">{{formatIDR .NetIncome}}</td>
@@ -103,7 +103,7 @@
                     <thead><tr><th>Period</th><th class="text-right">Closing cash</th><th class="text-right">Net cash movement</th></tr></thead>
                     <tbody>{{range $d.Trends}}
                         <tr>
-                            <td><a class="link" href="{{$.BasePath}}/reports/cash-flow?from={{.StartDate}}&to={{.EndDate}}">{{.Label}}{{if .IsPartial}} (in progress){{end}}</a></td>
+                            <td>{{if $.User.HasCapability "reports.view"}}<a class="link" href="{{$.BasePath}}/reports/cash-flow?from={{.StartDate}}&to={{.EndDate}}">{{.Label}}{{if .IsPartial}} (in progress){{end}}</a>{{else}}{{.Label}}{{if .IsPartial}} (in progress){{end}}{{end}}</td>
                             {{if $d.CashConfigured}}
                             <td class="text-right font-mono {{if isNegative .ClosingCash}}text-error{{end}}">{{formatIDR .ClosingCash}}</td>
                             <td class="text-right font-mono">{{formatIDR .NetCashMovement}}</td>

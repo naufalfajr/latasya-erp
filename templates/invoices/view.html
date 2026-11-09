@@ -11,10 +11,10 @@
     </div>
     <div class="flex gap-2 flex-wrap">
         <a href="{{$.BasePath}}/invoices" class="btn btn-ghost btn-sm">Back</a>
+        {{if .User.HasCapability "invoices.manage"}}
         <a href="{{$.BasePath}}/invoices/{{$inv.ID}}/print" class="btn btn-sm" target="_blank">Print</a>
         <a href="{{$.BasePath}}/invoices/{{$inv.ID}}/pdf" class="btn btn-sm">PDF</a>
-        {{if .User.HasCapability "invoices.manage"}}
-            {{if ne $inv.Status "draft"}}
+        {{if ne $inv.Status "draft"}}
             <a href="{{$.BasePath}}/invoices/{{$inv.ID}}/whatsapp" class="btn btn-success btn-sm" target="_blank" rel="noopener">Kirim via WhatsApp</a>
             {{end}}
             {{if eq $inv.Status "draft"}}

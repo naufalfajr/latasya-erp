@@ -491,12 +491,15 @@ func (h *Handler) Payment(w http.ResponseWriter, r *http.Request) {
 	v1.WriteJSON(w, http.StatusOK, map[string]any{"data": updated})
 }
 
-// PDF handles GET /api/v1/invoices/{id}/pdf. It is read-only and not
-// capability-gated, like the other invoice read endpoints. Note the rendered
-// document embeds company-profile fields (bank account, NPWP) that the JSON
-// endpoints do not return; gate this route before issuing down-scoped tokens
-// (e.g. Telegram bot or third-party MCP).
+// PDF handles GET /api/v1/invoices/{id}/pdf. The rendered document embeds
+// company-profile fields (bank account, NPWP) that the JSON endpoints do not
+// return, so unlike the other invoice read endpoints it is gated behind
+// invoices.manage.
 func (h *Handler) PDF(w http.ResponseWriter, r *http.Request) {
+	if !v1.HasEffectiveCapability(r.Context(), model.CapInvoicesManage) {
+		v1.WriteError(w, r, http.StatusForbidden, v1.CodeForbidden, "invoices.manage capability required", nil)
+		return
+	}
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		v1.WriteError(w, r, http.StatusNotFound, v1.CodeNotFound, "invoice not found", nil)

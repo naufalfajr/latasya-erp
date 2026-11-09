@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/naufal/latasya-erp/internal/account"
+	"github.com/naufal/latasya-erp/internal/auth"
+	"github.com/naufal/latasya-erp/internal/model"
 	"github.com/naufal/latasya-erp/internal/reporting"
 )
 
@@ -132,9 +134,11 @@ func (h *Handler) GeneralLedger(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) RegisterReportingRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /{$}", h.Dashboard)
-	mux.HandleFunc("GET /reports/trial-balance", h.TrialBalance)
-	mux.HandleFunc("GET /reports/profit-loss", h.ProfitLoss)
-	mux.HandleFunc("GET /reports/balance-sheet", h.BalanceSheet)
-	mux.HandleFunc("GET /reports/cash-flow", h.CashFlowReport)
-	mux.HandleFunc("GET /reports/general-ledger", h.GeneralLedger)
+	reports := http.NewServeMux()
+	reports.HandleFunc("GET /reports/trial-balance", h.TrialBalance)
+	reports.HandleFunc("GET /reports/profit-loss", h.ProfitLoss)
+	reports.HandleFunc("GET /reports/balance-sheet", h.BalanceSheet)
+	reports.HandleFunc("GET /reports/cash-flow", h.CashFlowReport)
+	reports.HandleFunc("GET /reports/general-ledger", h.GeneralLedger)
+	mux.Handle("/reports/", auth.RequireCapability(model.CapReportsView)(reports))
 }

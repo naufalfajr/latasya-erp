@@ -2411,6 +2411,9 @@ paths:
     get:
       operationId: getInvoicePDF
       summary: Download an invoice as a PDF document
+      description: The PDF embeds company bank details and NPWP, so this
+        requires the invoices.manage capability, unlike other invoice reads.
+      x-latasya-capability: invoices.manage
       responses:
         '200':
           description: PDF document.
@@ -2421,6 +2424,8 @@ paths:
                 format: binary
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -3014,6 +3019,7 @@ paths:
     get:
       operationId: getTrialBalance
       summary: Trial balance for a date range
+      x-latasya-capability: reports.view
       parameters:
         - name: from
           in: query
@@ -3035,11 +3041,14 @@ paths:
                     $ref: '#/components/schemas/TrialBalanceReport'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   /reports/profit-loss:
     get:
       operationId: getProfitLoss
       summary: Profit and loss report for a date range
+      x-latasya-capability: reports.view
       parameters:
         - name: from
           in: query
@@ -3061,11 +3070,14 @@ paths:
                     $ref: '#/components/schemas/ProfitLossReport'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   /reports/balance-sheet:
     get:
       operationId: getBalanceSheet
       summary: Balance sheet as of a date
+      x-latasya-capability: reports.view
       parameters:
         - name: date
           in: query
@@ -3083,11 +3095,14 @@ paths:
                     $ref: '#/components/schemas/BalanceSheetReport'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   /reports/cash-flow:
     get:
       operationId: getCashFlow
       summary: Cash flow statement for a date range
+      x-latasya-capability: reports.view
       parameters:
         - name: from
           in: query
@@ -3109,11 +3124,14 @@ paths:
                     $ref: '#/components/schemas/CashFlowReport'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   /reports/general-ledger:
     get:
       operationId: getGeneralLedger
       summary: General ledger for a specific account
+      x-latasya-capability: reports.view
       parameters:
         - name: account
           in: query
@@ -3142,6 +3160,8 @@ paths:
           $ref: '#/components/responses/ValidationFailed'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
 

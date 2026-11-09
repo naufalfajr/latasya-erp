@@ -8,6 +8,7 @@ import (
 	"time"
 
 	v1 "github.com/naufal/latasya-erp/internal/api/v1"
+	"github.com/naufal/latasya-erp/internal/model"
 	"github.com/naufal/latasya-erp/internal/reporting"
 )
 
@@ -63,6 +64,10 @@ type trialBalanceResp struct {
 }
 
 func (h *Handler) TrialBalance(w http.ResponseWriter, r *http.Request) {
+	if !v1.HasEffectiveCapability(r.Context(), model.CapReportsView) {
+		v1.WriteError(w, r, http.StatusForbidden, v1.CodeForbidden, "reports.view capability required", nil)
+		return
+	}
 	from, to := getDateRange(r)
 
 	report, err := h.Reporting.TrialBalance(r.Context(), from, to)
@@ -108,6 +113,10 @@ type profitLossResp struct {
 }
 
 func (h *Handler) ProfitLoss(w http.ResponseWriter, r *http.Request) {
+	if !v1.HasEffectiveCapability(r.Context(), model.CapReportsView) {
+		v1.WriteError(w, r, http.StatusForbidden, v1.CodeForbidden, "reports.view capability required", nil)
+		return
+	}
 	from, to := getDateRange(r)
 
 	report, err := h.Reporting.ProfitLoss(r.Context(), from, to)
@@ -178,6 +187,10 @@ func toSectionResp(s reporting.BalanceSheetSection) balanceSheetSectionResp {
 }
 
 func (h *Handler) BalanceSheet(w http.ResponseWriter, r *http.Request) {
+	if !v1.HasEffectiveCapability(r.Context(), model.CapReportsView) {
+		v1.WriteError(w, r, http.StatusForbidden, v1.CodeForbidden, "reports.view capability required", nil)
+		return
+	}
 	asOf := r.URL.Query().Get("date")
 	if asOf == "" {
 		asOf = time.Now().Format("2006-01-02")
@@ -218,6 +231,10 @@ type cashFlowResp struct {
 }
 
 func (h *Handler) CashFlow(w http.ResponseWriter, r *http.Request) {
+	if !v1.HasEffectiveCapability(r.Context(), model.CapReportsView) {
+		v1.WriteError(w, r, http.StatusForbidden, v1.CodeForbidden, "reports.view capability required", nil)
+		return
+	}
 	from, to := getDateRange(r)
 
 	report, err := h.Reporting.CashFlow(r.Context(), from, to)
@@ -273,6 +290,10 @@ type generalLedgerResp struct {
 }
 
 func (h *Handler) GeneralLedger(w http.ResponseWriter, r *http.Request) {
+	if !v1.HasEffectiveCapability(r.Context(), model.CapReportsView) {
+		v1.WriteError(w, r, http.StatusForbidden, v1.CodeForbidden, "reports.view capability required", nil)
+		return
+	}
 	from, to := getDateRange(r)
 	accountIDStr := r.URL.Query().Get("account")
 	accountID, err := strconv.Atoi(accountIDStr)

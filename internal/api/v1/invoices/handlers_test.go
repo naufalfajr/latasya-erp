@@ -856,6 +856,20 @@ func TestInvoicePDF(t *testing.T) {
 		}
 	})
 
+	t.Run("forbidden_without_capability", func(t *testing.T) {
+		viewerID := testutil.CreateTestUser(t, db, "pdf-viewer", "pw", "viewer")
+		_, tok, err := testutil.CreateAPIToken(db, viewerID, "pdf-viewer-tok",
+			[]string{model.CapReportsView}, nil)
+		if err != nil {
+			t.Fatalf("create token: %v", err)
+		}
+		resp := doRequest(t, ts, http.MethodGet, fmt.Sprintf("/api/v1/invoices/%d/pdf", id), tok, nil, nil)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusForbidden {
+			t.Fatalf("status: got %d, want 403 (bank details require invoices.manage)", resp.StatusCode)
+		}
+	})
+
 	t.Run("not_found", func(t *testing.T) {
 		resp := doRequest(t, ts, http.MethodGet, "/api/v1/invoices/999999/pdf", token, nil, nil)
 		defer resp.Body.Close()
