@@ -204,11 +204,11 @@ func TestRegister_DynamicClientRegistration(t *testing.T) {
 		t.Fatalf("register: status=%d body=%s", status, body)
 	}
 	var reg struct {
-		ClientID           string   `json:"client_id"`
-		ClientName         string   `json:"client_name"`
-		RedirectUris       []string `json:"redirect_uris"`
-		TokenEndpointAuth  string   `json:"token_endpoint_auth_method"`
-		GrantTypes         []string `json:"grant_types"`
+		ClientID          string   `json:"client_id"`
+		ClientName        string   `json:"client_name"`
+		RedirectUris      []string `json:"redirect_uris"`
+		TokenEndpointAuth string   `json:"token_endpoint_auth_method"`
+		GrantTypes        []string `json:"grant_types"`
 	}
 	if err := json.Unmarshal([]byte(body), &reg); err != nil {
 		t.Fatal(err)
