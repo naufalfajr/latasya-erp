@@ -20,6 +20,7 @@ import (
 	"github.com/naufal/latasya-erp/internal/googlecalendar"
 	"github.com/naufal/latasya-erp/internal/invoice"
 	"github.com/naufal/latasya-erp/internal/journal"
+	"github.com/naufal/latasya-erp/internal/mcpauth"
 	"github.com/naufal/latasya-erp/internal/model"
 	"github.com/naufal/latasya-erp/internal/reporting"
 	"github.com/naufal/latasya-erp/internal/schoolcalendar"
@@ -45,6 +46,7 @@ type Handler struct {
 	Accounts             *account.Module
 	Access               *access.Module
 	APITokens            *apitoken.Module
+	MCPAuth              *mcpauth.Module
 	Audit                *audit.Module
 	SchoolCalendar       *schoolcalendar.Module
 	Contacts             *contact.Module

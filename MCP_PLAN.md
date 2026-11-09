@@ -526,3 +526,50 @@ working unchanged. Do not build it speculatively.
    dropped `next`, so one wrong password during an MCP handoff dumped the
    user on the dashboard — all four error paths now carry the sanitized
    `Next`, with a test proving `next` survives a failed login.
+
+### Phase 2 — device handoff backend (migration 027, mcpauth, endpoints)
+
+1. **Mint-at-consume, delete-before-mint.** The token exists only in the
+   final poll response; if minting fails the handoff row is already gone, so
+   the user restarts login rather than inheriting half-issued state. A
+   replayed device code after a successful mint starts a *fresh* pending
+   handoff (no re-mint path) — tested at the endpoint level.
+2. **Two independent scope guards at mint time.** Consume re-derives the
+   approver's role capabilities from the DB (LookupUserByIDForAuth), and
+   `apitoken.Create` independently enforces scopes ⊆ current capabilities.
+   A role shrunk in the approve/poll window fails with 403 `scope_changed`.
+   The consent form additionally drops scopes beyond the submitter's current
+   capabilities, so the stored decision is already clean.
+3. **Lazy expiry sweep** on every Touch/Consume/Lookup (`DELETE WHERE
+   expires_at < now`, indexed) — no background goroutine, unlike session
+   cleanup. Rows live ≤ 10 minutes.
+4. **Touch is an idempotent upsert** (`ON CONFLICT(device_code_hash) DO
+   NOTHING`). A device hash arriving with a different user code means the
+   client restarted login: reported as gone (410), the stale row dies at TTL.
+5. **Device endpoint is unauthenticated by design** and rate-limited
+   120/15 min per unspoofable IP with all calls consuming (covers one full
+   10-minute poll cycle; caps junk-row creation). Payload length checks keep
+   junk out of the table; the device code is stored only as SHA-256.
+6. **Consent page sits inside the protected mux** (RegisterMCPRoutes), so it
+   inherits RequireAuth + CSRF + the must-change-password gate. Expiry
+   select: 30/90/never, default 90. Approve and deny are audited
+   (`mcp.handoff.approve`/`deny`); token creation audits via the existing
+   `api_token.create`. Token name `MCP <client≤40> <date>`.
+7. **Spec**: `/mcp/device` added with `x-latasya-auth: public` — the
+   contract-test rule (every mutating op classified) covers it.
+8. **Review round 1 (independent) found 1 must-fix + 1 should-fix + 2
+   nice-to-have, all applied**: (a) the deterministic mint-time token name
+   collided with `api_tokens`' `UNIQUE(user_id, name)` — with soft-only
+   revocation, a same-day re-login (logout→login, renewal, second machine
+   with the same client string) 500'd for the rest of the UTC day; names
+   now carry a 2-byte random suffix (`MCP <client> <date> <hex>`), pinned
+   by a same-day-relogin regression test. (b) my collision fix had
+   accidentally removed Touch's sweep call — restored (the public endpoint
+   cleans up its own junk rows again). (c) client-string truncation is now
+   UTF-8-safe. (d) Deny carries the same expiry predicate as Approve, so a
+   just-expired handoff reports invalid-code instead of a phantom success.
+   The reviewer also verified clean: the user_code-collision path (fixed
+   mid-review, mapped to 410), double-mint impossibility
+   (delete-before-mint + single connection), CSRF on the consent form, and
+   the sweep's string-compare expiry check. Round 2 (self): gofmt/vet/full
+   suite green.

@@ -27,6 +27,7 @@ import (
 	v1income "github.com/naufal/latasya-erp/internal/api/v1/income"
 	v1invoices "github.com/naufal/latasya-erp/internal/api/v1/invoices"
 	v1journals "github.com/naufal/latasya-erp/internal/api/v1/journals"
+	v1mcpauth "github.com/naufal/latasya-erp/internal/api/v1/mcpauth"
 	v1reports "github.com/naufal/latasya-erp/internal/api/v1/reports"
 	v1roles "github.com/naufal/latasya-erp/internal/api/v1/roles"
 	v1schoolcalendar "github.com/naufal/latasya-erp/internal/api/v1/school_calendar"
@@ -44,6 +45,7 @@ import (
 	"github.com/naufal/latasya-erp/internal/idempotency"
 	"github.com/naufal/latasya-erp/internal/invoice"
 	"github.com/naufal/latasya-erp/internal/journal"
+	"github.com/naufal/latasya-erp/internal/mcpauth"
 	"github.com/naufal/latasya-erp/internal/reporting"
 	"github.com/naufal/latasya-erp/internal/schoolcalendar"
 	"github.com/naufal/latasya-erp/internal/tmpl"
@@ -210,6 +212,11 @@ func main() {
 
 	mux.Handle("/api/v1/", v1.BearerOrCookie(db)(v1.BearerRateLimiter()(apiMux)))
 	authAPI.RegisterLoginRoute(mux, v1.LoginRateLimiter())
+
+	// MCP device login: unauthenticated poll endpoint with its own limiter;
+	// the consent page lives inside the protected HTML mux.
+	mcpDeviceAPI := &v1mcpauth.Handler{MCP: mcpauth.New(db)}
+	mux.Handle("POST /api/v1/mcp/device", v1.MCPDeviceLimiter()(http.HandlerFunc(mcpDeviceAPI.DevicePoll)))
 
 	// Public site: company profile at the bare domain, plus the parent
 	// invoice portal. No auth required.

@@ -24,6 +24,12 @@ const (
 	// cannot monopolize the single SQLite writer.
 	bearerRateLimitBucket = 120
 	bearerRateLimitWindow = time.Minute
+
+	// One MCP login polls every 5s for at most 10 minutes = 120 calls. All
+	// calls consume quota: the endpoint is unauthenticated, so the bucket
+	// also caps junk-row creation.
+	mcpDeviceBucketSize = 120
+	mcpDeviceRateWindow = 15 * time.Minute
 )
 
 type bucket struct {
@@ -158,6 +164,16 @@ func BearerRateLimiter() func(http.Handler) http.Handler {
 		},
 		func(w http.ResponseWriter, r *http.Request) {
 			WriteError(w, r, http.StatusTooManyRequests, CodeRateLimited, "rate limit exceeded, slow down", nil)
+		}, false)
+}
+
+// MCPDeviceLimiter throttles the unauthenticated MCP login-poll endpoint per
+// client IP: enough headroom for one full 10-minute handoff, a hard cap on
+// anything faster.
+func MCPDeviceLimiter() func(http.Handler) http.Handler {
+	return newRateLimiter(mcpDeviceBucketSize, mcpDeviceRateWindow, unspoofableClientIP,
+		func(w http.ResponseWriter, r *http.Request) {
+			WriteError(w, r, http.StatusTooManyRequests, CodeRateLimited, "too many login attempts, please try again later", nil)
 		}, false)
 }
 
