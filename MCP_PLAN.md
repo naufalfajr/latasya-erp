@@ -573,3 +573,55 @@ working unchanged. Do not build it speculatively.
    (delete-before-mint + single connection), CSRF on the consent form, and
    the sweep's string-compare expiry check. Round 2 (self): gofmt/vet/full
    suite green.
+
+### Phase 3 — MCP client (cmd/mcp-server, codegen, CI)
+
+1. **Tool types live in `internal/mcptools`** (not the client's main
+   package) so the generator — a separate `package main` — can import them.
+   The generated table is a JSON blob string decoded at init
+   (`mustDecodeTools`), not Go composite literals: immune to syntax drift,
+   single-blob diff review. Bootstrap order matters: a stub table must
+   exist for gen to compile the first time.
+2. **Tool paths are emitted fully qualified** with the spec's server base
+   path (`servers[0].URL` = `/api/v1`), so the dispatcher has no prefix
+   knowledge and a relocated API base changes the spec, not the client.
+   This was a real bug the e2e test caught (404s on every call).
+3. **The generator self-checks both directions**: every excluded operation
+   must be `cookie-only`/`public` in the spec, and every such operation must
+   be in the exclusion list — adding `pollMCPDevice` (public) was forced by
+   the generator itself. At test time, `TestGeneratedToolsCoverTheSpec`
+   asserts the spec ↔ tools ↔ exclusions tri-partition; in CI, a regenerate
+   + `git diff --exit-code` gate catches a stale generated table the moment
+   the spec changes. 77 tools, 8 exclusions.
+4. **Idempotency proven e2e on the income domain**: accounts routes turned
+   out not to be idempotency-wrapped server-side (module-level 409 instead)
+   — the retry test caught that assumption. On income, the deterministic
+   key (sha256 of token‖op‖canonical args, first 16 bytes base64url) replays
+   the stored 2xx verbatim; the test asserts response-body equality.
+5. **`tools/list` filtering is client-side UX** (token scopes from login);
+   the e2e test proves the server rejects a direct call lacking the
+   capability regardless of what the list showed.
+6. **Client safety rails**: serve refuses to send the token over plain HTTP
+   (localhost exempt; `LATASYA_MCP_ALLOW_HTTP=true` escape hatch for dev),
+   error strings are token-redacted, text results truncate at 64 KiB, PDF
+   blobs cap at 2 MiB, response bodies cap at 4 MiB.
+7. **CI `mcp-client` job**: staleness diff + linux-amd64/darwin-arm64 builds
+   + 30-day artifact upload. Makefile: `run-mcp`, `mcp-tools` (regenerate),
+   `mcp-release` (4-platform cross-compile). Nothing MCP-related deploys to
+   the VPS.
+
+8. **Review round 1 (independent) found 1 must-fix + 2 should-fix + 2
+   nice-to-have; two more must-fix-grade bugs were fixed mid-review when the
+   reviewer surfaced them** (unresolved `$ref`s in emitted body schemas —
+   now inlined by `resolveRefs`, 0 remaining; and the string-prefix HTTPS
+   guard admitting `http://127.0.0.1.evil.com` — now `url.Parse` + exact
+   hostname). Applied from the report: (a) `requireHTTPS` extracted and
+   called in login and logout too — the minting flow was the one place the
+   token crossed the wire unguarded; (b) poll body read via
+   `io.ReadAll(LimitReader)` — a single `Read` could truncate a successful
+   approval and lose the single-use token; (c) headless mode works with
+   `LATASYA_MCP_TOKEN` alone, no config file; env-aware logout says which
+   token it revoked; (d) oversized stdin lines get a parse-error response
+   before exit, not a bare EOF; (e) `make clean` removes `dist/`.
+   Round 2 (self): gofmt/vet/full suite green, idempotency e2e still
+   replays verbatim.
