@@ -2,6 +2,8 @@ package handler
 
 import (
 	"net/http"
+	"net/url"
+	"strings"
 
 	"github.com/naufal/latasya-erp/internal/audit"
 	"github.com/naufal/latasya-erp/internal/auth"
@@ -14,7 +16,9 @@ func (h *Handler) LoginPage(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	h.render(w, r, "templates/auth/login.html", "Login", nil)
+	h.render(w, r, "templates/auth/login.html", "Login", map[string]any{
+		"Next": safeMCPReturnTo(r.URL.Query().Get("next"), h.BasePath),
+	})
 }
 
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
@@ -25,6 +29,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		h.render(w, r, "templates/auth/login.html", "Login", map[string]string{
 			"Error":    "Username and password are required",
 			"Username": username,
+			"Next":     safeMCPReturnTo(r.FormValue("next"), h.BasePath),
 		})
 		return
 	}
@@ -40,6 +45,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		h.render(w, r, "templates/auth/login.html", "Login", map[string]string{
 			"Error":    "Invalid username or password",
 			"Username": username,
+			"Next":     safeMCPReturnTo(r.FormValue("next"), h.BasePath),
 		})
 		return
 	}
@@ -54,6 +60,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		h.render(w, r, "templates/auth/login.html", "Login", map[string]string{
 			"Error":    "Invalid username or password",
 			"Username": username,
+			"Next":     safeMCPReturnTo(r.FormValue("next"), h.BasePath),
 		})
 		return
 	}
@@ -69,6 +76,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		h.render(w, r, "templates/auth/login.html", "Login", map[string]string{
 			"Error":    "Account is disabled",
 			"Username": username,
+			"Next":     safeMCPReturnTo(r.FormValue("next"), h.BasePath),
 		})
 		return
 	}
@@ -111,7 +119,36 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, h.BasePath+"/password/change", http.StatusSeeOther)
 		return
 	}
-	http.Redirect(w, r, h.BasePath+"/", http.StatusSeeOther)
+	http.Redirect(w, r, safeMCPReturnTo(r.FormValue("next"), h.BasePath), http.StatusSeeOther)
+}
+
+// safeMCPReturnTo accepts only this app's MCP consent URL, preserving its
+// query (the handoff code). Anything else — other paths, absolute URLs,
+// scheme-relative URLs — falls back to the dashboard, so `next` can never
+// become an open redirect. Modeled on safeJournalReturnTo.
+func safeMCPReturnTo(value, basePath string) string {
+	fallback := strings.TrimSuffix(basePath, "/") + "/"
+	if value == "" || len(value) > 512 || strings.ContainsAny(value, "\\\r\n") {
+		return fallback
+	}
+	parsed, err := url.ParseRequestURI(value)
+	if err != nil || parsed.IsAbs() || parsed.Opaque != "" || parsed.Host != "" || parsed.User != nil ||
+		parsed.Fragment != "" {
+		return fallback
+	}
+	path := parsed.Path
+	withQuery := func(p string) string {
+		if parsed.RawQuery != "" {
+			return p + "?" + parsed.RawQuery
+		}
+		return p
+	}
+	// /oauth/authorize lives unprefixed on the outer mux: only its bare
+	// form is ever valid, in every deployment.
+	if path == "/oauth/authorize" {
+		return withQuery(path)
+	}
+	return fallback
 }
 
 func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {

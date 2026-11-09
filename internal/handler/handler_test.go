@@ -38,6 +38,7 @@ func testServer(t *testing.T, basePath ...string) (*httptest.Server, *sql.DB) {
 
 	protected := http.NewServeMux()
 	h.RegisterProtectedRoutes(protected)
+	h.RegisterOAuthRoutes(mux)
 
 	authChain := auth.RequireAuth(db, access.New(db, nil), auth.CSRFProtect(h.EnforcePasswordChange(protected)))
 	if bp == "" {
@@ -1195,6 +1196,60 @@ func TestReportPages_ViewerCanAccess(t *testing.T) {
 		resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
 			t.Errorf("viewer should access %s, got %d", page, resp.StatusCode)
+		}
+	}
+}
+
+func TestReportPages_WithoutCapability_Forbidden(t *testing.T) {
+	t.Parallel()
+	ts, db := testServer(t)
+
+	if err := testutil.CreateRole(db, &model.Role{
+		Name: "no-reports", Description: "no report access", Capabilities: []string{},
+	}); err != nil {
+		t.Fatalf("create role: %v", err)
+	}
+	hash, _ := auth.HashPassword("pw")
+	db.Exec("INSERT INTO users (username, password, full_name, role) VALUES ('no-reports-user', ?, 'No Reports', 'no-reports')", hash)
+
+	client := &http.Client{CheckRedirect: func(r *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+	resp, err := client.PostForm(ts.URL+"/login", url.Values{"username": {"no-reports-user"}, "password": {"pw"}})
+	if err != nil {
+		t.Fatalf("login: %v", err)
+	}
+	resp.Body.Close()
+	cookies := resp.Cookies()
+
+	for _, page := range []string{"/reports/trial-balance", "/reports/profit-loss", "/reports/general-ledger"} {
+		req, _ := requestWithCookies(db, "GET", ts.URL+page, cookies, "")
+		pageResp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("%s: %v", page, err)
+		}
+		pageResp.Body.Close()
+		if pageResp.StatusCode != http.StatusForbidden {
+			t.Errorf("%s without reports.view: got %d, want 403", page, pageResp.StatusCode)
+		}
+	}
+}
+
+func TestInvoicePDFAndPrint_RequireCapability(t *testing.T) {
+	t.Parallel()
+	ts, db := testServer(t)
+	cookies := loginAsViewer(t, ts, db)
+
+	// The gate runs before the invoice lookup, so any id exercises it.
+	for _, suffix := range []string{"/pdf", "/print"} {
+		req, _ := requestWithCookies(db, "GET", ts.URL+"/invoices/1"+suffix, cookies, "")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("%s: %v", suffix, err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusForbidden {
+			t.Errorf("viewer GET /invoices/1%s: got %d, want 403", suffix, resp.StatusCode)
 		}
 	}
 }

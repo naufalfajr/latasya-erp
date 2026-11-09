@@ -247,6 +247,8 @@ func TestCapabilityEnforcement(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	ts := newTestServer(t, db)
 
+	// The viewer role holds reports.view, but this token's scopes are empty:
+	// the request-time scope∩role intersection must deny it.
 	viewerID := testutil.CreateTestUser(t, db, "viewer-reports", "pw", "viewer")
 	_, noCapTok, err := testutil.CreateAPIToken(db, viewerID, "no-cap-reports", []string{}, nil)
 	if err != nil {
@@ -258,12 +260,25 @@ func TestCapabilityEnforcement(t *testing.T) {
 		"/api/v1/reports/profit-loss",
 		"/api/v1/reports/balance-sheet",
 		"/api/v1/reports/cash-flow",
+		"/api/v1/reports/general-ledger",
 	}
 	for _, ep := range endpoints {
 		resp := doReq(t, ts, http.MethodGet, ep, noCapTok)
 		resp.Body.Close()
-		if resp.StatusCode != http.StatusOK {
-			t.Logf("endpoint %s with viewer token: %d (reports are open to all authenticated users)", ep, resp.StatusCode)
+		if resp.StatusCode != http.StatusForbidden {
+			t.Errorf("%s with empty-scope token: got %d, want 403", ep, resp.StatusCode)
 		}
+	}
+
+	// A token that does carry reports.view passes the gate.
+	_, reportTok, err := testutil.CreateAPIToken(db, viewerID, "report-scope",
+		[]string{model.CapReportsView}, nil)
+	if err != nil {
+		t.Fatalf("create token: %v", err)
+	}
+	resp := doReq(t, ts, http.MethodGet, "/api/v1/reports/trial-balance", reportTok)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("viewer token with reports.view scope: got %d, want 200", resp.StatusCode)
 	}
 }

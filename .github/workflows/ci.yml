@@ -63,3 +63,23 @@ jobs:
 
       - name: Test (race detector)
         run: go test -race -timeout=10m ./...
+
+
+  mcp-tools:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+          cache: true
+
+      # The generated tool table must match the spec; regenerating and
+      # diffing catches a stale tools_gen.go the moment the spec changes.
+      - name: Generated tools are current
+        run: |
+          go run ./cmd/mcp-gen api/openapi.yaml internal/mcptools/tools_gen.go
+          gofmt -w internal/mcptools/tools_gen.go
+          git diff --exit-code -- internal/mcptools/tools_gen.go

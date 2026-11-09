@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/naufal/latasya-erp/internal/auth"
 )
 
 const (
@@ -16,6 +18,12 @@ const (
 	// 1000 codes per name; 5/hour makes a sweep take ~8 days.
 	portalCodeBucketSize = 5
 	portalCodeWindow     = time.Hour
+
+	// Authenticated API traffic per credential. Generous for humans and bots
+	// (2/s sustained, burst 120), small enough that a runaway agent loop
+	// cannot monopolize the single SQLite writer.
+	bearerRateLimitBucket = 120
+	bearerRateLimitWindow = time.Minute
 )
 
 type bucket struct {
@@ -43,9 +51,11 @@ func (b *bucket) allow(size float64, window time.Duration) bool {
 	return false
 }
 
-// newRateLimiter returns a token-bucket middleware keyed by keyFn. Only
-// non-2xx consumes quota, so legitimate callers are never throttled.
-func newRateLimiter(size int, window time.Duration, keyFn func(*http.Request) string, deny http.HandlerFunc) func(http.Handler) http.Handler {
+// newRateLimiter returns a token-bucket middleware keyed by keyFn. When
+// refundOn2xx is set, successful responses give the token back: right for
+// brute-force surfaces (login, portal codes) where only failures should
+// count; throughput caps pass false so every request consumes quota.
+func newRateLimiter(size int, window time.Duration, keyFn func(*http.Request) string, deny http.HandlerFunc, refundOn2xx bool) func(http.Handler) http.Handler {
 	var buckets sync.Map
 	bucketSize := float64(size)
 
@@ -85,7 +95,7 @@ func newRateLimiter(size int, window time.Duration, keyFn func(*http.Request) st
 			rw := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 			next.ServeHTTP(rw, r)
 
-			if rw.status >= 200 && rw.status < 300 {
+			if refundOn2xx && rw.status >= 200 && rw.status < 300 {
 				b.mu.Lock()
 				b.tokens = min(bucketSize, b.tokens+1)
 				b.mu.Unlock()
@@ -119,7 +129,7 @@ func LoginRateLimiter() func(http.Handler) http.Handler {
 		},
 		func(w http.ResponseWriter, r *http.Request) {
 			WriteError(w, r, http.StatusTooManyRequests, CodeRateLimited, "too many login attempts, please try again later", nil)
-		})
+		}, true)
 }
 
 // PortalCodeLimiter throttles guesses at the short portal code, which is
@@ -128,7 +138,27 @@ func PortalCodeLimiter() func(http.Handler) http.Handler {
 	return newRateLimiter(portalCodeBucketSize, portalCodeWindow, unspoofableClientIP,
 		func(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Terlalu banyak percobaan. Coba lagi beberapa saat lagi.", http.StatusTooManyRequests)
-		})
+		}, true)
+}
+
+// BearerRateLimiter caps authenticated /api/v1 traffic per credential
+// (bearer token id, else session user id). Unlike the login limiter, every
+// request consumes quota: this is a throughput cap protecting the single
+// SQLite connection, not a brute-force guard.
+func BearerRateLimiter() func(http.Handler) http.Handler {
+	return newRateLimiter(bearerRateLimitBucket, bearerRateLimitWindow,
+		func(r *http.Request) string {
+			if id := TokenIDFromContext(r.Context()); id != nil {
+				return "t:" + strconv.Itoa(*id)
+			}
+			if user := auth.UserFromContext(r.Context()); user != nil {
+				return "u:" + strconv.Itoa(user.ID)
+			}
+			return unspoofableClientIP(r)
+		},
+		func(w http.ResponseWriter, r *http.Request) {
+			WriteError(w, r, http.StatusTooManyRequests, CodeRateLimited, "rate limit exceeded, slow down", nil)
+		}, false)
 }
 
 type statusRecorder struct {
@@ -139,4 +169,17 @@ type statusRecorder struct {
 func (sr *statusRecorder) WriteHeader(status int) {
 	sr.status = status
 	sr.ResponseWriter.WriteHeader(status)
+}
+
+// OAuthTokenLimiter throttles authorization-code exchanges per client IP.
+// 10/min with all calls consuming: the exchange is a single manual step, so
+// anything faster is code brute-forcing or a throughput attack on the
+// unauthenticated endpoint's DB access.
+func OAuthTokenLimiter() func(http.Handler) http.Handler {
+	return newRateLimiter(10, time.Minute, unspoofableClientIP,
+		func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusTooManyRequests)
+			_, _ = w.Write([]byte(`{"error":"slow_down","error_description":"too many token requests"}`))
+		}, false)
 }

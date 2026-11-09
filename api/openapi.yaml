@@ -1445,6 +1445,7 @@ paths:
     post:
       operationId: createAccount
       summary: Create a new account
+      x-latasya-capability: accounts.manage
       requestBody:
         required: true
         content:
@@ -1494,6 +1495,7 @@ paths:
     put:
       operationId: updateAccount
       summary: Update an account
+      x-latasya-capability: accounts.manage
       parameters:
         - name: id
           in: path
@@ -1527,6 +1529,7 @@ paths:
     delete:
       operationId: deleteAccount
       summary: Delete an account
+      x-latasya-capability: accounts.manage
       parameters:
         - name: id
           in: path
@@ -1548,6 +1551,7 @@ paths:
     get:
       operationId: getOpenAPISpec
       summary: Get OpenAPI specification
+      x-latasya-auth: public
       description: Returns the raw OpenAPI 3.1 YAML specification.
       security: []
       responses:
@@ -1562,6 +1566,7 @@ paths:
     post:
       operationId: login
       summary: Authenticate and create a session
+      x-latasya-auth: public
       security: []
       requestBody:
         required: true
@@ -1604,6 +1609,7 @@ paths:
     post:
       operationId: logout
       summary: Destroy the current session
+      x-latasya-auth: cookie-only
       responses:
         '200':
           description: Logged out.
@@ -1621,6 +1627,7 @@ paths:
     get:
       operationId: getMe
       summary: Get current authenticated user
+      x-latasya-auth: any
       responses:
         '200':
           description: Current user.
@@ -1639,6 +1646,7 @@ paths:
     get:
       operationId: getCSRFToken
       summary: Get CSRF token for cookie-authenticated requests
+      x-latasya-auth: cookie-only
       security:
         - CookieAuth: []
       responses:
@@ -1665,6 +1673,7 @@ paths:
     delete:
       operationId: revokeCurrentToken
       summary: Revoke the bearer token making this request
+      x-latasya-auth: bearer-only
       security:
         - BearerAuth: []
       responses:
@@ -1683,6 +1692,7 @@ paths:
     post:
       operationId: changePassword
       summary: Change the current user's password
+      x-latasya-auth: any
       requestBody:
         required: true
         content:
@@ -1751,6 +1761,7 @@ paths:
     post:
       operationId: createContact
       summary: Create a contact
+      x-latasya-capability: contacts.manage
       requestBody:
         required: true
         content:
@@ -1795,6 +1806,7 @@ paths:
     put:
       operationId: updateContact
       summary: Update a contact
+      x-latasya-capability: contacts.manage
       requestBody:
         required: true
         content:
@@ -1819,6 +1831,7 @@ paths:
     delete:
       operationId: deleteContact
       summary: Delete a contact
+      x-latasya-capability: contacts.manage
       responses:
         '204':
           description: Contact deleted.
@@ -1874,6 +1887,7 @@ paths:
     post:
       operationId: createIncome
       summary: Record a new income entry
+      x-latasya-capability: income.manage
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -1928,6 +1942,7 @@ paths:
     put:
       operationId: updateIncome
       summary: Update an income entry
+      x-latasya-capability: income.manage
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -1957,6 +1972,7 @@ paths:
     delete:
       operationId: deleteIncome
       summary: Delete an income entry
+      x-latasya-capability: income.manage
       responses:
         '204':
           description: Income entry deleted.
@@ -2010,6 +2026,7 @@ paths:
     post:
       operationId: createExpense
       summary: Record a new expense entry
+      x-latasya-capability: expenses.manage
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -2084,6 +2101,7 @@ paths:
     put:
       operationId: updateExpense
       summary: Update an expense entry
+      x-latasya-capability: expenses.manage
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -2113,6 +2131,7 @@ paths:
     delete:
       operationId: deleteExpense
       summary: Delete an expense entry
+      x-latasya-capability: expenses.manage
       responses:
         '204':
           description: Expense entry deleted.
@@ -2165,6 +2184,7 @@ paths:
     post:
       operationId: createJournal
       summary: Create a journal entry
+      x-latasya-capability: journals.manage
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -2219,6 +2239,7 @@ paths:
     put:
       operationId: updateJournal
       summary: Update a manual journal entry
+      x-latasya-capability: journals.manage
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -2250,6 +2271,7 @@ paths:
     delete:
       operationId: deleteJournal
       summary: Delete a manual journal entry
+      x-latasya-capability: journals.manage
       responses:
         '204':
           description: Deleted.
@@ -2297,6 +2319,7 @@ paths:
     post:
       operationId: createInvoice
       summary: Create an invoice (status=draft)
+      x-latasya-capability: invoices.manage
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -2358,6 +2381,7 @@ paths:
     put:
       operationId: updateInvoice
       summary: Update a draft invoice
+      x-latasya-capability: invoices.manage
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -2389,6 +2413,7 @@ paths:
     delete:
       operationId: deleteInvoice
       summary: Delete a draft invoice
+      x-latasya-capability: invoices.manage
       responses:
         '204':
           description: Invoice deleted.
@@ -2411,6 +2436,9 @@ paths:
     get:
       operationId: getInvoicePDF
       summary: Download an invoice as a PDF document
+      description: The PDF embeds company bank details and NPWP, so this
+        requires the invoices.manage capability, unlike other invoice reads.
+      x-latasya-capability: invoices.manage
       responses:
         '200':
           description: PDF document.
@@ -2421,6 +2449,8 @@ paths:
                 format: binary
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -2435,6 +2465,7 @@ paths:
     post:
       operationId: sendInvoice
       summary: Send an invoice (creates AR journal entry, status=sent)
+      x-latasya-capability: invoices.manage
       responses:
         '200':
           description: Invoice sent.
@@ -2465,6 +2496,7 @@ paths:
     post:
       operationId: recordInvoicePayment
       summary: Record a payment against an invoice
+      x-latasya-capability: invoices.manage
       requestBody:
         required: true
         content:
@@ -2498,6 +2530,7 @@ paths:
     post:
       operationId: generateRecurringInvoices
       summary: Generate draft invoices for all active customers
+      x-latasya-capability: invoices.manage
       description: |
         Creates a draft invoice for every active customer from the current
         contact pricing formula, adjusted by the local school calendar multiplier
@@ -2527,6 +2560,7 @@ paths:
     post:
       operationId: bulkDeleteInvoices
       summary: Bulk-delete draft invoices
+      x-latasya-capability: invoices.manage
       description: |
         Deletes the draft invoices among the provided IDs. IDs that are unknown
         or not in draft status are skipped and returned. Requires invoices.manage.
@@ -2584,6 +2618,7 @@ paths:
     post:
       operationId: bulkSendInvoices
       summary: Bulk-send draft invoices
+      x-latasya-capability: invoices.manage
       description: |
         Marks the draft invoices among the provided IDs as sent, posting each
         one's AR journal entry. IDs that are unknown or not in draft status are
@@ -2688,6 +2723,7 @@ paths:
     post:
       operationId: createBill
       summary: Create a bill
+      x-latasya-capability: bills.manage
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -2734,6 +2770,7 @@ paths:
     put:
       operationId: updateBill
       summary: Update a draft bill
+      x-latasya-capability: bills.manage
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -2762,6 +2799,7 @@ paths:
     delete:
       operationId: deleteBill
       summary: Delete a draft bill
+      x-latasya-capability: bills.manage
       responses:
         '204':
           description: Bill deleted.
@@ -2785,6 +2823,7 @@ paths:
     post:
       operationId: receiveBill
       summary: Receive a bill (creates AP journal entry, status=received)
+      x-latasya-capability: bills.manage
       responses:
         '200':
           description: Bill received.
@@ -2812,6 +2851,7 @@ paths:
     post:
       operationId: recordBillPayment
       summary: Record a payment against a bill
+      x-latasya-capability: bills.manage
       requestBody:
         required: true
         content:
@@ -2871,6 +2911,7 @@ paths:
     post:
       operationId: createCreditNote
       summary: Create a credit note
+      x-latasya-capability: invoices.manage
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -2917,6 +2958,7 @@ paths:
     put:
       operationId: updateCreditNote
       summary: Update a draft credit note
+      x-latasya-capability: invoices.manage
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -2945,6 +2987,7 @@ paths:
     delete:
       operationId: deleteCreditNote
       summary: Delete a draft credit note
+      x-latasya-capability: invoices.manage
       responses:
         '204':
           description: Credit note deleted.
@@ -2968,6 +3011,7 @@ paths:
     post:
       operationId: issueCreditNote
       summary: Issue a credit note (posts journal entry, status=issued)
+      x-latasya-capability: invoices.manage
       responses:
         '200':
           description: Credit note issued.
@@ -2995,6 +3039,7 @@ paths:
     post:
       operationId: voidCreditNote
       summary: Void an issued credit note (posts reversing journal, status=void)
+      x-latasya-capability: invoices.manage
       responses:
         '200':
           description: Credit note voided.
@@ -3014,6 +3059,7 @@ paths:
     get:
       operationId: getTrialBalance
       summary: Trial balance for a date range
+      x-latasya-capability: reports.view
       parameters:
         - name: from
           in: query
@@ -3035,11 +3081,14 @@ paths:
                     $ref: '#/components/schemas/TrialBalanceReport'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   /reports/profit-loss:
     get:
       operationId: getProfitLoss
       summary: Profit and loss report for a date range
+      x-latasya-capability: reports.view
       parameters:
         - name: from
           in: query
@@ -3061,11 +3110,14 @@ paths:
                     $ref: '#/components/schemas/ProfitLossReport'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   /reports/balance-sheet:
     get:
       operationId: getBalanceSheet
       summary: Balance sheet as of a date
+      x-latasya-capability: reports.view
       parameters:
         - name: date
           in: query
@@ -3083,11 +3135,14 @@ paths:
                     $ref: '#/components/schemas/BalanceSheetReport'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   /reports/cash-flow:
     get:
       operationId: getCashFlow
       summary: Cash flow statement for a date range
+      x-latasya-capability: reports.view
       parameters:
         - name: from
           in: query
@@ -3109,11 +3164,14 @@ paths:
                     $ref: '#/components/schemas/CashFlowReport'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   /reports/general-ledger:
     get:
       operationId: getGeneralLedger
       summary: General ledger for a specific account
+      x-latasya-capability: reports.view
       parameters:
         - name: account
           in: query
@@ -3142,6 +3200,8 @@ paths:
           $ref: '#/components/responses/ValidationFailed'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -3149,6 +3209,7 @@ paths:
     get:
       operationId: listUsers
       summary: List all users
+      x-latasya-capability: users.manage
       description: Requires users.manage.
       parameters:
         - $ref: '#/components/parameters/PageParam'
@@ -3174,6 +3235,7 @@ paths:
     post:
       operationId: createUser
       summary: Create a user
+      x-latasya-capability: users.manage
       description: |
         Requires users.manage. Callers that are not admins, including every
         bearer token, may only assign non-admin roles within their own
@@ -3207,6 +3269,7 @@ paths:
     get:
       operationId: getUser
       summary: Get a single user
+      x-latasya-capability: users.manage
       description: Requires users.manage.
       parameters:
         - name: id
@@ -3233,6 +3296,7 @@ paths:
     put:
       operationId: updateUser
       summary: Update a user
+      x-latasya-capability: users.manage
       description: |
         Requires users.manage. Callers that are not admins, including every
         bearer token, get 403 for users whose role exceeds their own
@@ -3272,6 +3336,7 @@ paths:
     delete:
       operationId: deleteUser
       summary: Deactivate a user (cannot deactivate self)
+      x-latasya-capability: users.manage
       description: |
         Requires users.manage. Callers that are not admins, including every
         bearer token, get 403 for users whose role exceeds their own
@@ -3298,6 +3363,7 @@ paths:
     get:
       operationId: listRoles
       summary: List all roles (admin-only)
+      x-latasya-capability: roles.manage
       parameters:
         - $ref: '#/components/parameters/PageParam'
         - $ref: '#/components/parameters/PerPageParam'
@@ -3322,6 +3388,7 @@ paths:
     post:
       operationId: createRole
       summary: Create a role (admin-only)
+      x-latasya-capability: roles.manage
       requestBody:
         required: true
         content:
@@ -3349,6 +3416,7 @@ paths:
     get:
       operationId: listCapabilities
       summary: List all available capability strings
+      x-latasya-auth: public
       security: []
       responses:
         '200':
@@ -3367,6 +3435,7 @@ paths:
     get:
       operationId: getRole
       summary: Get a single role (admin-only)
+      x-latasya-capability: roles.manage
       parameters:
         - name: name
           in: path
@@ -3392,6 +3461,7 @@ paths:
     put:
       operationId: updateRole
       summary: Update a role (admin-only; cannot edit admin role)
+      x-latasya-capability: roles.manage
       parameters:
         - name: name
           in: path
@@ -3427,6 +3497,7 @@ paths:
     delete:
       operationId: deleteRole
       summary: Delete a role (admin-only; cannot delete admin role or roles with assigned users)
+      x-latasya-capability: roles.manage
       parameters:
         - name: name
           in: path
@@ -3449,6 +3520,7 @@ paths:
     get:
       operationId: listAuditLog
       summary: Paginated audit log (admin-only)
+      x-latasya-capability: audit.view
       parameters:
         - name: actor
           in: query
@@ -3491,6 +3563,7 @@ paths:
     get:
       operationId: listSchoolClosures
       summary: List school closures
+      x-latasya-capability: invoices.manage
       description: Requires the effective `invoices.manage` capability.
       parameters:
         - name: month
@@ -3521,6 +3594,7 @@ paths:
     post:
       operationId: createSchoolClosure
       summary: Create a manual school closure
+      x-latasya-capability: invoices.manage
       description: Requires the effective `invoices.manage` capability. Source is always `manual`.
       requestBody:
         required: true
@@ -3549,6 +3623,7 @@ paths:
     delete:
       operationId: deleteSchoolClosure
       summary: Delete a school closure
+      x-latasya-capability: invoices.manage
       description: Requires the effective `invoices.manage` capability.
       parameters:
         - name: id
@@ -3570,6 +3645,7 @@ paths:
     get:
       operationId: getEffectiveSchoolDays
       summary: Preview effective school days and invoice multiplier
+      x-latasya-capability: invoices.manage
       description: Requires the effective `invoices.manage` capability.
       parameters:
         - name: month
@@ -3599,6 +3675,7 @@ paths:
     post:
       operationId: syncGoogleCalendar
       summary: Sync school closures from Google Calendar
+      x-latasya-capability: invoices.manage
       description: Requires an admin user and the effective `invoices.manage` capability. Does not expose OAuth secrets.
       responses:
         '200':
@@ -3665,6 +3742,7 @@ paths:
     post:
       operationId: createAPIToken
       summary: Create a new API token (cookie auth only)
+      x-latasya-auth: cookie-only
       description: |
         Creates a scoped Bearer token for bot/MCP/Telegram integrations.
         The plaintext token is returned ONCE in this response only.
@@ -3695,6 +3773,7 @@ paths:
     delete:
       operationId: revokeAPIToken
       summary: Revoke an API token (cookie auth only)
+      x-latasya-auth: cookie-only
       parameters:
         - name: id
           in: path

@@ -20,12 +20,13 @@
     <li><a href="{{$.BasePath}}/bills" class="{{if eq .Path "/bills"}}active{{end}}">Bills</a></li>
     <li><a href="{{$.BasePath}}/contacts" class="{{if eq .Path "/contacts"}}active{{end}}">Contacts</a></li>
 
-    <li class="menu-title mt-4"><span>Reports</span></li>
+    {{if .User.HasCapability "reports.view"}}<li class="menu-title mt-4"><span>Reports</span></li>
     <li><a href="{{$.BasePath}}/reports/profit-loss" class="{{if eq .Path "/reports/profit-loss"}}active{{end}}">Profit & Loss</a></li>
     <li><a href="{{$.BasePath}}/reports/balance-sheet" class="{{if eq .Path "/reports/balance-sheet"}}active{{end}}">Balance Sheet</a></li>
     <li><a href="{{$.BasePath}}/reports/cash-flow" class="{{if eq .Path "/reports/cash-flow"}}active{{end}}">Cash Flow</a></li>
     <li><a href="{{$.BasePath}}/reports/trial-balance" class="{{if eq .Path "/reports/trial-balance"}}active{{end}}">Trial Balance</a></li>
     <li><a href="{{$.BasePath}}/reports/general-ledger" class="{{if eq .Path "/reports/general-ledger"}}active{{end}}">General Ledger</a></li>
+    {{end}}
 
     <li class="menu-title mt-4"><span>Settings</span></li>
     <li><a href="{{$.BasePath}}/accounts" class="{{if eq .Path "/accounts"}}active{{end}}">Chart of Accounts</a></li>

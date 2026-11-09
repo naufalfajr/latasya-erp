@@ -1,4 +1,4 @@
-.PHONY: dev run run-bot build build-linux css css-watch clean test
+.PHONY: dev run run-bot mcp-tools build build-linux css css-watch clean test
 
 # Tailwind standalone CLI
 TAILWIND := ./bin/tailwindcss
@@ -41,6 +41,11 @@ run:
 run-bot:
 	go run ./cmd/telegram-bot
 
+# Regenerate the MCP tool table from the OpenAPI spec
+mcp-tools:
+	go run ./cmd/mcp-gen api/openapi.yaml internal/mcptools/tools_gen.go
+	gofmt -w internal/mcptools/tools_gen.go
+
 # Build identity, surfaced at /healthz. CI overrides with the commit SHA;
 # local builds stay "dev".
 VERSION ?= dev
@@ -63,4 +68,3 @@ test:
 clean:
 	rm -f latasya-erp
 	rm -f static/css/app.css
-	rm -rf bin/

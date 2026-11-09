@@ -25,8 +25,8 @@ func (h *Handler) RegisterInvoiceRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /invoices/{id}", manage(h.DeleteInvoice))
 	mux.HandleFunc("POST /invoices/{id}/send", manage(h.SendInvoice))
 	mux.HandleFunc("POST /invoices/{id}/payment", manage(h.InvoicePayment))
-	mux.HandleFunc("GET /invoices/{id}/print", h.PrintInvoice)
-	mux.HandleFunc("GET /invoices/{id}/pdf", h.InvoicePDF)
+	mux.HandleFunc("GET /invoices/{id}/print", manage(h.PrintInvoice))
+	mux.HandleFunc("GET /invoices/{id}/pdf", manage(h.InvoicePDF))
 	mux.HandleFunc("GET /invoices/{id}/whatsapp", manage(h.InvoiceWhatsApp))
 	mux.HandleFunc("GET /htmx/invoice-line", h.InvoiceLinePartial)
 }
