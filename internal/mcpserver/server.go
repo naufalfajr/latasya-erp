@@ -11,7 +11,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strings"
 
 	v1 "github.com/naufal/latasya-erp/internal/api/v1"
@@ -174,7 +176,7 @@ func (s *Server) toolsCall(r *http.Request, params json.RawMessage) (any, *jsonr
 	// A capability the caller lacks is indistinguishable from an unknown
 	// tool: no probing oracle.
 	caps := v1.EffectiveCapabilitiesFromContext(r.Context())
-	if tool == nil || (tool.Capability != "" && !hasCapability(caps, tool.Capability)) {
+	if tool == nil || (tool.Capability != "" && !slices.Contains(caps, tool.Capability)) {
 		return nil, &jsonrpcError{codeInvalidParams, fmt.Sprintf("unknown tool %q — see tools/list", p.Name)}
 	}
 
@@ -209,7 +211,7 @@ func (s *Server) toolsCall(r *http.Request, params json.RawMessage) (any, *jsonr
 		replay.Header.Set("Idempotency-Key", key)
 	}
 
-	rec := newCaptureRecorder()
+	rec := httptest.NewRecorder()
 	s.API.ServeHTTP(rec, replay)
 
 	if rec.Code >= 200 && rec.Code < 300 {
@@ -219,15 +221,6 @@ func (s *Server) toolsCall(r *http.Request, params json.RawMessage) (any, *jsonr
 		return mcptools.TextResult(rec.Body.Bytes()), nil
 	}
 	return mcptools.ErrorResult(fmt.Sprintf("erp api %d: %s", rec.Code, strings.TrimSpace(rec.Body.String()))), nil
-}
-
-func hasCapability(caps []string, want string) bool {
-	for _, c := range caps {
-		if c == want {
-			return true
-		}
-	}
-	return false
 }
 
 func tokenIDFrom(r *http.Request) int {
@@ -251,27 +244,4 @@ func sameHost(origin, host string) bool {
 		return false
 	}
 	return u.Host == host
-}
-
-// captureRecorder is an http.ResponseWriter that never needs Flusher or
-// Hijacker — the /api/v1 tree uses none.
-type captureRecorder struct {
-	HeaderMap http.Header
-	Code      int
-	Body      bytes.Buffer
-}
-
-func newCaptureRecorder() *captureRecorder { return &captureRecorder{HeaderMap: make(http.Header)} }
-
-func (c *captureRecorder) Header() http.Header { return c.HeaderMap }
-func (c *captureRecorder) WriteHeader(code int) {
-	if c.Code == 0 {
-		c.Code = code
-	}
-}
-func (c *captureRecorder) Write(b []byte) (int, error) {
-	if c.Code == 0 {
-		c.Code = http.StatusOK
-	}
-	return c.Body.Write(b)
 }
