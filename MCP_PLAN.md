@@ -469,3 +469,60 @@ working unchanged. Do not build it speculatively.
    403-before-404 ordering, operation-level spec annotations, no other
    bank-detail surface (company profile is admin-only; portal PDF is
    intentionally code-gated public), and no resource/audit changes.
+
+### Phase 1 — API hardening (extensions, rate limit, headers, login next)
+
+1. **`newRateLimiter` gained a `refundOn2xx` parameter.** Login and portal
+   limiters keep refunding successful responses (brute-force surfaces where
+   only failures should count). `BearerRateLimiter` passes false: it is a
+   throughput cap protecting the single SQLite writer, so every request
+   consumes quota — a loop of *successful* requests is exactly what it must
+   stop.
+2. **`BearerRateLimiter`: 120/min per credential** (bearer → token id,
+   cookie → user id, fallback `unspoofableClientIP`), wired inside
+   `BearerOrCookie` in `cmd/server/main.go` so the auth context is populated
+   when the key function runs. 2/s sustained with 120-burst is far above
+   human/bot menu-cadence and far below what could starve the writer.
+3. **`SecurityHeaders` lives in `internal/handler`** (app-wide, not
+   API-only). CSP keeps `'unsafe-inline'` for scripts and styles — a dozen
+   HTMX templates embed inline blocks (upgrade path: nonces when templates
+   consolidate) — but blocks external loads, outbound `connect-src`,
+   framing, and cross-origin form posts. `fonts.googleapis.com` is
+   allowlisted for the public home page. HSTS only outside dev mode;
+   `Cache-Control: no-store` on `/api/v1/*`; never overrides headers an
+   inner handler already set (portal keeps `private, no-store`).
+4. **Login `next` is tightly allowlisted** (`safeMCPReturnTo`): only the MCP
+   consent path (with or without `BasePath`), query preserved; everything
+   else — absolute URLs, `//host`, other app paths, prefix tricks — falls
+   back to the dashboard. Percent-encoded values are decoded by `FormValue`
+   *before* validation, so `/mcp%2fauthorize` simply validates as its
+   decoded, allowlisted self — safe. `must_change_password` rotation outranks
+   `next`. The login page reflects only the sanitized value into the hidden
+   field.
+5. **Spec vocabulary**: `x-latasya-capability` (one of the 11 capabilities)
+   and `x-latasya-auth` ∈ {public, any, cookie-only, bearer-only}. 59
+   annotations in this phase (65 total with Phase 0's six). The contract
+   test now asserts unique operationIds, valid values, and that every
+   mutating operation is classified — no endpoint can ship silently
+   un-gated. `syncGoogleCalendar` carries
+   `invoices.manage` even though it is admin-only; the admin-only nuance
+   stays in its description (the extension vocabulary encodes capabilities,
+   and the server enforces the admin check regardless).
+6. **Spec endpoint made actually public.** `GET /api/v1/openapi.yaml` was
+   registered inside the auth-wrapped `apiMux` (unauthenticated → 401) while
+   the spec itself declares `security: []`. Moved to the outer mux, where the
+   more specific Go 1.22 pattern wins over the `/api/v1/` subtree — behavior,
+   `security: []`, and the new `public` marker now agree. No limiter wraps
+   it: it is an embedded-FS read with no DB access.
+7. **Review round 1 (independent) found 2 must-fix + 2 should-fix, all
+   applied**: (a) the `/api/v1/` mount line lost its leading tab — CI's
+   gofmt gate would fail; restored. (b) CSP lacked `'unsafe-eval'`, which
+   htmx needs for the journal form's `hx-vals="js:…"` (Function
+   constructor) — without it the Add-Line button breaks in every browser;
+   directive added with the reason documented in code and pinned by test.
+   (c) `listCapabilities` was annotated `public` while sitting behind
+   `BearerOrCookie` — same outer-mux treatment as the spec endpoint, so
+   `security: []`, behavior, and marker agree. (d) failed-login re-renders
+   dropped `next`, so one wrong password during an MCP handoff dumped the
+   user on the dashboard — all four error paths now carry the sanitized
+   `Next`, with a test proving `next` survives a failed login.

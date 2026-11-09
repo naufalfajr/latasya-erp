@@ -146,7 +146,10 @@ func main() {
 	// API v1 mux: BearerOrCookie auth, no CSRF on Bearer path.
 	// Wave 2 tasks register domain endpoints on apiMux.
 	apiMux := http.NewServeMux()
-	apiMux.HandleFunc("GET /api/v1/openapi.yaml", v1.ServeOpenAPI)
+
+	// The spec is public (security: []) and served from the outer mux so the
+	// bearer/cookie auth wrapper below cannot 401 it.
+	mux.HandleFunc("GET /api/v1/openapi.yaml", v1.ServeOpenAPI)
 
 	// Auth API (T11). Login is unauthenticated and lives on the outer mux so
 	// it bypasses BearerOrCookie; the rest are wired through apiMux so they
@@ -192,6 +195,10 @@ func main() {
 	rolesAPI := &v1roles.Handler{Access: accessModule}
 	rolesAPI.RegisterRoutes(apiMux)
 
+	// Same public-meta treatment as the spec: the capability list is static
+	// (security: []) and must not sit behind BearerOrCookie.
+	mux.HandleFunc("GET /api/v1/roles/capabilities", rolesAPI.Capabilities)
+
 	auditAPI := &v1audit.Handler{Audit: auditModule}
 	auditAPI.RegisterRoutes(apiMux)
 
@@ -201,7 +208,7 @@ func main() {
 	schoolCalendarAPI := &v1schoolcalendar.Handler{Calendar: schoolCalendarModule, GoogleCalendarConfig: h.GoogleCalendarConfig}
 	schoolCalendarAPI.RegisterRoutes(apiMux)
 
-	mux.Handle("/api/v1/", v1.BearerOrCookie(db)(apiMux))
+	mux.Handle("/api/v1/", v1.BearerOrCookie(db)(v1.BearerRateLimiter()(apiMux)))
 	authAPI.RegisterLoginRoute(mux, v1.LoginRateLimiter())
 
 	// Public site: company profile at the bare domain, plus the parent
@@ -228,7 +235,7 @@ func main() {
 	// still get a request_id and client IP attached.
 	srv := &http.Server{
 		Addr:         ":" + port,
-		Handler:      audit.RequestContext(mux),
+		Handler:      audit.RequestContext(handler.SecurityHeaders(devMode)(mux)),
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  60 * time.Second,
