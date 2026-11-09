@@ -12,7 +12,7 @@ DAISYUI_VERSION := v5.6.18
 $(TAILWIND):
 	@mkdir -p bin
 	@echo "Downloading Tailwind CSS standalone CLI..."
-	@curl -sL https://github.com/tailwindlabs/tailwindcss/releases/download/$(TAILWIND_VERSION)/tailwindcss-macos-arm64 -o $(TAILWIND)
+	@curl -fsSL --retry 3 https://github.com/tailwindlabs/tailwindcss/releases/download/$(TAILWIND_VERSION)/tailwindcss-macos-arm64 -o $(TAILWIND)
 	@chmod +x $(TAILWIND)
 
 $(DAISYUI):
@@ -23,7 +23,7 @@ $(DAISYUI):
 $(DAISYUI_THEME):
 	@mkdir -p bin
 	@echo "Downloading daisyUI theme plugin..."
-	@curl -sL https://github.com/saadeghi/daisyui/releases/download/$(DAISYUI_VERSION)/daisyui-theme.mjs -o $(DAISYUI_THEME)
+	@curl -fsSL --retry 3 https://github.com/saadeghi/daisyui/releases/download/$(DAISYUI_VERSION)/daisyui-theme.mjs -o $(DAISYUI_THEME)
 
 # Build CSS
 css: $(TAILWIND) $(DAISYUI) $(DAISYUI_THEME)

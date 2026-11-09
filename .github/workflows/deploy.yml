@@ -31,10 +31,21 @@ jobs:
           DAISYUI_VERSION: v5.6.18
         run: |
           mkdir -p bin
-          curl -sL https://github.com/tailwindlabs/tailwindcss/releases/download/${TAILWIND_VERSION}/tailwindcss-linux-x64 -o bin/tailwindcss
+          # -f fails on HTTP errors (a 4xx/5xx body must never be saved as
+          # the binary), retries ride out CDN hiccups, and the magic check
+          # refuses a truncated file before it becomes a confusing crash.
+          curl -fsSL --retry 3 --retry-delay 2 \
+            https://github.com/tailwindlabs/tailwindcss/releases/download/${TAILWIND_VERSION}/tailwindcss-linux-x64 \
+            -o bin/tailwindcss
+          head -c4 bin/tailwindcss | grep -q $'\x7fELF'
           chmod +x bin/tailwindcss
-          curl -sL https://github.com/saadeghi/daisyui/releases/download/${DAISYUI_VERSION}/daisyui.mjs -o bin/daisyui.mjs
-          curl -sL https://github.com/saadeghi/daisyui/releases/download/${DAISYUI_VERSION}/daisyui-theme.mjs -o bin/daisyui-theme.mjs
+          curl -fsSL --retry 3 --retry-delay 2 \
+            https://github.com/saadeghi/daisyui/releases/download/${DAISYUI_VERSION}/daisyui.mjs \
+            -o bin/daisyui.mjs
+          curl -fsSL --retry 3 --retry-delay 2 \
+            https://github.com/saadeghi/daisyui/releases/download/${DAISYUI_VERSION}/daisyui-theme.mjs \
+            -o bin/daisyui-theme.mjs
+          test -s bin/daisyui.mjs && test -s bin/daisyui-theme.mjs
 
       - name: Build CSS
         run: ./bin/tailwindcss -i static/css/input.css -o static/css/app.css --minify
