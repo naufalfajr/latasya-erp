@@ -37,7 +37,7 @@ type apiErr struct {
 }
 
 func (e *apiErr) Error() string {
-	if e.Fields != nil && len(e.Fields) > 0 {
+	if len(e.Fields) > 0 {
 		return fmt.Sprintf("erp api %d %s: %s (fields: %v)", e.Status, e.Code, e.Message, e.Fields)
 	}
 	return fmt.Sprintf("erp api %d %s: %s", e.Status, e.Code, e.Message)
