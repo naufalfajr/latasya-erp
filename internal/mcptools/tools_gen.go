@@ -10,7 +10,6 @@ var ExcludedOperations = map[string]string{
 	"listCapabilities": "public meta, no ERP data",
 	"login":            "cookie-session semantics; passwords never enter LLM context",
 	"logout":           "cookie-session semantics",
-	"pollMCPDevice":    "unauthenticated device-login poll; not an ERP data operation",
 	"revokeAPIToken":   "server rejects bearer callers",
 }
 

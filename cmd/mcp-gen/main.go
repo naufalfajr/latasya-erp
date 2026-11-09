@@ -28,7 +28,6 @@ var excludedReasons = map[string]string{
 	"listCapabilities": "public meta, no ERP data",
 	"createAPIToken":   "server rejects bearer callers; a token must never spawn a token",
 	"revokeAPIToken":   "server rejects bearer callers",
-	"pollMCPDevice":    "unauthenticated device-login poll; not an ERP data operation",
 }
 
 const wireNotes = `Wire formats: amounts are integer IDR strings ("50000"); quantities decimal strings with up to 2 places ("1.50"); dates "YYYY-MM-DD"; timestamps ISO-8601 UTC; lists return {"data":[...],"meta":{"page",...}}.`

@@ -54,6 +54,12 @@ user's browser ────► GET/POST /dashboard/mcp/authorize?code=AB2C-D3F4
 token minted at poll time via apitoken.Module.Create, returned once to the binary
 ```
 
+
+> **Superseded by §10 Phase 6:** the stdio client and the device-login
+> handoff diagrammed above (and detailed in §4, §5, parts of §7) were
+> removed before merge — the remote `/mcp` transport (§8) is the shipped
+> architecture.
+
 Why this shape (compared against two alternatives that were fully designed):
 
 | | A. Local stdio (chosen) | B. Embedded `/mcp` + 3 meta-tools | C. Embedded `/mcp` + 80 tools + OAuth 2.1 AS |
