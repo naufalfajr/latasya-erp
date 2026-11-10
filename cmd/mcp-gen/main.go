@@ -65,7 +65,7 @@ func main() {
 			if auth := extString(op.Extensions, "x-latasya-auth"); auth == "cookie-only" || auth == "public" {
 				log.Fatalf("%s is %s in the spec but missing from gen's exclusion list — classify it", name, auth)
 			}
-			defs = append(defs, buildTool(doc, method, apiPrefix+path, op))
+			defs = append(defs, buildTool(doc, method, apiPrefix+path, item, op))
 		}
 	}
 	sort.Slice(defs, func(i, j int) bool { return defs[i].Name < defs[j].Name })
@@ -108,7 +108,7 @@ func assertClassified(name string, op *openapi3.Operation) {
 	}
 }
 
-func buildTool(doc *openapi3.T, method, path string, op *openapi3.Operation) mcptools.ToolDef {
+func buildTool(doc *openapi3.T, method, path string, item *openapi3.PathItem, op *openapi3.Operation) mcptools.ToolDef {
 	var t mcptools.ToolDef
 	t.Name = op.OperationID
 	t.Method = method
@@ -134,7 +134,24 @@ func buildTool(doc *openapi3.T, method, path string, op *openapi3.Operation) mcp
 		}
 	}
 
-	for _, p := range op.Parameters {
+	// Path-item parameters (every /{id} route) apply to all operations, but
+	// kin-openapi keeps them off op.Parameters; merge, operation-level winning on name+in.
+	merged := make([]*openapi3.ParameterRef, 0, len(item.Parameters)+len(op.Parameters))
+	for _, pp := range item.Parameters {
+		shadowed := false
+		for _, q := range op.Parameters {
+			if pp.Value != nil && q.Value != nil &&
+				q.Value.Name == pp.Value.Name && q.Value.In == pp.Value.In {
+				shadowed = true
+				break
+			}
+		}
+		if !shadowed {
+			merged = append(merged, pp)
+		}
+	}
+	merged = append(merged, op.Parameters...)
+	for _, p := range merged {
 		if p.Value == nil {
 			continue
 		}
