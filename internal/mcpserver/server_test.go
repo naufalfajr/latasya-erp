@@ -15,7 +15,9 @@ import (
 	v1accounts "github.com/naufal/latasya-erp/internal/api/v1/accounts"
 	v1auth "github.com/naufal/latasya-erp/internal/api/v1/auth"
 	v1income "github.com/naufal/latasya-erp/internal/api/v1/income"
+	v1invoices "github.com/naufal/latasya-erp/internal/api/v1/invoices"
 	"github.com/naufal/latasya-erp/internal/idempotency"
+	invoiceModule "github.com/naufal/latasya-erp/internal/invoice"
 	"github.com/naufal/latasya-erp/internal/journal"
 	"github.com/naufal/latasya-erp/internal/mcpserver"
 	"github.com/naufal/latasya-erp/internal/model"
@@ -33,6 +35,7 @@ func newStack(t *testing.T, scopes []string) (*httptest.Server, *sql.DB, string)
 	apiMux := http.NewServeMux()
 	v1auth.New(db, true).RegisterRoutes(apiMux)
 	(&v1accounts.Handler{Accounts: account.New(db)}).RegisterRoutes(apiMux)
+	(&v1invoices.Handler{Invoices: invoiceModule.New(db)}).RegisterRoutes(apiMux, idem)
 	(&v1income.Handler{Journals: journal.New(db)}).RegisterRoutes(apiMux, idem)
 
 	srv := &mcpserver.Server{API: apiMux}
@@ -194,6 +197,64 @@ func TestMCP_ToolsCall_ReplaysThroughAPIWithIdempotency(t *testing.T) {
 	if len(firstResp.Result.Content) == 0 || len(retryResp.Result.Content) == 0 ||
 		firstResp.Result.Content[0].Text != retryResp.Result.Content[0].Text {
 		t.Fatalf("identical call did not replay:\nfirst=%s\nretry=%s", first, retry)
+	}
+}
+
+// TestMCP_ToolsCall_PathParamReachesAPI exercises a tool whose record id is a
+// path parameter: the id must be substituted into the replayed URL.
+func TestMCP_ToolsCall_PathParamReachesAPI(t *testing.T) {
+	ts, db, token := newStack(t, nil)
+
+	var contactID, adminID int
+	if err := db.QueryRow(`INSERT INTO contacts (name, contact_type) VALUES ('Arsyila Nisfa Nur Meysha', 'customer') RETURNING id`).Scan(&contactID); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow("SELECT id FROM users WHERE username='admin'").Scan(&adminID); err != nil {
+		t.Fatal(err)
+	}
+	res, err := db.Exec(`INSERT INTO invoices (invoice_number, contact_id, invoice_date, due_date, status, subtotal, total, created_by)
+		VALUES ('INV-202611-0005', ?, '2026-11-10', '2026-12-10', 'sent', 350000, 350000, ?)`, contactID, adminID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	invoiceID, _ := res.LastInsertId()
+
+	status, body := rpc(t, ts, token, "tools/call", map[string]any{
+		"name":      "getInvoice",
+		"arguments": map[string]any{"id": invoiceID},
+	}, 1)
+	if status != http.StatusOK {
+		t.Fatalf("tools/call: got HTTP %d: %s", status, body)
+	}
+	var rpcResp struct {
+		Result struct {
+			IsError bool `json:"isError"`
+			Content []struct {
+				Text string `json:"text"`
+			} `json:"content"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal([]byte(body), &rpcResp); err != nil {
+		t.Fatalf("decode rpc: %v: %s", err, body)
+	}
+	if rpcResp.Result.IsError || len(rpcResp.Result.Content) == 0 {
+		t.Fatalf("getInvoice tool error: %s", body)
+	}
+	var payload struct {
+		Data struct {
+			InvoiceNumber string `json:"invoice_number"`
+			ContactName   string `json:"contact_name"`
+			Total         string `json:"total"`
+			Status        string `json:"status"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(rpcResp.Result.Content[0].Text), &payload); err != nil {
+		t.Fatalf("decode payload: %v: %s", err, rpcResp.Result.Content[0].Text)
+	}
+	got := payload.Data
+	if got.InvoiceNumber != "INV-202611-0005" || got.ContactName != "Arsyila Nisfa Nur Meysha" ||
+		got.Total != "350000" || got.Status != "sent" {
+		t.Errorf("getInvoice got %+v", got)
 	}
 }
 
