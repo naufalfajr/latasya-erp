@@ -181,6 +181,62 @@ func TestOAuthAuthorize_BadRedirectURIRendersErrorNotRedirect(t *testing.T) {
 	}
 }
 
+var hostedClientCallbacks = []string{
+	"https://claude.ai/api/mcp/auth_callback",
+	"https://claude.com/api/mcp/auth_callback",
+	"https://chatgpt.com/connector_platform_oauth_redirect",
+	"https://www.cursor.com/agents/mcp/oauth/callback",
+	"https://vertexaisearch.cloud.google.com/oauth-redirect",
+}
+
+func TestOAuthAuthorize_HostedClientCallbackRedirectsWithCode(t *testing.T) {
+	// Hosted web connectors (Claude, ChatGPT/Codex, Cursor, Gemini
+	// Enterprise) send fixed cross-origin callbacks; each must be accepted
+	// exactly like a loopback native client.
+	t.Parallel()
+	ts, db := testServer(t)
+	cookies := loginAsAdmin(t, ts)
+	redirect := hostedClientCallbacks[0]
+
+	for _, cb := range hostedClientCallbacks {
+		req, _ := requestWithCookies(db, "GET", ts.URL+oauthAuthorizeURL(cb, oauthChallenge(t)), cookies, "")
+		page, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, _ := io.ReadAll(page.Body)
+		page.Body.Close()
+		if strings.Contains(string(body), "must be a loopback") {
+			t.Errorf("consent page must not reject hosted callback %s", cb)
+		}
+	}
+
+	req, _ := requestWithCookies(db, "GET", ts.URL+oauthAuthorizeURL(redirect, oauthChallenge(t)), cookies, "")
+	page, _ := http.DefaultClient.Do(req)
+	body, _ := io.ReadAll(page.Body)
+	page.Body.Close()
+
+	form := url.Values{"csrf_token": {csrfFromHTML(string(body))}, "action": {"approve"}, "scopes": {model.CapReportsView}}
+	post, _ := http.NewRequest("POST", ts.URL+oauthAuthorizeURL(redirect, oauthChallenge(t)), strings.NewReader(form.Encode()))
+	post.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	for _, c := range cookies {
+		post.AddCookie(c)
+	}
+	client := &http.Client{CheckRedirect: func(r *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+	resp, err := client.Do(post)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	loc, _ := url.Parse(resp.Header.Get("Location"))
+	if resp.StatusCode != http.StatusSeeOther || loc.Host != "claude.ai" ||
+		loc.Query().Get("code") == "" || loc.Query().Get("state") != "st4te" {
+		t.Fatalf("redirect: %d %q", resp.StatusCode, resp.Header.Get("Location"))
+	}
+}
+
 func TestOAuthAuthorize_RequiresCSRF(t *testing.T) {
 	t.Parallel()
 	ts, _ := testServer(t)

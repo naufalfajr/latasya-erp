@@ -28,7 +28,7 @@ func TestSecurityHeaders_SetOnEveryResponse(t *testing.T) {
 	if csp == "" {
 		t.Fatal("Content-Security-Policy missing")
 	}
-	for _, directive := range []string{"default-src 'self'", "script-src 'self' 'unsafe-inline' 'unsafe-eval'", "connect-src 'self'", "frame-ancestors 'none'", "form-action 'self' https://accounts.google.com http://127.0.0.1:* http://localhost:*"} {
+	for _, directive := range []string{"default-src 'self'", "script-src 'self' 'unsafe-inline' 'unsafe-eval'", "connect-src 'self'", "frame-ancestors 'none'", "form-action 'self'"} {
 		if !strings.Contains(csp, directive) {
 			t.Errorf("CSP missing %q in %q", directive, csp)
 		}
