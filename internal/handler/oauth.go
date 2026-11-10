@@ -21,9 +21,25 @@ func (h *Handler) RegisterOAuthRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /oauth/authorize", h.OAuthAuthorizeSubmit)
 }
 
+// hostedMCPRedirects are exact-match callbacks of hosted MCP clients whose
+// redirect target is inherently cross-origin (web connectors). Each URL is
+// the vendor's published OAuth callback; the vendor validates the state it
+// issued, so a code delivered there is only usable inside its own flow.
+var hostedMCPRedirects = map[string]bool{
+	"https://claude.ai/api/mcp/auth_callback":                true,
+	"https://claude.com/api/mcp/auth_callback":               true,
+	"https://chatgpt.com/connector_platform_oauth_redirect":  true,
+	"https://www.cursor.com/agents/mcp/oauth/callback":       true,
+	"https://vertexaisearch.cloud.google.com/oauth-redirect": true,
+}
+
 // validRedirectURI accepts loopback redirect targets (native MCP clients,
-// RFC 8252 — any port) and same-origin https/http targets.
+// RFC 8252 — any port), same-origin https/http targets, and the exact
+// hosted-callback URLs above.
 func validRedirectURI(raw string, r *http.Request) bool {
+	if hostedMCPRedirects[raw] {
+		return true
+	}
 	u, err := url.Parse(raw)
 	if err != nil || u.Scheme == "" || u.Host == "" || u.Fragment != "" {
 		return false
