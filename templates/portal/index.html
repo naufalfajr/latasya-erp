@@ -1,112 +1,116 @@
 <!DOCTYPE html>
-<html lang="id" data-theme="silk">
+<html lang="id">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{.Title}}</title>
-    <link rel="stylesheet" href="{{asset "css/app.css"}}">
+    {{template "theme-head" .}}
 </head>
-<body class="min-h-screen bg-base-200">
-<div class="max-w-2xl mx-auto p-4 py-8">
+<body class="latasya">
 {{$d := .Data}}
-{{if $d.Invalid}}
-    <div class="card bg-base-100 shadow">
-        <div class="card-body text-center py-10">
-            <h1 class="text-xl font-bold">Link Tidak Valid</h1>
-            <p class="opacity-70 mt-2">Link ini sudah tidak berlaku atau salah ketik. Hubungi Latasya Transport untuk mendapatkan link invoice terbaru.</p>
+<div class="portal">
+    <header class="auth-top">
+        <span class="auth-mark">{{with $d.Company}}{{.Name}}{{else}}Latasya Transport{{end}}</span>
+        {{template "theme-toggle" "Ganti mode gelap"}}
+    </header>
+
+    <main class="portal-main">
+    {{if $d.Invalid}}
+        <section class="asta-card py-10 text-center">
+            <h1 class="page-title">Link tidak valid</h1>
+            <p class="mx-auto mt-2 max-w-md text-[14.5px] text-ink-2">Link ini sudah tidak berlaku atau salah ketik. Hubungi Latasya Transport untuk mendapatkan link invoice terbaru.</p>
+        </section>
+    {{else}}
+        <div class="page-head">
+            <h1 class="page-title">Invoice {{$d.FamilyLabel}}</h1>
         </div>
-    </div>
-{{else}}
-    <div class="mb-6">
-        <p class="text-sm opacity-60">{{$d.Company.Name}}</p>
-        <h1 class="text-2xl font-bold">Invoice {{$d.FamilyLabel}}</h1>
-    </div>
 
-    <div class="alert alert-info mb-4 text-sm flex flex-wrap">
-        <span class="min-w-0">Simpan link ini: <span class="font-mono font-semibold break-all">{{$d.ShortURL}}</span>. Link berisi daftar invoice akan terus aktif sesuai masa keikutsertaan antar jemput.</span>
-        <button type="button" class="btn btn-ghost btn-xs" data-copy="{{$d.ShortURL}}" onclick="copyText(this)">Salin</button>
-    </div>
-
-    {{if not $d.HasCurrentMonth}}
-    <div class="alert mb-4">
-        <span>Belum ada invoice bulan ini.</span>
-    </div>
-    {{end}}
-
-    {{if gt $d.TotalDue 0}}
-    <div class="card bg-base-100 shadow mb-6 border border-warning/30">
-        <div class="card-body">
-            <h2 class="card-title text-base">Cara Pembayaran</h2>
-            <p class="text-sm">Total belum lunas: <span class="font-mono font-bold text-lg">{{formatIDR $d.TotalDue}}</span></p>
-            <div class="mt-2 text-sm flex items-center gap-2">
-                <span>{{$d.Company.BankName}} — <span class="font-mono font-semibold">{{$d.Company.BankAccountNumber}}</span> (a.n. {{$d.Company.BankAccountHolder}})</span>
-                <button type="button" class="btn btn-ghost btn-xs" data-copy="{{$d.Company.BankAccountNumber}}" onclick="copyText(this)">Salin</button>
+        <div class="asta-alert asta-alert-neutral" role="status">{{template "alert-icon"}}
+            <div class="asta-alert-body">
+                <p class="asta-alert-text">Simpan link ini: <span class="font-mono font-medium text-ink break-all">{{$d.ShortURL}}</span>. Link berisi daftar invoice akan terus aktif sesuai masa keikutsertaan antar jemput.</p>
             </div>
-            <p class="text-xs opacity-60 mt-2">Cantumkan berita/keterangan transfer sesuai yang tertera di masing-masing invoice di bawah, agar mudah kami cocokkan pembayarannya.</p>
+            <button type="button" class="asta-btn asta-btn-ghost asta-btn-xs" data-copy="{{$d.ShortURL}}" onclick="copyText(this)"><span class="asta-btn-label">Salin</span></button>
         </div>
-    </div>
-    {{end}}
 
-    <div class="flex flex-col gap-3">
-        {{range $d.Invoices}}
-        <div class="card bg-base-100 shadow">
-            <div class="card-body">
-                <div class="flex justify-between items-start gap-2">
-                    <div>
-                        <p class="font-semibold">{{.ChildName}}</p>
-                        <p class="text-xs opacity-60">{{.InvoiceNumber}} &middot; {{formatDate .InvoiceDate}}</p>
-                    </div>
-                    <span class="badge shrink-0 whitespace-nowrap
-                        {{if eq .Status "paid"}}badge-success
-                        {{else if eq .Status "partial"}}badge-warning
-                        {{else if eq .Status "cancelled"}}badge-ghost
-                        {{else}}badge-info{{end}}">
-                        {{if eq .Status "sent"}}Belum Lunas
-                        {{else if eq .Status "partial"}}Sebagian
-                        {{else if eq .Status "paid"}}Lunas
-                        {{else if eq .Status "cancelled"}}Dibatalkan
-                        {{else}}{{.Status}}{{end}}
-                    </span>
-                </div>
-
-                <div class="mt-2 text-sm">
-                    <p>Total: <span class="font-mono">{{formatIDR .Total}}</span></p>
-                    {{if eq .Status "paid"}}
-                    <p class="text-success mt-1">Lunas pada {{formatDate .PaidDate}} &check;</p>
-                    {{else if gt .AmountDue 0}}
-                    <p>Sisa pembayaran: <span class="font-mono font-semibold">{{formatIDR .AmountDue}}</span></p>
-                    <p class="text-xs opacity-60 mt-1">Jatuh tempo {{formatDate .DueDate}}</p>
-                    {{end}}
-                </div>
-
-                {{if gt .AmountDue 0}}
-                <div class="mt-3 p-3 bg-base-200 rounded-box text-sm flex items-center justify-between gap-2">
-                    <div>
-                        <p class="text-xs opacity-60">Berita transfer</p>
-                        <p class="font-mono font-semibold" id="remark-{{.ID}}">{{.Remark}}</p>
-                    </div>
-                    <button type="button" class="btn btn-ghost btn-xs" data-copy="{{.Remark}}" onclick="copyText(this)">Salin</button>
-                </div>
-                {{end}}
-
-                <div class="card-actions justify-end mt-3">
-                    <a href="{{.PDFPath}}" class="btn btn-ghost btn-xs" target="_blank" rel="noopener">Unduh PDF</a>
-                    {{if .ConfirmWA}}
-                    <a href="{{.ConfirmWA}}" target="_blank" rel="noopener" class="btn btn-success btn-xs">Konfirmasi Sudah Bayar</a>
-                    {{end}}
-                </div>
-            </div>
-        </div>
+        {{if not $d.HasCurrentMonth}}
+        <div class="asta-alert asta-alert-neutral" role="status">{{template "alert-icon"}}<div class="asta-alert-body"><p class="asta-alert-text">Belum ada invoice bulan ini.</p></div></div>
         {{end}}
-    </div>
-{{end}}
+
+        {{if gt $d.TotalDue 0}}
+        <section class="asta-card">
+            <div class="asta-card-header"><h2 class="asta-card-title">Cara pembayaran</h2></div>
+            <p class="asta-stat-card-label">Total belum lunas</p>
+            <p class="font-mono text-[24px] font-medium tracking-[-0.02em] text-ink">{{formatIDR $d.TotalDue}}</p>
+            {{if $d.Company.BankAccountNumber}}
+            <div class="portal-copy mt-4">
+                <div class="min-w-0">
+                    <p class="text-[12.5px] text-ink-2">{{$d.Company.BankName}}{{with $d.Company.BankAccountHolder}} · a.n. {{.}}{{end}}</p>
+                    <p class="font-mono font-medium text-ink break-all">{{$d.Company.BankAccountNumber}}</p>
+                </div>
+                <button type="button" class="asta-btn asta-btn-ghost asta-btn-xs" data-copy="{{$d.Company.BankAccountNumber}}" onclick="copyText(this)"><span class="asta-btn-label">Salin</span></button>
+            </div>
+            {{end}}
+            <p class="asta-hint mt-3">Cantumkan berita/keterangan transfer sesuai yang tertera di masing-masing invoice di bawah, agar mudah kami cocokkan pembayarannya.</p>
+        </section>
+        {{end}}
+
+        {{range $d.Invoices}}
+        <article class="asta-card">
+            <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                    <h2 class="text-[16px] font-medium tracking-[-0.01em] text-ink">{{.ChildName}}</h2>
+                    <p class="mt-0.5 text-[12.5px] text-ink-2"><span class="font-mono">{{.InvoiceNumber}}</span> · <span class="tabular-nums">{{formatDate .InvoiceDate}}</span></p>
+                </div>
+                <span class="asta-badge asta-badge-sm shrink-0
+                    {{- if eq .Status "paid"}} asta-badge-success
+                    {{- else if eq .Status "partial"}} asta-badge-warning
+                    {{- else if eq .Status "cancelled"}} asta-badge-outline
+                    {{- else}} asta-badge-accent{{end}}"><span class="asta-badge-dot"></span>
+                    {{- if or (eq .Status "sent") (eq .Status "overdue")}}Belum lunas
+                    {{- else if eq .Status "partial"}}Sebagian
+                    {{- else if eq .Status "paid"}}Lunas
+                    {{- else if eq .Status "cancelled"}}Dibatalkan
+                    {{- else}}{{humanize .Status}}{{end}}</span>
+            </div>
+
+            <dl class="erp-dl mt-4">
+                <div><dt>Total</dt><dd class="font-mono">{{formatIDR .Total}}</dd></div>
+                {{if eq .Status "paid"}}
+                <div><dt>Lunas pada</dt><dd class="tabular-nums">{{formatDate .PaidDate}}</dd></div>
+                {{else if gt .AmountDue 0}}
+                <div><dt>Sisa pembayaran</dt><dd class="font-mono font-medium">{{formatIDR .AmountDue}}</dd></div>
+                <div><dt>Jatuh tempo</dt><dd class="tabular-nums">{{formatDate .DueDate}}</dd></div>
+                {{end}}
+            </dl>
+
+            {{if gt .AmountDue 0}}
+            <div class="portal-copy mt-4">
+                <div class="min-w-0">
+                    <p class="text-[12.5px] text-ink-2">Berita transfer</p>
+                    <p class="font-mono font-medium text-ink" id="remark-{{.ID}}">{{.Remark}}</p>
+                </div>
+                <button type="button" class="asta-btn asta-btn-ghost asta-btn-xs" data-copy="{{.Remark}}" onclick="copyText(this)"><span class="asta-btn-label">Salin</span></button>
+            </div>
+            {{end}}
+
+            <div class="mt-4 flex flex-wrap justify-end gap-2">
+                <a href="{{.PDFPath}}" class="asta-btn asta-btn-outline asta-btn-sm" target="_blank" rel="noopener"><span class="asta-btn-label">Unduh PDF</span></a>
+                {{if .ConfirmWA}}
+                <a href="{{.ConfirmWA}}" target="_blank" rel="noopener" class="asta-btn asta-btn-accent asta-btn-sm"><span class="asta-btn-label">Konfirmasi sudah bayar</span></a>
+                {{end}}
+            </div>
+        </article>
+        {{end}}
+    {{end}}
+    </main>
 </div>
 <script>
 function copyText(btn) {
+    var label = btn.querySelector(".asta-btn-label") || btn;
     navigator.clipboard.writeText(btn.dataset.copy).then(function () {
-        var original = btn.textContent;
-        btn.textContent = "Tersalin";
-        setTimeout(function () { btn.textContent = original; }, 1500);
+        var original = label.textContent;
+        label.textContent = "Tersalin";
+        setTimeout(function () { label.textContent = original; }, 1500);
     });
 }
 </script>

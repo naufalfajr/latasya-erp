@@ -981,3 +981,28 @@ func TestDisconnectGoogleCalendar_DBErrorSetsFlash(t *testing.T) {
 		t.Fatalf("flash = %q", flash)
 	}
 }
+
+// Google returns to the bare /integrations/... URL configured before the ERP
+// moved under /dashboard; it must reach the real callback with the query
+// intact instead of a 404.
+func TestGoogleCalendarCallback_BarePathForwardsIntoBasePath(t *testing.T) {
+	t.Parallel()
+	ts, db := testServer(t, "/dashboard")
+	cookies := loginAsAdmin(t, ts, "/dashboard")
+	query := "state=VyQlza8MUUC&iss=https%3A%2F%2Faccounts.google.com&code=4%2F0AUn6&scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fcalendar.events.readonly"
+
+	resp, _ := sendRequest(t, db, cookies, "GET", ts.URL+"/integrations/google-calendar/callback?"+query, "")
+	if resp.StatusCode != http.StatusFound {
+		t.Fatalf("bare callback: status %d, want 302", resp.StatusCode)
+	}
+	want := "/dashboard/integrations/google-calendar/callback?" + query
+	if loc := resp.Header.Get("Location"); loc != want {
+		t.Fatalf("Location = %q, want %q", loc, want)
+	}
+
+	// The forwarded URL reaches the callback handler (here: not configured).
+	resp, _ = sendRequest(t, db, cookies, "GET", ts.URL+want, "")
+	if resp.StatusCode != http.StatusSeeOther || flashCookieValue(resp) != "Google Calendar OAuth is not configured" {
+		t.Fatalf("forwarded callback: status %d, flash %q", resp.StatusCode, flashCookieValue(resp))
+	}
+}

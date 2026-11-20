@@ -12,6 +12,20 @@ func (h *Handler) RegisterAuthRoutes(mux *http.ServeMux, loginMiddleware func(ht
 	mux.HandleFunc("GET "+h.BasePath+"/login", h.LoginPage)
 	mux.Handle("POST "+h.BasePath+"/login", loginMiddleware(http.HandlerFunc(h.Login)))
 	mux.HandleFunc("POST "+h.BasePath+"/logout", h.Logout)
+
+	// GOOGLE_REDIRECT_URL (and the URI registered in Google Cloud Console)
+	// predates the ERP moving under BasePath, so Google returns to the bare
+	// path. Forward it, query intact, to the real callback. The token
+	// exchange still sends the configured URL, so Google's match holds.
+	if h.BasePath != "" {
+		mux.HandleFunc("GET /integrations/google-calendar/callback", func(w http.ResponseWriter, r *http.Request) {
+			target := h.BasePath + r.URL.Path
+			if r.URL.RawQuery != "" {
+				target += "?" + r.URL.RawQuery
+			}
+			http.Redirect(w, r, target, http.StatusFound)
+		})
+	}
 }
 
 // RegisterAccessRoutes installs user, role, and self-service password routes.

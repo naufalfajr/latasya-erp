@@ -7,25 +7,11 @@ import (
 	"testing"
 )
 
-// Pages still on DaisyUI until they migrate (see templates/README.md).
-var daisyPages = map[string]bool{
-	"templates/home/index.html":          true, // public page, own styles
-	"templates/portal/index.html":        true,
-	"templates/invoices/print.html":      true,
-	"templates/auth/login.html":          true,
-	"templates/mcp/oauth_consent.html":   true,
-	"templates/partials/csrf.html":       true,
-	"templates/invoices/README.md":       true,
-	"templates/README.md":                true,
-	"templates/partials/theme.html":      true,
-	"templates/partials/pagination.html": false,
-}
-
-func erpTemplates(t *testing.T) map[string]string {
+func allTemplates(t *testing.T) map[string]string {
 	t.Helper()
 	out := map[string]string{}
 	err := fs.WalkDir(TemplateFS, "templates", func(path string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".html") || daisyPages[path] {
+		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".html") {
 			return err
 		}
 		b, err := TemplateFS.ReadFile(path)
@@ -36,28 +22,30 @@ func erpTemplates(t *testing.T) map[string]string {
 		t.Fatal(err)
 	}
 	if len(out) < 40 {
-		t.Fatalf("found only %d ERP templates; the walk is broken", len(out))
+		t.Fatalf("found only %d templates; the walk is broken", len(out))
 	}
 	return out
 }
 
 var (
-	classAttr = regexp.MustCompile(`class="([^"]*)"`)
+	// A class attribute may hold template actions with their own quotes
+	// ({{if eq .Status "paid"}} asta-badge-success{{end}}), so read through them.
+	classAttr      = regexp.MustCompile(`(?s)class="((?:[^"{]|\{\{.*?\}\}|\{)*)"`)
+	templateAction = regexp.MustCompile(`(?s)\{\{.*?\}\}`)
 	// DaisyUI component classes. Tailwind utilities with the same stem
 	// (table-cell, hidden) are not in this list.
 	daisyClass = regexp.MustCompile(`^(btn|card|card-body|card-title|card-actions|badge|alert|input-bordered|select-bordered|textarea-bordered|form-control|label-text|tab|tabs|tab-active|join|join-item|stat|stats|stat-title|stat-value|divider|drawer|drawer-side|drawer-toggle|menu|menu-title|navbar|link|link-hover|link-primary|checkbox|toggle|loading|rounded-box)(-[a-z0-9]+)*$|^(bg|text|border)-(base|primary|secondary|accent|neutral|info|success|warning|error)(-[a-z0-9]+)?$`)
 )
 
-// Migrated screens must not fall back to DaisyUI: mixing the two kits is
-// how a page drifts out of the design system unnoticed.
-func TestERPTemplates_NoDaisyUIClasses(t *testing.T) {
-	for path, src := range erpTemplates(t) {
-		if path == "templates/base.html" {
-			// The signed-out branch still serves the DaisyUI login page.
-			src = src[:strings.Index(src, "{{else}}\n<body class=\"min-h-screen bg-base-200\"")]
+// DaisyUI is gone from the build, so a leftover class would render unstyled;
+// mixing kits is also how a page drifts out of the design system unnoticed.
+func TestTemplates_NoDaisyUIClasses(t *testing.T) {
+	for path, src := range allTemplates(t) {
+		if strings.Contains(src, "data-theme") {
+			t.Errorf("%s: data-theme opts into a DaisyUI theme; dark mode is the .dark class", path)
 		}
 		for _, m := range classAttr.FindAllStringSubmatch(src, -1) {
-			for _, cls := range strings.Fields(m[1]) {
+			for _, cls := range strings.Fields(templateAction.ReplaceAllString(m[1], " ")) {
 				cls = cls[strings.LastIndex(cls, ":")+1:]
 				if daisyClass.MatchString(cls) {
 					t.Errorf("%s: DaisyUI class %q in class=%q", path, cls, m[1])
@@ -74,7 +62,7 @@ var buttonTag = regexp.MustCompile(`<button\b(?:[^>"]|"[^"]*")*>`)
 // what protects them: every one must ask first.
 func TestERPTemplates_DestructiveActionsConfirm(t *testing.T) {
 	found := 0
-	for path, src := range erpTemplates(t) {
+	for path, src := range allTemplates(t) {
 		if strings.Contains(src, "asta-btn-danger") {
 			t.Errorf("%s: filled asta-btn-danger; use asta-btn-outline erp-danger", path)
 		}
@@ -108,7 +96,7 @@ var astaButton = regexp.MustCompile(`(?s)<(a|button)\b((?:[^>"]|"[^"]*")*)>(.*?)
 // Kit buttons need a label: the asta-btn-label span (which the loading
 // spinner overlays) or, for icon-only buttons, an aria-label.
 func TestERPTemplates_ButtonsHaveLabels(t *testing.T) {
-	for path, src := range erpTemplates(t) {
+	for path, src := range allTemplates(t) {
 		for _, m := range astaButton.FindAllStringSubmatch(src, -1) {
 			attrs, inner := m[2], m[3]
 			if !regexp.MustCompile(`class="[^"]*\basta-btn\b`).MatchString(attrs) {
@@ -125,7 +113,7 @@ func TestERPTemplates_ButtonsHaveLabels(t *testing.T) {
 // Line-row partials are rendered standalone for HTMX (journal.go parses its
 // partial alone), so they must not depend on shared UI templates.
 func TestLinePartials_SelfContained(t *testing.T) {
-	for path, src := range erpTemplates(t) {
+	for path, src := range allTemplates(t) {
 		if !strings.HasSuffix(path, "line_partial.html") {
 			continue
 		}
@@ -154,13 +142,15 @@ func TestBase_ClosesDialogsBeforeHistorySnapshot(t *testing.T) {
 
 // Cloudflare and browsers cache /static/ for hours, so templates link static
 // files through {{asset}}, whose content hash changes the URL on every deploy.
+var bareStatic = regexp.MustCompile(`(?:=["']|\}\}|url\(\s*["']?)/static/`)
+
 func TestTemplates_StaticLinksUseAsset(t *testing.T) {
 	err := fs.WalkDir(TemplateFS, "templates", func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".html") {
 			return err
 		}
 		b, err := TemplateFS.ReadFile(path)
-		if strings.Contains(string(b), `="/static/`) {
+		if bareStatic.Match(b) {
 			t.Errorf("%s links a bare /static/ path; use {{asset \"…\"}}", path)
 		}
 		return err

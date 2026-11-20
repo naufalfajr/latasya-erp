@@ -176,8 +176,10 @@ func TestOAuthAuthorize_BadRedirectURIRendersErrorNotRedirect(t *testing.T) {
 		t.Fatalf("status: got %d, want 200 with error", resp.StatusCode)
 	}
 	body, _ := io.ReadAll(resp.Body)
-	if !strings.Contains(string(body), "redirect_uri") {
-		t.Error("expected redirect_uri error on the page")
+	// The bare "redirect_uri" also sits in the form action, so match the alert.
+	if !strings.Contains(string(body), `<div class="asta-alert asta-alert-danger mb-4" role="alert">`) ||
+		!strings.Contains(string(body), "redirect_uri must be a loopback or same-origin URL.") {
+		t.Error("expected the redirect_uri error in a danger alert")
 	}
 }
 

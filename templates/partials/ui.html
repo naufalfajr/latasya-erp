@@ -4,8 +4,8 @@
 {{define "alert-icon"}}<span class="asta-alert-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M10 6.5v4.25M10 13.5h.01"/></svg></span>{{end}}
 {{define "check-icon"}}<svg class="asta-checkbox-check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7"/></svg><span class="asta-checkbox-dash" aria-hidden="true"></span>{{end}}
 
-{{/* Document status badge: draft grey, sent/received/issued navy, partial amber,
-     paid green, overdue red, cancelled/void grey outline. Unknown statuses fall back to grey. */}}
+{{/* Document status badge: draft grey, sent/received/issued/unpaid navy, partial amber,
+     paid/applied green, overdue red, cancelled/void/voided grey outline. Unknown statuses fall back to grey. */}}
 {{define "status-badge"}}<span class="asta-badge asta-badge-sm
 {{- if or (eq . "sent") (eq . "received") (eq . "issued") (eq . "unpaid")}} asta-badge-accent
 {{- else if eq . "partial"}} asta-badge-warning

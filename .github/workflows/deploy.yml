@@ -25,10 +25,9 @@ jobs:
           go-version: stable
           cache: true
 
-      - name: Download Tailwind CLI and daisyUI
+      - name: Download Tailwind CLI
         env:
           TAILWIND_VERSION: v4.3.3
-          DAISYUI_VERSION: v5.6.18
         run: |
           mkdir -p bin
           # -f fails on HTTP errors (a 4xx/5xx body must never be saved as
@@ -39,13 +38,6 @@ jobs:
             -o bin/tailwindcss
           head -c4 bin/tailwindcss | grep -q $'\x7fELF'
           chmod +x bin/tailwindcss
-          curl -fsSL --retry 3 --retry-delay 2 \
-            https://github.com/saadeghi/daisyui/releases/download/${DAISYUI_VERSION}/daisyui.mjs \
-            -o bin/daisyui.mjs
-          curl -fsSL --retry 3 --retry-delay 2 \
-            https://github.com/saadeghi/daisyui/releases/download/${DAISYUI_VERSION}/daisyui-theme.mjs \
-            -o bin/daisyui-theme.mjs
-          test -s bin/daisyui.mjs && test -s bin/daisyui-theme.mjs
 
       - name: Build CSS
         run: ./bin/tailwindcss -i static/css/input.css -o static/css/app.css --minify

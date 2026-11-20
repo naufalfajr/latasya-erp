@@ -114,16 +114,16 @@
       "mute": {
         "role": "neutral",
         "displayName": "Mute",
-        "canonical": "oklch(63.3% 0.004 107)",
+        "canonical": "oklch(54.0% 0.006 107)",
         "tonalRamp": [
-          "oklch(15% 0.004 107)",
-          "oklch(25% 0.004 107)",
+          "oklch(15% 0.002 107)",
+          "oklch(25% 0.003 107)",
           "oklch(35% 0.004 107)",
-          "oklch(45% 0.004 107)",
-          "oklch(55% 0.004 107)",
-          "oklch(65% 0.004 107)",
+          "oklch(45% 0.005 107)",
+          "oklch(55% 0.006 107)",
+          "oklch(65% 0.005 107)",
           "oklch(80% 0.004 107)",
-          "oklch(95% 0.004 107)"
+          "oklch(95% 0.002 107)"
         ]
       },
       "paper-dark": {
@@ -189,16 +189,16 @@
       "mute-dark": {
         "role": "neutral",
         "displayName": "Mute (dark stage)",
-        "canonical": "oklch(59.1% 0.005 286)",
+        "canonical": "oklch(63.5% 0.006 286)",
         "tonalRamp": [
-          "oklch(15% 0.005 286)",
-          "oklch(25% 0.005 286)",
-          "oklch(35% 0.005 286)",
+          "oklch(15% 0.002 286)",
+          "oklch(25% 0.003 286)",
+          "oklch(35% 0.004 286)",
           "oklch(45% 0.005 286)",
-          "oklch(55% 0.005 286)",
+          "oklch(55% 0.006 286)",
           "oklch(65% 0.005 286)",
-          "oklch(80% 0.005 286)",
-          "oklch(95% 0.005 286)"
+          "oklch(80% 0.003 286)",
+          "oklch(95% 0.002 286)"
         ]
       },
       "status-success": {
@@ -408,7 +408,7 @@
   ],
   "narrative": {
     "northStar": "The Working Ledger",
-    "overview": "Paper, ink, and one navy. Every Latasya surface (the public profile, the staff ERP, the parent invoice portal, login, and the printed invoice) is to be built from the vendored Astabyte UI 0.9.1 kit, unmodified, with three token additions: the kit's `--brand` becomes Latasya navy, `--mute` is darkened to pass contrast at the ERP's small sizes, and `--danger` names the kit's own red (#e5484d) for errors and destructive text. The public profile and the signed-in ERP are built; login, the MCP consent page, the parent portal, and print still run on DaisyUI and migrate next. Nothing is decorated. Hierarchy comes from Geist set large and tight, from Geist Mono for the facts, and from the two-step tonal shift between paper and raised paper.\n\nThe system is typographic. There are no photos, illustrations or stock imagery anywhere; the only drawings allowed are ones generated from product facts, like the fleet seat plans. Light is the default stage, Asta's dark stage is the alternate, and every migrated surface carries the toggle. The device setting decides first paint, a saved choice wins after that, and the `theme-head` partial applies `.dark` before paint so nothing flashes.\n\nThe homepage is persuasive and roomy; the ERP is operational and dense. Both use the same tokens, components, and rules. Only spacing and type size change with the mode.",
+    "overview": "Paper, ink, and one navy. Every Latasya surface (the public profile, the staff ERP, the parent invoice portal, login, and the printed invoice) is built from the vendored Astabyte UI 0.9.1 kit, unmodified, with three token additions: the kit's `--brand` becomes Latasya navy, `--mute` is darkened to pass contrast at the ERP's small sizes, and `--danger` names the kit's own red (#e5484d) for errors and destructive text. DaisyUI is gone from the build. Nothing is decorated. Hierarchy comes from Geist set large and tight, from Geist Mono for the facts, and from the two-step tonal shift between paper and raised paper.\n\nThe system is typographic. There are no photos, illustrations or stock imagery anywhere; the only drawings allowed are ones generated from product facts, like the fleet seat plans. Light is the default stage, Asta's dark stage is the alternate, and every surface carries the toggle except the printed invoice, which is always light. The device setting decides first paint, a saved choice wins after that, and the `theme-head` partial applies `.dark` before paint so nothing flashes.\n\nThe homepage is persuasive and roomy; the ERP is operational and dense. Both use the same tokens, components, and rules. Only spacing and type size change with the mode.",
     "keyCharacteristics": [
       "One kit (Asta UI `asta-*` classes), one accent (navy), one family pair (Geist + Geist Mono).",
       "Depth from tone (paper → paper-2) and soft kit shadows; outlines are inset 1px shadows, never CSS borders.",
@@ -444,9 +444,9 @@
       }
     ],
     "dos": [
-      "**Do** build every surface from `asta-*` kit classes and the tokens above; migrate DaisyUI screens onto them rather than restyling DaisyUI.",
+      "**Do** build every surface from `asta-*` kit classes and the tokens above; never bring back DaisyUI or a second kit.",
       "**Do** change the accent only by overriding `--brand` (`#1b2a55` light, `#5a72c0` dark).",
-      "**Do** include the `theme-head` partial and the theme toggle on every surface (in the ERP, the sidebar foot and the phone top bar), and check every screen on both stages.",
+      "**Do** include the `theme-head` partial and the theme toggle on every surface (in the ERP, the sidebar foot and the phone top bar), and check every screen on both stages. The printed invoice is the one exception: light only, no theme script.",
       "**Do** set amounts, ids and codes in Geist Mono with `tabular-nums`; dates and names in Geist with `tabular-nums`.",
       "**Do** show document status with `{{template \"status-badge\"}}` and nothing else.",
       "**Do** keep charts mono: revenue in brand, expenses in neutral grey, losses by sign or label.",

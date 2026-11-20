@@ -6,19 +6,13 @@
 @source "../../templates";
 @source "../js/financial-charts.js";
 
-/* ponytail: DaisyUI stays until login, portal and print move to asta-* (PR3 removes it). */
-@plugin "../../bin/daisyui.mjs" {
-  themes: silk --default;
-}
-@plugin "../../bin/daisyui-theme.mjs";
-
 @theme {
   --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
 /* One accent, Latasya navy (dark lifted for 4.5:1 white text); --navy stays fixed.
-   --mute darkened so 12px labels pass 4.5:1 on paper and paper-2 (DESIGN.md). */
+   --mute darkened (light) and lifted (dark) so 12px labels pass 4.5:1 on paper and paper-2 (DESIGN.md). */
 :root {
   --navy: #1b2a55;
   --brand: var(--navy);
@@ -41,7 +35,7 @@
   display: block;
 }
 
-/* ---- Page base for migrated pages (body.latasya). Becomes global in PR3. ---- */
+/* ---- Page base: every page puts `latasya` on <body>. ---- */
 html:has(> body.latasya) {
   background: var(--paper);
 }
@@ -50,7 +44,12 @@ body.latasya {
   background: var(--paper);
   color: var(--ink);
 }
-.latasya :focus-visible {
+/* Kit controls draw their own focus ring (inset shadow or ring); the outline
+   covers everything else (plain links, summaries) without doubling them.
+   Segmented items ring only for a focused radio inside (:has), so the
+   anchor form used for filter links needs the outline too. */
+.latasya :focus-visible:not([class*="asta-"]),
+.latasya a.asta-segmented-item:focus-visible {
   outline: 2px solid var(--brand);
   outline-offset: 2px;
 }
@@ -122,6 +121,62 @@ body.latasya {
   flex-direction: column;
 }
 .erp-drawer .asta-sidebar-link[aria-current="page"] {
+  background: var(--paper-2);
+}
+
+/* ---- Signed-out pages (login, MCP consent) and the parent portal:
+   a slim top bar with the name and theme toggle over centred content. ---- */
+.auth-shell {
+  display: flex;
+  min-height: 100dvh;
+  flex-direction: column;
+}
+.auth-top {
+  display: flex;
+  height: 56px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 16px;
+}
+.auth-mark {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+.auth-main {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px 72px;
+}
+.portal {
+  max-width: 640px;
+  margin: 0 auto;
+}
+.portal-main {
+  display: grid;
+  gap: 12px;
+  padding: 16px 16px 72px;
+}
+.portal-main .page-head {
+  margin-bottom: 4px;
+}
+/* Invoice facts sit side by side even on a phone: values are short. */
+.portal-main .erp-dl {
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 12px 16px;
+}
+/* A copyable value (bank account, transfer note) with its Salin button. */
+.portal-copy {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
   background: var(--paper-2);
 }
 

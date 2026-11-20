@@ -6,15 +6,17 @@ Templates are the HTML adapter's presentation layer. Business rules and database
 
 Full-page responses execute `templates/base.html` with the shared partials in `templates/partials/` (navigation, sidebar, flash, CSRF, pagination, theme, UI fragments). Page data should be typed when practical.
 
-Signed-in pages get the ERP shell from `base.html`: the kit sidebar on desktop, a top bar and drawer on phones, and `body.latasya`. Pages that do not use `base.html` (the public homepage) include `{{template "theme-head" .}}` in `<head>` and put `latasya` on `<body>`. `theme-head` loads the stylesheet, Geist fonts, and the Asta runtime, and applies dark mode before first paint. `{{template "theme-toggle" "<label>"}}` renders the light/dark switch; the label is its accessible name in the page's language. The login page, MCP consent page, parent portal, and invoice print still use DaisyUI until they migrate.
+Signed-in pages get the ERP shell from `base.html`: the kit sidebar on desktop, a top bar and drawer on phones, and `body.latasya`. Signed-out pages that use `base.html` (login, MCP consent) get a slim top bar over a centred card. Pages that do not use `base.html` (the public homepage, the parent portal) include `{{template "theme-head" .}}` in `<head>` and put `latasya` on `<body>`. `theme-head` loads the stylesheet, Geist fonts, and the Asta runtime, and applies dark mode before first paint. `{{template "theme-toggle" "<label>"}}` renders the light/dark switch; the label is its accessible name in the page's language. The invoice print page loads `app.css` and Geist without `theme-head`, so it always prints on the light stage.
 
 Link static files with `{{asset "css/app.css"}}`, never a bare `/static/…` path. `asset` adds a content hash (`?v=…`), so a deploy changes the URL. Cloudflare and browsers cache `/static/` for 4 hours, and a bare path can pair new HTML with old CSS.
 
 ## Markup: Astabyte UI
 
-Markup uses Astabyte UI's `asta-*` classes and the tokens in [DESIGN.md](../DESIGN.md); Tailwind utilities handle layout (grid, flex, gap, width) and tokens (`text-ink`, `text-ink-2`, `text-mute`, `bg-paper`, `bg-paper-2`). Keep the `data-asta-*` and ARIA attributes from the kit's examples: `asta.js` drives dialogs, menus, tabs, and segmented controls through them. Never use DaisyUI classes on a migrated page.
+Markup uses Astabyte UI's `asta-*` classes and the tokens in [DESIGN.md](../DESIGN.md); Tailwind utilities handle layout (grid, flex, gap, width) and tokens (`text-ink`, `text-ink-2`, `text-mute`, `bg-paper`, `bg-paper-2`). Keep the `data-asta-*` and ARIA attributes from the kit's examples: `asta.js` drives dialogs, menus, tabs, and segmented controls through them. DaisyUI is not in the build; a DaisyUI class renders unstyled, and `TestTemplates_NoDaisyUIClasses` fails on one.
 
-Copy is English sentence case in the ERP ("New invoice", not "New Invoice"). Update tests that assert on changed copy.
+Copy is English sentence case in the ERP ("New invoice", not "New Invoice") and Indonesian sentence case on the portal and homepage ("Belum lunas"). Update tests that assert on changed copy.
+
+Guard tests: `templates_test.go` (no DaisyUI class or `data-theme`, static links through `asset`, labelled buttons, confirmed destructive actions), `internal/handler/erp_render_test.go` (every ERP route renders on the shell), and `internal/handler/standalone_*_test.go` (login, consent, portal and print render on the kit, including their error and status states).
 
 | Need | Markup |
 |---|---|
@@ -35,6 +37,7 @@ Copy is English sentence case in the ERP ("New invoice", not "New Invoice"). Upd
 | Filter / period links | `<nav class="asta-segmented asta-segmented-sm" aria-label="…"><a class="asta-segmented-item" aria-current="page">…</a></nav>` |
 | Record details | `<dl class="erp-dl"><div><dt>Label</dt><dd>Value</dd></div></dl>` |
 | Inline link | `<a class="erp-link">` |
+| Signed-out and portal layout | `base.html` wraps signed-out pages in `.auth-shell` > `.auth-top` (`.auth-mark` + toggle) and `.auth-main`. The portal uses `.portal` > `.auth-top` + `.portal-main`, and `.portal-copy` for a value with its "Salin" button. |
 
 Colour: navy (`brand`) is the only accent. Amounts never turn green or red; a negative amount reads by its minus sign. Red appears only in `erp-danger` buttons, `asta-error`, `asta-alert-danger`, and the danger/success/warning badges.
 

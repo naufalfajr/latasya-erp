@@ -63,7 +63,7 @@ func (h *Handler) PortalIndex(w http.ResponseWriter, r *http.Request) {
 		// 404, not 200: PortalCodeLimiter only counts non-2xx as a guess.
 		w.WriteHeader(http.StatusNotFound)
 		t.ExecuteTemplate(w, "index.html", PageData{
-			Title: "Link Tidak Valid",
+			Title: "Link tidak valid",
 			Data:  portalData{Invalid: true},
 		})
 		return

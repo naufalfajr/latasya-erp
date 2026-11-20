@@ -4,65 +4,76 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Invoice {{.Data.Invoice.InvoiceNumber}}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+    <link rel="stylesheet" href="{{asset "css/app.css"}}">
+    <!-- Print is paper: always the light stage, no theme script. -->
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: Arial, sans-serif; font-size: 14px; color: #333; padding: 40px; max-width: 800px; margin: 0 auto; }
-        .header { display: flex; justify-content: space-between; margin-bottom: 40px; }
-        .company { font-size: 24px; font-weight: bold; }
-        .invoice-title { font-size: 28px; color: #666; text-align: right; }
-        .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; }
-        .meta-group label { font-size: 12px; color: #888; text-transform: uppercase; }
-        .meta-group p { font-weight: bold; margin-top: 2px; }
+        body { font-family: var(--font-sans); font-size: 14px; color: var(--ink); background: var(--paper); padding: 40px; max-width: 800px; margin: 0 auto; }
+        .toolbar { display: flex; gap: 8px; margin-bottom: 32px; }
+        .header { display: flex; justify-content: space-between; gap: 24px; margin-bottom: 40px; }
+        .company { font-size: 24px; font-weight: 600; letter-spacing: -0.02em; }
+        .sub { color: var(--ink-2); margin-top: 4px; }
+        .sub-sm { color: var(--ink-2); font-size: 12px; margin-top: 4px; }
+        .invoice-title { font-size: 30px; font-weight: 500; letter-spacing: -0.04em; color: var(--brand); text-align: right; }
+        .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 32px; }
+        .meta-group + .meta-group { margin-top: 10px; }
+        .meta-group label { font-family: var(--font-mono); font-size: 12px; color: var(--mute); }
+        .meta-group p { font-weight: 500; margin-top: 2px; }
         table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-        th { background: #f5f5f5; text-align: left; padding: 10px; border-bottom: 2px solid #ddd; font-size: 12px; text-transform: uppercase; color: #666; }
-        td { padding: 10px; border-bottom: 1px solid #eee; }
+        th { background: var(--paper-2); text-align: left; padding: 10px; font-size: 12px; font-weight: 500; color: var(--ink-2); }
+        td { padding: 10px; border-bottom: 1px solid var(--line); }
         .text-right { text-align: right; }
-        .mono { font-family: monospace; }
+        .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
         .totals { margin-left: auto; width: 300px; }
-        .totals tr td { padding: 6px 10px; }
-        .totals .grand-total { font-size: 18px; font-weight: bold; border-top: 2px solid #333; }
-        .notes { margin-top: 30px; padding: 15px; background: #f9f9f9; border-radius: 4px; }
-        .notes label { font-size: 12px; color: #888; text-transform: uppercase; }
-        @media print { body { padding: 20px; } .no-print { display: none; } }
+        .totals tr td { padding: 6px 10px; border-bottom: 0; }
+        .totals .grand-total td { font-size: 18px; font-weight: 600; border-top: 1px solid var(--ink); }
+        .notes { margin-top: 28px; padding: 14px 16px; background: var(--paper-2); border-radius: 8px; }
+        .notes + .notes { margin-top: 12px; }
+        .notes label { font-family: var(--font-mono); font-size: 12px; color: var(--mute); }
+        .notes p { margin-top: 4px; }
+        .footer { margin-top: 24px; text-align: center; color: var(--ink-2); font-size: 12px; white-space: pre-line; }
+        @media print { body { padding: 20px; } .no-print { display: none; } th, .notes { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
     </style>
 </head>
-<body>
+<body class="latasya">
     {{$inv := .Data.Invoice}}
     {{$co := .Data.Company}}
-    <div class="no-print" style="margin-bottom:20px">
-        <button onclick="window.print()" style="padding:8px 16px;cursor:pointer">Print</button>
-        <a href="{{$.BasePath}}/invoices/{{$inv.ID}}" style="margin-left:10px">Back</a>
+    <div class="toolbar no-print">
+        <button type="button" onclick="window.print()" class="asta-btn asta-btn-accent asta-btn-sm"><span class="asta-btn-label">Print</span></button>
+        <a href="{{$.BasePath}}/invoices/{{$inv.ID}}" class="asta-btn asta-btn-outline asta-btn-sm"><span class="asta-btn-label">Back</span></a>
     </div>
 
     <div class="header">
         <div>
             <div class="company">{{$co.Name}}</div>
-            {{if $co.Tagline}}<p style="color:#666;margin-top:4px">{{$co.Tagline}}</p>{{end}}
-            {{if $co.Address}}<p style="color:#666;margin-top:4px;white-space:pre-line">{{$co.Address}}</p>{{end}}
-            {{if or $co.Phone $co.Email}}<p style="color:#666;font-size:12px;margin-top:4px">{{$co.Phone}}{{if and $co.Phone $co.Email}} · {{end}}{{$co.Email}}</p>{{end}}
-            {{if $co.NPWP}}<p style="color:#666;font-size:12px">NPWP: {{$co.NPWP}}</p>{{end}}
+            {{if $co.Tagline}}<p class="sub">{{$co.Tagline}}</p>{{end}}
+            {{if $co.Address}}<p class="sub" style="white-space:pre-line">{{$co.Address}}</p>{{end}}
+            {{if or $co.Phone $co.Email}}<p class="sub-sm">{{$co.Phone}}{{if and $co.Phone $co.Email}} · {{end}}{{$co.Email}}</p>{{end}}
+            {{if $co.NPWP}}<p class="sub-sm">NPWP: <span class="mono">{{$co.NPWP}}</span></p>{{end}}
         </div>
-        <div class="invoice-title">INVOICE</div>
+        <div class="invoice-title">Invoice</div>
     </div>
 
     <div class="meta">
         <div>
             <div class="meta-group">
-                <label>Bill To</label>
+                <label>Bill to</label>
                 <p>{{$inv.ContactName}}</p>
             </div>
         </div>
         <div style="text-align:right">
             <div class="meta-group">
-                <label>Invoice Number</label>
-                <p>{{$inv.InvoiceNumber}}</p>
+                <label>Invoice number</label>
+                <p class="mono">{{$inv.InvoiceNumber}}</p>
             </div>
-            <div class="meta-group" style="margin-top:10px">
+            <div class="meta-group">
                 <label>Date</label>
                 <p>{{formatDate $inv.InvoiceDate}}</p>
             </div>
-            <div class="meta-group" style="margin-top:10px">
-                <label>Due Date</label>
+            <div class="meta-group">
+                <label>Due date</label>
                 <p>{{formatDate $inv.DueDate}}</p>
             </div>
         </div>
@@ -73,7 +84,7 @@
             <tr>
                 <th>Description</th>
                 <th class="text-right">Qty</th>
-                <th class="text-right">Unit Price</th>
+                <th class="text-right">Unit price</th>
                 <th class="text-right">Amount</th>
             </tr>
         </thead>
@@ -81,7 +92,7 @@
             {{range $inv.Lines}}
             <tr>
                 <td>{{.Description}}</td>
-                <td class="text-right">{{formatQty .Quantity}}</td>
+                <td class="text-right mono">{{formatQty .Quantity}}</td>
                 <td class="text-right mono">{{formatIDR .UnitPrice}}</td>
                 <td class="text-right mono">{{formatIDR .Amount}}</td>
             </tr>
@@ -110,7 +121,7 @@
             <td class="text-right mono">{{formatIDR $inv.AmountPaid}}</td>
         </tr>
         <tr class="grand-total">
-            <td>Balance Due</td>
+            <td>Balance due</td>
             <td class="text-right mono">{{formatIDR $inv.AmountDue}}</td>
         </tr>
         {{end}}
@@ -119,19 +130,19 @@
     {{if $inv.Notes}}
     <div class="notes">
         <label>Notes</label>
-        <p style="margin-top:4px">{{$inv.Notes}}</p>
+        <p>{{$inv.Notes}}</p>
     </div>
     {{end}}
 
     {{if or $co.BankName $co.BankAccountNumber}}
-    <div class="notes" style="margin-top:20px">
+    <div class="notes">
         <label>Payment</label>
-        <p style="margin-top:4px">{{$co.BankName}}{{if $co.BankAccountNumber}} — {{$co.BankAccountNumber}}{{end}}{{if $co.BankAccountHolder}} (a.n. {{$co.BankAccountHolder}}){{end}}</p>
+        <p>{{$co.BankName}}{{if $co.BankAccountNumber}} — {{$co.BankAccountNumber}}{{end}}{{if $co.BankAccountHolder}} (a.n. {{$co.BankAccountHolder}}){{end}}</p>
     </div>
     {{end}}
 
     {{if $co.InvoiceFooter}}
-    <div style="margin-top:20px;text-align:center;color:#666;font-size:12px;white-space:pre-line">{{$co.InvoiceFooter}}</div>
+    <div class="footer">{{$co.InvoiceFooter}}</div>
     {{end}}
 </body>
 </html>

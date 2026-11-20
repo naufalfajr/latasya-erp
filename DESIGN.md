@@ -171,9 +171,9 @@ components:
 
 **Creative North Star: "The Working Ledger"**
 
-Paper, ink, and one navy. Every Latasya surface (the public profile, the staff ERP, the parent invoice portal, login, and the printed invoice) is to be built from the vendored Astabyte UI 0.9.1 kit, unmodified, with three token additions: the kit's `--brand` becomes Latasya navy, `--mute` is darkened to pass contrast at the ERP's small sizes, and `--danger` names the kit's own red (#e5484d) for errors and destructive text. The public profile and the signed-in ERP are built; login, the MCP consent page, the parent portal, and print still run on DaisyUI and migrate next. Nothing is decorated. Hierarchy comes from Geist set large and tight, from Geist Mono for the facts, and from the two-step tonal shift between paper and raised paper.
+Paper, ink, and one navy. Every Latasya surface (the public profile, the staff ERP, the parent invoice portal, login, and the printed invoice) is built from the vendored Astabyte UI 0.9.1 kit, unmodified, with three token additions: the kit's `--brand` becomes Latasya navy, `--mute` is darkened to pass contrast at the ERP's small sizes, and `--danger` names the kit's own red (#e5484d) for errors and destructive text. DaisyUI is gone from the build. Nothing is decorated. Hierarchy comes from Geist set large and tight, from Geist Mono for the facts, and from the two-step tonal shift between paper and raised paper.
 
-The system is typographic. There are no photos, illustrations or stock imagery anywhere; the only drawings allowed are ones generated from product facts, like the fleet seat plans. Light is the default stage, Asta's dark stage is the alternate, and every migrated surface carries the toggle. The device setting decides first paint, a saved choice wins after that, and the `theme-head` partial applies `.dark` before paint so nothing flashes.
+The system is typographic. There are no photos, illustrations or stock imagery anywhere; the only drawings allowed are ones generated from product facts, like the fleet seat plans. Light is the default stage, Asta's dark stage is the alternate, and every surface carries the toggle except the printed invoice, which is always light. The device setting decides first paint, a saved choice wins after that, and the `theme-head` partial applies `.dark` before paint so nothing flashes.
 
 The homepage is persuasive and roomy; the ERP is operational and dense. Both use the same tokens, components, and rules. Only spacing and type size change with the mode.
 
@@ -189,7 +189,7 @@ The homepage is persuasive and roomy; the ERP is operational and dense. Both use
 A near-neutral paper-and-ink scale from the Asta kit, cut by a single deep navy.
 
 ### Primary
-- **Latasya Navy** (`brand`): the only accent. Accent buttons, the active segment, the hero emphasis word, the pass stub and the contact band, focus rings (2px outline, 2px offset), and the selection tint (22% mix). Applied by overriding `--brand` on `:root`; never by hard-coding navy into component CSS.
+- **Latasya Navy** (`brand`): the only accent. Accent buttons, the active segment, the hero emphasis word, the pass stub and the contact band, focus rings (the kit's own rings on `asta-*` controls; a 2px outline at 2px offset on everything else), and the selection tint (22% mix). Applied by overriding `--brand` on `:root`; never by hard-coding navy into component CSS.
 - **Lifted Navy** (`brand-dark`): the same accent on the dark stage, lifted so white text on it keeps 4.56:1. As text on dark paper it reaches only ~4.3:1, so in dark mode navy text appears at display and headline sizes only.
 - **On-Brand White** (`on-brand`): text on navy fills, and the fill of the one button that sits on a navy panel. That button keeps navy as its label colour in both themes, through the fixed `--navy` token (#1b2a55) rather than the theme-lifted `--brand`.
 
@@ -198,11 +198,11 @@ A near-neutral paper-and-ink scale from the Asta kit, cut by a single deep navy.
 - **Raised Paper** (`paper-2` / `paper-2-dark`): every raised surface (service rows, the pass, seat plans, segmented tracks, hover fills).
 - **Ink** (`ink` / `ink-dark`): headings, values, primary text; also the default (primary) button fill.
 - **Soft Ink** (`ink-2` / `ink-2-dark`): body copy, ledes, mono labels. 10:1 on raised paper.
-- **Mute** (`mute` / `mute-dark`): secondary text: table headers, hints, captions, timestamps, placeholders, icon tint. Darkened from the kit's value (#6f6f6b light, #8a8a8e dark) so 12px text keeps 4.5:1 on both paper and raised paper.
+- **Mute** (`mute` / `mute-dark`): secondary text: table headers, hints, captions, timestamps, placeholders, icon tint. Moved from the kit's values (#8a8a87 light, #7d7d80 dark) to #6f6f6b light and #8a8a8e dark so 12px text keeps 4.5:1 on both paper and raised paper.
 
 ### Status (kit-owned)
 - **Success / Warning / Danger** (`status-*`): the kit's own badge hues, used only through `asta-badge-success / -warning / -danger` for record status in the ERP and portal, and danger for errors and destructive text (`asta-error`, `asta-alert-danger`, `erp-danger`). There is no filled red button. They are signals, not accents.
-- **Document status mapping** (`{{template "status-badge"}}`): draft grey, sent / received / issued / unpaid navy (`asta-badge-accent`), partial amber, paid / applied green, overdue red, cancelled / void grey outline; any other status falls back to grey. Labels are sentence case through `humanize`.
+- **Document status mapping** (`{{template "status-badge"}}`): draft grey, sent / received / issued / unpaid navy (`asta-badge-accent`), partial amber, paid / applied green, overdue red, cancelled / void grey outline; any other status falls back to grey. Labels are sentence case through `humanize`. The portal shows the same tones with Indonesian labels: Belum lunas (navy, also for a legacy overdue row, so parents never see "Terlambat"), Sebagian, Lunas, Dibatalkan; any other status shows navy with its humanized name.
 
 ### Named Rules
 **The One Navy Rule.** Navy is the only hue with a voice. No second accent; the retired gold does not return. Status colours appear only inside status badges.
@@ -243,6 +243,12 @@ ERP and portal screens keep the same tokens and kit controls at operational dens
 
 **ERP shell** (`templates/base.html`): the kit sidebar (`asta-sidebar`, 248px, paper-2) sticks at full viewport height on desktop, its link list scrolling on its own, with the user, theme toggle and log out at the foot. Below 1024px it becomes a 56px top bar (menu, title, toggle) and a left `asta-drawer` holding the same sidebar. Content fills the width beside the sidebar (32px / 40px padding, 24px / 16px on phones). Every screen opens with a page header: title (and optional subtitle) on the left, actions on the right with one accent button.
 
+**Signed-out pages** (login and MCP consent, the signed-out branch of `templates/base.html`): a 56px bar with the "Latasya ERP" mark and the theme toggle, over one kit card centred in the remaining height.
+
+**Parent portal** (`templates/portal/index.html`, Bahasa Indonesia): the same bar with the company name and a toggle labelled "Ganti mode gelap", over a 640px column of kit cards 12px apart. Invoice facts are a compact `erp-dl` that sits side by side on phones. Values a parent copies (bank account, transfer note) sit on raised paper with a ghost "Salin" button. Each invoice's one accent action is "Konfirmasi sudah bayar"; "Unduh PDF" is outline.
+
+**Print** (`templates/invoices/print.html`): paper, so always the light stage, with no toggle and no theme script. Geist and the kit tokens, the word "Invoice" in navy, Geist Mono for numbers and amounts, raised-paper table head and notes.
+
 ## Elevation & Depth
 
 Tonal first: raised paper on paper is the main signal of a raised region. Shadows come from the kit and stay soft: buttons carry a faint inset highlight plus a short drop, the active segment pill floats on a small blur, and outlines are 1px inset shadows mixed from ink (6-14%, 24% on hover). One signature panel per page may lift further with a long soft shadow.
@@ -252,7 +258,7 @@ Tonal first: raised paper on paper is the main signal of a raised region. Shadow
 - **Kit button** (`box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.18), 0 1px 2px rgb(0 0 0 / 0.16), 0 6px 14px -8px rgb(0 0 0 / 0.45)`): the solid ink button.
 - **Signature lift** (`box-shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 24px 48px -32px rgb(0 0 0 / 0.35)`): the single hero panel (the travel pass). One per page.
 - **Segment pill / current link** (`box-shadow: 0 1px 2px rgb(0 0 0 / 0.08), 0 3px 10px -4px rgb(0 0 0 / 0.18), inset 0 0 0 1px color-mix(in srgb, var(--ink) 8%, transparent)`): the kit's checked segment, reused for the current filter link and (lighter, `0 1px 2px rgb(0 0 0 / 0.06)`) the current sidebar link.
-- **Focus** (`outline: 2px solid var(--brand); outline-offset: 2px`, white on navy panels): every focusable element.
+- **Focus** (`outline: 2px solid var(--brand); outline-offset: 2px`, white on navy panels): every focusable element the kit does not ring itself. Kit controls (buttons, fields, checkboxes, sidebar links) keep their own navy ring or inset shadow, so the two never stack. Filter links (`a.asta-segmented-item`) take the outline, because the kit rings a segment only through a focused radio inside it.
 
 ### Named Rules
 **The Inset Outline Rule.** Edges are drawn with inset shadows, not borders, so they follow the radius and never shift layout.
@@ -319,9 +325,9 @@ One minibus outline per vehicle model, drawn from the static fleet list in `inte
 ## Do's and Don'ts
 
 ### Do:
-- **Do** build every surface from `asta-*` kit classes and the tokens above; migrate DaisyUI screens onto them rather than restyling DaisyUI.
+- **Do** build every surface from `asta-*` kit classes and the tokens above; never bring back DaisyUI or a second kit.
 - **Do** change the accent only by overriding `--brand` (`#1b2a55` light, `#5a72c0` dark).
-- **Do** include the `theme-head` partial and the theme toggle on every surface (in the ERP, the sidebar foot and the phone top bar), and check every screen on both stages.
+- **Do** include the `theme-head` partial and the theme toggle on every surface (in the ERP, the sidebar foot and the phone top bar), and check every screen on both stages. The printed invoice is the one exception: light only, no theme script.
 - **Do** set amounts, ids and codes in Geist Mono with `tabular-nums`; dates and names in Geist with `tabular-nums`.
 - **Do** show document status with `{{template "status-badge"}}` and nothing else.
 - **Do** keep charts mono: revenue in brand, expenses in neutral grey, losses by sign or label.

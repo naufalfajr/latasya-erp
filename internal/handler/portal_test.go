@@ -137,7 +137,7 @@ func TestPortalIndex_ConfirmPaymentButton_HiddenWithoutCompanyPhone(t *testing.T
 	if strings.Contains(text, "wa.me/?text") {
 		t.Error("confirm-payment link should not be built with a blank company phone")
 	}
-	if strings.Contains(text, "Konfirmasi Sudah Bayar") {
+	if strings.Contains(text, "Konfirmasi sudah bayar") {
 		t.Error("confirm-payment button should be hidden when the company has no phone on file")
 	}
 }
@@ -475,7 +475,7 @@ func TestPortalIndex_UnknownCode_404(t *testing.T) {
 		t.Errorf("expected 404 for an unknown short code, got %d", resp.StatusCode)
 	}
 	body, _ := io.ReadAll(resp.Body)
-	if !strings.Contains(string(body), "Link Tidak Valid") {
+	if !strings.Contains(string(body), "Link tidak valid") {
 		t.Error("expected the friendly invalid-link page body alongside the 404")
 	}
 }
