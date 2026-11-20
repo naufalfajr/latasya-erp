@@ -166,6 +166,8 @@ GOOGLE_CLIENT_SECRET=your-google-oauth-client-secret
 GOOGLE_REDIRECT_URL=https://latasya.naufalf.net/integrations/google-calendar/callback
 ```
 
+The URL must match an authorized redirect URI in Google Cloud Console exactly. The bare `/integrations/google-calendar/callback` path forwards to the real callback under `/dashboard`, so either form works as long as the env value and the console entry are the same.
+
 Install the systemd unit:
 
 ```bash
@@ -280,7 +282,7 @@ Environment variables (all optional):
 | `DEV_MODE` | `false` | Re-parse templates on each request |
 | `GOOGLE_CLIENT_ID` | empty | Google OAuth client ID for private school calendar sync |
 | `GOOGLE_CLIENT_SECRET` | empty | Google OAuth client secret for private school calendar sync |
-| `GOOGLE_REDIRECT_URL` | empty | Google OAuth redirect URL, e.g. `https://latasya.naufalf.net/integrations/google-calendar/callback` |
+| `GOOGLE_REDIRECT_URL` | empty | Google OAuth redirect URL, e.g. `https://latasya.naufalf.net/integrations/google-calendar/callback` (forwarded to `/dashboard/integrations/google-calendar/callback`); must match the URI in Google Cloud Console |
 
 On a VPS, keep secrets and deployment-specific overrides in `/etc/latasya/latasya-erp.env` with mode `600`. The systemd service loads this file if it exists.
 
