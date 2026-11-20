@@ -1,0 +1,32 @@
+{{define "theme-head"}}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="/static/css/app.css">
+<script src="/static/css/asta/asta.js" defer></script>
+<script>
+// Theme before first paint: saved choice wins, else the device setting (followed live).
+(function () {
+    var saved = null;
+    try { saved = localStorage.getItem("theme"); } catch (e) {}
+    var mq = matchMedia("(prefers-color-scheme: dark)");
+    document.documentElement.classList.toggle("dark", saved ? saved === "dark" : mq.matches);
+    mq.addEventListener("change", function (e) {
+        var chosen = null;
+        try { chosen = localStorage.getItem("theme"); } catch (err) {}
+        if (!chosen) document.documentElement.classList.toggle("dark", e.matches);
+    });
+})();
+function toggleTheme() {
+    var dark = document.documentElement.classList.toggle("dark");
+    try { localStorage.setItem("theme", dark ? "dark" : "light"); } catch (e) {}
+}
+</script>
+{{end}}
+
+{{define "theme-toggle"}}
+<button type="button" class="asta-btn asta-btn-ghost asta-btn-icon asta-btn-sm theme-toggle" onclick="toggleTheme()" aria-label="{{if .}}{{.}}{{else}}Toggle dark mode{{end}}">
+    <svg class="theme-toggle-sun" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="3"/><path d="M8 1.5v1.5M8 13v1.5M1.5 8H3M13 8h1.5M3.4 3.4l1 1M11.6 11.6l1 1M3.4 12.6l1-1M11.6 4.4l1-1"/></svg>
+    <svg class="theme-toggle-moon" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 9.5A5.5 5.5 0 0 1 6.5 2.5a5.5 5.5 0 1 0 7 7Z"/></svg>
+</button>
+{{end}}

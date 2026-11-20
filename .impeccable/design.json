@@ -1,0 +1,468 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-20T01:01:03+00:00",
+  "title": "Design System: Latasya",
+  "extensions": {
+    "colorMeta": {
+      "brand": {
+        "role": "primary",
+        "displayName": "Latasya Navy",
+        "canonical": "oklch(29.8% 0.080 267)",
+        "tonalRamp": [
+          "oklch(15% 0.027 267)",
+          "oklch(25% 0.040 267)",
+          "oklch(35% 0.053 267)",
+          "oklch(45% 0.067 267)",
+          "oklch(55% 0.080 267)",
+          "oklch(65% 0.067 267)",
+          "oklch(80% 0.047 267)",
+          "oklch(95% 0.027 267)"
+        ],
+        "cssVar": "--brand (:root)"
+      },
+      "brand-dark": {
+        "role": "primary",
+        "displayName": "Lifted Navy",
+        "canonical": "oklch(57.0% 0.124 269)",
+        "tonalRamp": [
+          "oklch(15% 0.041 269)",
+          "oklch(25% 0.062 269)",
+          "oklch(35% 0.083 269)",
+          "oklch(45% 0.103 269)",
+          "oklch(55% 0.124 269)",
+          "oklch(65% 0.103 269)",
+          "oklch(80% 0.072 269)",
+          "oklch(95% 0.041 269)"
+        ],
+        "cssVar": "--brand (.dark)"
+      },
+      "on-brand": {
+        "role": "neutral",
+        "displayName": "On-Brand White",
+        "canonical": "oklch(100% 0 0)",
+        "tonalRamp": [
+          "oklch(15% 0.000 0)",
+          "oklch(25% 0.000 0)",
+          "oklch(35% 0.000 0)",
+          "oklch(45% 0.000 0)",
+          "oklch(55% 0.000 0)",
+          "oklch(65% 0.000 0)",
+          "oklch(80% 0.000 0)",
+          "oklch(95% 0.000 0)"
+        ]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Paper",
+        "canonical": "oklch(99.1% 0.001 106)",
+        "tonalRamp": [
+          "oklch(15% 0.001 106)",
+          "oklch(25% 0.001 106)",
+          "oklch(35% 0.001 106)",
+          "oklch(45% 0.001 106)",
+          "oklch(55% 0.001 106)",
+          "oklch(65% 0.001 106)",
+          "oklch(80% 0.001 106)",
+          "oklch(95% 0.001 106)"
+        ]
+      },
+      "paper-2": {
+        "role": "neutral",
+        "displayName": "Raised Paper",
+        "canonical": "oklch(96.1% 0.003 106)",
+        "tonalRamp": [
+          "oklch(15% 0.003 106)",
+          "oklch(25% 0.003 106)",
+          "oklch(35% 0.003 106)",
+          "oklch(45% 0.003 106)",
+          "oklch(55% 0.003 106)",
+          "oklch(65% 0.003 106)",
+          "oklch(80% 0.003 106)",
+          "oklch(95% 0.003 106)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "oklch(14.5% 0 0)",
+        "tonalRamp": [
+          "oklch(15% 0.000 0)",
+          "oklch(25% 0.000 0)",
+          "oklch(35% 0.000 0)",
+          "oklch(45% 0.000 0)",
+          "oklch(55% 0.000 0)",
+          "oklch(65% 0.000 0)",
+          "oklch(80% 0.000 0)",
+          "oklch(95% 0.000 0)"
+        ]
+      },
+      "ink-2": {
+        "role": "neutral",
+        "displayName": "Soft Ink",
+        "canonical": "oklch(35.2% 0.002 106)",
+        "tonalRamp": [
+          "oklch(15% 0.002 106)",
+          "oklch(25% 0.002 106)",
+          "oklch(35% 0.002 106)",
+          "oklch(45% 0.002 106)",
+          "oklch(55% 0.002 106)",
+          "oklch(65% 0.002 106)",
+          "oklch(80% 0.002 106)",
+          "oklch(95% 0.002 106)"
+        ]
+      },
+      "mute": {
+        "role": "neutral",
+        "displayName": "Mute",
+        "canonical": "oklch(63.3% 0.004 107)",
+        "tonalRamp": [
+          "oklch(15% 0.004 107)",
+          "oklch(25% 0.004 107)",
+          "oklch(35% 0.004 107)",
+          "oklch(45% 0.004 107)",
+          "oklch(55% 0.004 107)",
+          "oklch(65% 0.004 107)",
+          "oklch(80% 0.004 107)",
+          "oklch(95% 0.004 107)"
+        ]
+      },
+      "paper-dark": {
+        "role": "neutral",
+        "displayName": "Paper (dark stage)",
+        "canonical": "oklch(15.0% 0.002 286)",
+        "tonalRamp": [
+          "oklch(15% 0.002 286)",
+          "oklch(25% 0.002 286)",
+          "oklch(35% 0.002 286)",
+          "oklch(45% 0.002 286)",
+          "oklch(55% 0.002 286)",
+          "oklch(65% 0.002 286)",
+          "oklch(80% 0.002 286)",
+          "oklch(95% 0.002 286)"
+        ]
+      },
+      "paper-2-dark": {
+        "role": "neutral",
+        "displayName": "Raised Paper (dark stage)",
+        "canonical": "oklch(19.6% 0.002 286)",
+        "tonalRamp": [
+          "oklch(15% 0.002 286)",
+          "oklch(25% 0.002 286)",
+          "oklch(35% 0.002 286)",
+          "oklch(45% 0.002 286)",
+          "oklch(55% 0.002 286)",
+          "oklch(65% 0.002 286)",
+          "oklch(80% 0.002 286)",
+          "oklch(95% 0.002 286)"
+        ]
+      },
+      "ink-dark": {
+        "role": "neutral",
+        "displayName": "Ink (dark stage)",
+        "canonical": "oklch(96.1% 0.003 106)",
+        "tonalRamp": [
+          "oklch(15% 0.003 106)",
+          "oklch(25% 0.003 106)",
+          "oklch(35% 0.003 106)",
+          "oklch(45% 0.003 106)",
+          "oklch(55% 0.003 106)",
+          "oklch(65% 0.003 106)",
+          "oklch(80% 0.003 106)",
+          "oklch(95% 0.003 106)"
+        ]
+      },
+      "ink-2-dark": {
+        "role": "neutral",
+        "displayName": "Soft Ink (dark stage)",
+        "canonical": "oklch(85.4% 0.004 106)",
+        "tonalRamp": [
+          "oklch(15% 0.004 106)",
+          "oklch(25% 0.004 106)",
+          "oklch(35% 0.004 106)",
+          "oklch(45% 0.004 106)",
+          "oklch(55% 0.004 106)",
+          "oklch(65% 0.004 106)",
+          "oklch(80% 0.004 106)",
+          "oklch(95% 0.004 106)"
+        ]
+      },
+      "mute-dark": {
+        "role": "neutral",
+        "displayName": "Mute (dark stage)",
+        "canonical": "oklch(59.1% 0.005 286)",
+        "tonalRamp": [
+          "oklch(15% 0.005 286)",
+          "oklch(25% 0.005 286)",
+          "oklch(35% 0.005 286)",
+          "oklch(45% 0.005 286)",
+          "oklch(55% 0.005 286)",
+          "oklch(65% 0.005 286)",
+          "oklch(80% 0.005 286)",
+          "oklch(95% 0.005 286)"
+        ]
+      },
+      "status-success": {
+        "role": "status",
+        "displayName": "Kit Success",
+        "canonical": "oklch(64.1% 0.133 158)",
+        "tonalRamp": [
+          "oklch(15% 0.044 158)",
+          "oklch(25% 0.067 158)",
+          "oklch(35% 0.089 158)",
+          "oklch(45% 0.111 158)",
+          "oklch(55% 0.133 158)",
+          "oklch(65% 0.111 158)",
+          "oklch(80% 0.078 158)",
+          "oklch(95% 0.044 158)"
+        ]
+      },
+      "status-warning": {
+        "role": "status",
+        "displayName": "Kit Warning",
+        "canonical": "oklch(78.2% 0.158 72)",
+        "tonalRamp": [
+          "oklch(15% 0.053 72)",
+          "oklch(25% 0.079 72)",
+          "oklch(35% 0.105 72)",
+          "oklch(45% 0.132 72)",
+          "oklch(55% 0.158 72)",
+          "oklch(65% 0.132 72)",
+          "oklch(80% 0.092 72)",
+          "oklch(95% 0.053 72)"
+        ]
+      },
+      "status-danger": {
+        "role": "status",
+        "displayName": "Kit Danger",
+        "canonical": "oklch(62.6% 0.193 23)",
+        "tonalRamp": [
+          "oklch(15% 0.064 23)",
+          "oklch(25% 0.097 23)",
+          "oklch(35% 0.129 23)",
+          "oklch(45% 0.161 23)",
+          "oklch(55% 0.193 23)",
+          "oklch(65% 0.161 23)",
+          "oklch(80% 0.113 23)",
+          "oklch(95% 0.064 23)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Hero line, one per page."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Section heads."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Item heads such as a service row."
+      },
+      "body-lg": {
+        "displayName": "Body Lg",
+        "purpose": "Ledes and fleet summary line."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Running copy in ink-2."
+      },
+      "control": {
+        "displayName": "Control",
+        "purpose": "Kit buttons and segments."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Geist Mono terms, labels, ids, dates and numbers (tabular)."
+      }
+    },
+    "shadows": [
+      {
+        "name": "inset-outline",
+        "value": "inset 0 0 0 1px color-mix(in srgb, var(--ink) 14%, transparent)",
+        "purpose": "Fields and outline buttons; 6-10% for cards, tracks and plans."
+      },
+      {
+        "name": "kit-button",
+        "value": "inset 0 1px 0 rgb(255 255 255 / 0.18), 0 1px 2px rgb(0 0 0 / 0.16), 0 6px 14px -8px rgb(0 0 0 / 0.45)",
+        "purpose": "Solid ink button."
+      },
+      {
+        "name": "signature-lift",
+        "value": "0 1px 2px rgb(0 0 0 / 0.04), 0 24px 48px -32px rgb(0 0 0 / 0.35)",
+        "purpose": "The single hero panel per page."
+      },
+      {
+        "name": "focus",
+        "value": "outline: 2px solid var(--brand); outline-offset: 2px",
+        "purpose": "Every focusable element; white on navy panels."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-expo",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Entrances (pass swap: 0.42s, 6px rise)."
+      },
+      {
+        "name": "ease-quart",
+        "value": "cubic-bezier(0.76, 0, 0.24, 1)",
+        "purpose": "Kit in-out transitions."
+      },
+      {
+        "name": "control",
+        "value": "200ms ease-out; active scale(0.97)",
+        "purpose": "Button colour, shadow and press."
+      },
+      {
+        "name": "header-fill",
+        "value": "scroll-driven opacity over 0-48px",
+        "purpose": "Sticky header turns solid paper on scroll."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "phone",
+        "value": "720px"
+      },
+      {
+        "name": "stack",
+        "value": "900px"
+      },
+      {
+        "name": "fold",
+        "value": "1080px"
+      }
+    ],
+    "themes": {
+      "mechanism": ".dark on <html>, set by the theme-head partial before paint; saved choice in localStorage 'theme', else prefers-color-scheme",
+      "kit": "Astabyte UI 0.9.1 (static/css/asta, unmodified, MIT)"
+    }
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Solid ink kit button for the main action in operational screens.",
+      "html": "<button class=\"ds-btn\">Save invoice</button>",
+      "css": ":host{--paper:#fcfcfb;--paper-2:#f2f2f0;--ink:#0a0a0a;--ink-2:#3b3b3a;--mute:#8a8a87;--brand:#1b2a55;} .ds-btn{font-family:Geist,ui-sans-serif,system-ui,sans-serif;height:40px;padding:0 16px;border:0;border-radius:8px;background:var(--ink);color:var(--paper);font-size:14px;font-weight:500;letter-spacing:-0.01em;box-shadow:inset 0 1px 0 rgb(255 255 255/.18),0 1px 2px rgb(0 0 0/.16),0 6px 14px -8px rgb(0 0 0/.45);transition:background-color .2s ease-out,transform .2s ease-out;cursor:pointer} .ds-btn:hover{background:color-mix(in srgb,var(--ink) 84%,var(--paper))} .ds-btn:active{transform:scale(.97)} .ds-btn:focus-visible{outline:2px solid var(--brand);outline-offset:2px}"
+    },
+    {
+      "name": "Accent Button",
+      "kind": "button",
+      "refersTo": "button-accent",
+      "description": "Navy kit button; the one action per view.",
+      "html": "<button class=\"ds-btn-accent\">Chat WhatsApp</button>",
+      "css": ":host{--paper:#fcfcfb;--paper-2:#f2f2f0;--ink:#0a0a0a;--ink-2:#3b3b3a;--mute:#8a8a87;--brand:#1b2a55;} .ds-btn-accent{font-family:Geist,ui-sans-serif,system-ui,sans-serif;height:40px;padding:0 16px;border:0;border-radius:8px;background:var(--brand);color:#fff;font-size:14px;font-weight:500;letter-spacing:-0.01em;transition:background-color .2s ease-out,transform .2s ease-out;cursor:pointer} .ds-btn-accent:hover{background:color-mix(in srgb,var(--brand) 88%,black)} .ds-btn-accent:active{transform:scale(.97)} .ds-btn-accent:focus-visible{outline:2px solid var(--brand);outline-offset:2px}"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Secondary per-item action with an inset ink outline.",
+      "html": "<button class=\"ds-btn-outline\">Tanya layanan ini</button>",
+      "css": ":host{--paper:#fcfcfb;--paper-2:#f2f2f0;--ink:#0a0a0a;--ink-2:#3b3b3a;--mute:#8a8a87;--brand:#1b2a55;} .ds-btn-outline{font-family:Geist,ui-sans-serif,system-ui,sans-serif;height:40px;padding:0 16px;border:0;border-radius:8px;background:var(--paper);color:var(--ink);font-size:14px;font-weight:500;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ink) 14%,transparent),0 1px 2px rgb(0 0 0/.05);transition:background-color .2s,box-shadow .2s;cursor:pointer} .ds-btn-outline:hover{background:var(--paper-2);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ink) 24%,transparent),0 1px 2px rgb(0 0 0/.05)} .ds-btn-outline:focus-visible{outline:2px solid var(--brand);outline-offset:2px}"
+    },
+    {
+      "name": "Ghost Nav",
+      "kind": "nav",
+      "refersTo": "button-ghost",
+      "description": "Sticky header nav as small ghost buttons beside the wordmark.",
+      "html": "<nav class=\"ds-nav\"><a class=\"ds-mark\" href=\"#\">Latasya Trans</a><a class=\"ds-ghost\" href=\"#\">Layanan</a><a class=\"ds-ghost\" href=\"#\">Armada</a><a class=\"ds-ghost\" href=\"#\">Kontak</a></nav>",
+      "css": ":host{--paper:#fcfcfb;--paper-2:#f2f2f0;--ink:#0a0a0a;--ink-2:#3b3b3a;--mute:#8a8a87;--brand:#1b2a55;} .ds-nav{font-family:Geist,ui-sans-serif,system-ui,sans-serif;display:flex;align-items:center;gap:4px;height:56px;background:var(--paper)} .ds-mark{font-weight:600;font-size:16px;letter-spacing:-0.02em;color:var(--ink);text-decoration:none;margin-right:16px} .ds-ghost{display:inline-flex;align-items:center;height:32px;padding:0 12px;border-radius:6px;font-size:13px;font-weight:500;color:var(--ink-2);text-decoration:none;transition:background-color .2s,color .2s} .ds-ghost:hover{background:var(--paper-2);color:var(--ink)} .ds-ghost:focus-visible{outline:2px solid var(--brand);outline-offset:2px}"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Kit input: inset outline, navy outline and halo on focus.",
+      "html": "<label class=\"ds-field\"><span class=\"ds-label\">Invoice number</span><input class=\"ds-input\" placeholder=\"INV-2026-0142\"></label>",
+      "css": ":host{--paper:#fcfcfb;--paper-2:#f2f2f0;--ink:#0a0a0a;--ink-2:#3b3b3a;--mute:#8a8a87;--brand:#1b2a55;} .ds-field{font-family:Geist,ui-sans-serif,system-ui,sans-serif;display:grid;gap:6px;max-width:320px} .ds-label{font-family:'Geist Mono',ui-monospace,monospace;font-size:12px;color:var(--ink-2)} .ds-input{font-family:Geist,ui-sans-serif,system-ui,sans-serif;height:40px;padding:0 12px;border:0;border-radius:8px;background:var(--paper);color:var(--ink);font-size:14px;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ink) 14%,transparent);outline:none;transition:box-shadow .2s;font-variant-numeric:tabular-nums} .ds-input::placeholder{color:var(--mute)} .ds-input:hover{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ink) 24%,transparent)} .ds-input:focus-visible{box-shadow:inset 0 0 0 1px var(--brand),0 0 0 4px color-mix(in srgb,var(--brand) 16%,transparent)}"
+    },
+    {
+      "name": "Status Badges",
+      "kind": "chip",
+      "refersTo": "badge-success",
+      "description": "Kit status badges, the only place status hues appear.",
+      "html": "<span class=\"ds-badge ds-ok\">Paid</span> <span class=\"ds-badge ds-warn\">Due</span> <span class=\"ds-badge ds-bad\">Overdue</span>",
+      "css": ":host{--paper:#fcfcfb;--paper-2:#f2f2f0;--ink:#0a0a0a;--ink-2:#3b3b3a;--mute:#8a8a87;--brand:#1b2a55;} .ds-badge{font-family:Geist,ui-sans-serif,system-ui,sans-serif;--b:var(--ink);display:inline-flex;align-items:center;height:24px;padding:0 10px;border-radius:6px;font-size:12px;font-weight:500;background:color-mix(in srgb,var(--b) 12%,transparent);color:color-mix(in srgb,var(--b) 80%,var(--ink))} .ds-ok{--b:#30a46c} .ds-warn{--b:#f5a524} .ds-bad{--b:#e5484d}"
+    },
+    {
+      "name": "Raised Panel with Facts",
+      "kind": "card",
+      "refersTo": "surface",
+      "description": "Paper-2 row with a title, body and a mono definition list of facts.",
+      "html": "<article class=\"ds-panel\"><h3>Antar jemput sekolah</h3><dl><dt>Jadwal</dt><dd>Senin–Sabtu</dd><dt>Tarif</dt><dd>Berbasis jarak</dd></dl></article>",
+      "css": ":host{--paper:#fcfcfb;--paper-2:#f2f2f0;--ink:#0a0a0a;--ink-2:#3b3b3a;--mute:#8a8a87;--brand:#1b2a55;} .ds-panel{font-family:Geist,ui-sans-serif,system-ui,sans-serif;background:var(--paper-2);border-radius:14px;padding:36px;color:var(--ink);display:grid;gap:20px} .ds-panel h3{margin:0;font-weight:500;font-size:30px;line-height:1.05;letter-spacing:-0.04em} .ds-panel dl{margin:0;display:grid;grid-template-columns:72px 1fr;gap:10px 14px;font-size:14.5px} .ds-panel dt{font-family:'Geist Mono',ui-monospace,monospace;font-size:12px;color:var(--ink-2);padding-top:2px} .ds-panel dd{margin:0}"
+    },
+    {
+      "name": "Segmented Control",
+      "kind": "custom",
+      "refersTo": "segmented",
+      "description": "Kit segmented control on native radios; navy pill inside navy-led components.",
+      "html": "<div class=\"ds-seg\" role=\"radiogroup\"><label><input type=\"radio\" name=\"s\" checked><span>Sekolah</span></label><label><input type=\"radio\" name=\"s\"><span>Wisata</span></label><label><input type=\"radio\" name=\"s\"><span>Antar kota</span></label></div>",
+      "css": ":host{--paper:#fcfcfb;--paper-2:#f2f2f0;--ink:#0a0a0a;--ink-2:#3b3b3a;--mute:#8a8a87;--brand:#1b2a55;} .ds-seg{font-family:Geist,ui-sans-serif,system-ui,sans-serif;display:inline-flex;padding:4px;border-radius:10px;background:var(--paper-2);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ink) 6%,transparent)} .ds-seg label{display:inline-flex;align-items:center;height:32px;padding:0 12px;border-radius:7px;font-size:13px;font-weight:500;color:var(--mute);cursor:pointer;transition:color .3s,background-color .3s} .ds-seg label:hover{color:var(--ink)} .ds-seg input{position:absolute;opacity:0;pointer-events:none} .ds-seg label:has(:checked){background:var(--brand);color:#fff} .ds-seg label:has(:focus-visible){outline:2px solid var(--brand);outline-offset:2px}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Working Ledger",
+    "overview": "Paper, ink, and one navy. Every Latasya surface (the public profile, the staff ERP, the parent invoice portal, login, and the printed invoice) is to be built from the vendored Astabyte UI 0.9.1 kit, unmodified, with exactly one override: the kit's `--brand` becomes Latasya navy. The public profile is built; the other surfaces still run on DaisyUI and migrate onto this system next. Nothing is decorated. Hierarchy comes from Geist set large and tight, from Geist Mono for the facts, and from the two-step tonal shift between paper and raised paper.\n\nThe system is typographic. There are no photos, illustrations or stock imagery anywhere; the only drawings allowed are ones generated from product facts, like the fleet seat plans. Light is the default stage, Asta's dark stage is the alternate, and every migrated surface carries the toggle. The device setting decides first paint, a saved choice wins after that, and the `theme-head` partial applies `.dark` before paint so nothing flashes.\n\nThe homepage is persuasive and roomy; the ERP is operational and dense. Both use the same tokens, components, and rules. Only spacing and type size change with the mode.",
+    "keyCharacteristics": [
+      "One kit (Asta UI `asta-*` classes), one accent (navy), one family pair (Geist + Geist Mono).",
+      "Depth from tone (paper → paper-2) and soft kit shadows; outlines are inset 1px shadows, never CSS borders.",
+      "Mono for labels, ids, dates and numbers, always tabular.",
+      "Sentence case everywhere; short, plain copy (Bahasa Indonesia on public and parent surfaces, English in the ERP).",
+      "Light and dark are equals: every rule below must hold on both stages."
+    ],
+    "rules": [
+      {
+        "name": "The One Navy Rule",
+        "body": "Navy is the only hue with a voice. No second accent; the retired gold does not return. Status colours appear only inside status badges.",
+        "section": "colors"
+      },
+      {
+        "name": "The Mono Chart Rule",
+        "body": "Charts carry no status colour: revenue is `brand`, expenses are neutral grey, and a loss shows as a sign or label, never as red.",
+        "section": "colors"
+      },
+      {
+        "name": "The Two Families Rule",
+        "body": "Geist and Geist Mono, nothing else: no serif, no system display face, no icon font.",
+        "section": "typography"
+      },
+      {
+        "name": "The Sentence Case Rule",
+        "body": "Headings, labels and buttons are sentence case. No all-caps tracking, no eyebrow line above a heading.",
+        "section": "typography"
+      },
+      {
+        "name": "The Inset Outline Rule",
+        "body": "Edges are drawn with inset shadows, not borders, so they follow the radius and never shift layout.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** build every surface from `asta-*` kit classes and the tokens above; migrate DaisyUI screens onto them rather than restyling DaisyUI.",
+      "**Do** change the accent only by overriding `--brand` (`#1b2a55` light, `#5a72c0` dark).",
+      "**Do** include the `theme-head` partial and the theme toggle on every surface, and check every screen on both stages.",
+      "**Do** set labels, ids, dates and amounts in Geist Mono with `tabular-nums`.",
+      "**Do** show invoice status with `asta-badge-success / -warning / -danger` and nothing else.",
+      "**Do** keep charts mono: revenue in brand, expenses in neutral grey, losses by sign or label.",
+      "**Do** separate sections with space and tone, and draw edges with inset outlines.",
+      "**Do** honour `prefers-reduced-motion` for every entrance animation."
+    ],
+    "donts": [
+      "**Don't** add photos, illustrations, stock imagery or decorative icons; only data-driven drawings.",
+      "**Don't** add a second accent colour, revive the gold, or use status hues outside badges.",
+      "**Don't** put an eyebrow or kicker label above a heading, or number sections decoratively.",
+      "**Don't** nest cards inside cards.",
+      "**Don't** use decorative gradients or glass/backdrop blur. A gradient used as a cut-out mask in the surface colour (the pass perforation) is not decoration.",
+      "**Don't** use a one-sided accent bar (a coloured left or top border) to mark a card or alert.",
+      "**Don't** use `mute` for text someone must read; use `ink-2`.",
+      "**Don't** load any family other than Geist and Geist Mono.",
+      "**Don't** write copy in all caps or title case."
+    ]
+  }
+}

@@ -1,8 +1,39 @@
 @import "tailwindcss";
+/* Astabyte UI 0.9.1 (MIT), vendored unmodified from npm asta-ui/css. */
+@import "./asta/tokens.css";
+@import "./asta/components.css";
 
 @source "../../templates";
 
+/* ponytail: DaisyUI stays until every template is on asta-* classes (PR3 removes it).
+   Page-level base rules (body, focus, selection) live in each migrated page until then. */
 @plugin "../../bin/daisyui.mjs" {
   themes: silk --default;
 }
 @plugin "../../bin/daisyui-theme.mjs";
+
+@theme {
+  --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+/* Latasya brand: one accent, Latasya navy. Dark navy is lifted so white
+   button text keeps 4.5:1 on it. --navy stays fixed for labels on white. */
+:root {
+  --navy: #1b2a55;
+  --brand: var(--navy);
+  --on-brand: #ffffff;
+}
+.dark {
+  --brand: #5a72c0;
+  color-scheme: dark;
+}
+
+/* Theme toggle shows the icon of the current mode. */
+.theme-toggle-moon,
+.dark .theme-toggle-sun {
+  display: none;
+}
+.dark .theme-toggle-moon {
+  display: block;
+}
