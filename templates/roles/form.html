@@ -3,71 +3,60 @@
 {{$data := .Data}}
 
 <div class="max-w-2xl">
-    <h1 class="text-2xl font-bold mb-6">
-        {{if $data.IsEdit}}Edit Role{{else}}New Role{{end}}
-    </h1>
+    <div class="page-head">
+        <h1 class="page-title">{{if $data.IsEdit}}Edit role{{else}}New role{{end}}</h1>
+    </div>
 
     <form method="POST" action="{{$.BasePath}}{{if $data.IsEdit}}/roles/{{$data.Role.Name}}{{else}}/roles{{end}}"
-        class="card bg-base-100 shadow">
+        class="asta-card">
         {{template "csrf" $}}
-        <div class="card-body">
+        <div class="grid grid-cols-1 gap-5">
 
             {{if not $data.IsEdit}}
-            <!-- Name -->
-            <div class="flex flex-col gap-1">
-                <label class="label">Name *</label>
-                <input type="text" name="name" placeholder="e.g. manager"
-                    class="input {{if index $data.Errors "name"}}input-error{{end}}"
-                    value="{{$data.Role.Name}}" required>
-                <span class="text-xs opacity-60">Lowercase letters, digits, hyphens or underscores. Must start with a letter.</span>
-                {{if index $data.Errors "name"}}
-                <span class="text-xs text-error">{{index $data.Errors "name"}}</span>
-                {{end}}
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="name">Name<span class="asta-label-required" aria-hidden="true">*</span></label></div>
+                <label class="asta-input"><input type="text" id="name" name="name" placeholder="e.g. manager"
+                    class="asta-input-control font-mono"
+                    value="{{$data.Role.Name}}" required{{if index $data.Errors "name"}} aria-invalid="true"{{end}}></label>
+                {{if index $data.Errors "name"}}<p class="asta-error" role="alert">{{index $data.Errors "name"}}</p>{{end}}
+                <p class="asta-hint">Lowercase letters, digits, hyphens or underscores. Must start with a letter.</p>
             </div>
             {{else}}
-            <div class="flex flex-col gap-1">
-                <label class="label">Name</label>
-                <input type="text" class="input bg-base-200" value="{{$data.Role.Name}}" disabled>
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="name">Name</label></div>
+                <label class="asta-input"><input type="text" id="name" class="asta-input-control font-mono" value="{{$data.Role.Name}}" disabled></label>
                 {{if $data.Role.IsSystem}}
-                <span class="text-xs opacity-60">System role — name cannot be changed.</span>
+                <p class="asta-hint">System role — name cannot be changed.</p>
                 {{end}}
             </div>
             {{end}}
 
-            <!-- Description -->
-            <div class="flex flex-col gap-1">
-                <label class="label">Description</label>
-                <input type="text" name="description" placeholder="Short description"
-                    class="input"
-                    value="{{$data.Role.Description}}">
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="description">Description</label></div>
+                <label class="asta-input"><input type="text" id="description" name="description" placeholder="Short description"
+                    class="asta-input-control"
+                    value="{{$data.Role.Description}}"></label>
             </div>
 
-            <!-- Capabilities -->
-            <div class="flex flex-col gap-1">
-                <label class="label">
-                    <span>Capabilities</span>
-                    {{if index $data.Errors "capabilities"}}
-                    <span class="text-xs text-error">{{index $data.Errors "capabilities"}}</span>
-                    {{end}}
-                </label>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 p-3 border border-base-300 rounded-lg">
+            <fieldset class="asta-field">
+                <legend class="asta-label">Capabilities</legend>
+                {{if index $data.Errors "capabilities"}}<p class="asta-error" role="alert">{{index $data.Errors "capabilities"}}</p>{{end}}
+                <div class="grid grid-cols-1 gap-2 rounded-lg bg-paper-2 p-3 sm:grid-cols-2">
                     {{range $data.AllCapabilities}}
-                    <label class="label cursor-pointer justify-start gap-2">
-                        <input type="checkbox" name="capabilities" value="{{.}}"
-                            class="checkbox checkbox-sm"
-                            {{if hasString . $data.Role.Capabilities}}checked{{end}}>
-                        <span class="font-mono text-xs">{{.}}</span>
+                    <label class="asta-checkbox">
+                        <span class="asta-checkbox-box"><input type="checkbox" name="capabilities" value="{{.}}"
+                            class="asta-checkbox-input"
+                            {{if hasString . $data.Role.Capabilities}}checked{{end}}>{{template "check-icon"}}</span>
+                        <span><span class="asta-checkbox-label font-mono text-[12.5px]">{{.}}</span></span>
                     </label>
                     {{end}}
                 </div>
-            </div>
+            </fieldset>
+        </div>
 
-            <div class="card-actions justify-end mt-4">
-                <a href="{{$.BasePath}}/roles" class="btn btn-ghost">Cancel</a>
-                <button type="submit" class="btn btn-primary">
-                    {{if $data.IsEdit}}Update{{else}}Create{{end}} Role
-                </button>
-            </div>
+        <div class="asta-card-footer">
+            <a href="{{$.BasePath}}/roles" class="asta-btn asta-btn-ghost"><span class="asta-btn-label">Cancel</span></a>
+            <button type="submit" class="asta-btn asta-btn-accent"><span class="asta-btn-label">{{if $data.IsEdit}}Update role{{else}}Create role{{end}}</span></button>
         </div>
     </form>
 </div>

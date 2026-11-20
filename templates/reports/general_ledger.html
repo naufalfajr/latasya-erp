@@ -2,88 +2,91 @@
 {{define "content"}}
 {{$data := .Data}}
 
-<h1 class="text-2xl font-bold mb-6">General Ledger</h1>
+<div class="page-head">
+    <h1 class="page-title">General ledger</h1>
+</div>
 
-<form class="flex flex-wrap gap-2 mb-4 items-end">
-    <div class="flex flex-col gap-1">
-        <label class="label text-xs">Account</label>
-        <select name="account" class="select select-sm">
-            <option value="">Select account</option>
-            {{$selID := (index $data "AccountID")}}
-            {{range (index $data "Accounts")}}
-            <option value="{{.ID}}" {{if eq .ID $selID}}selected{{end}}>{{.Code}} - {{.Name}}</option>
-            {{end}}
-        </select>
+<form class="mb-4 flex flex-wrap items-end gap-3" aria-label="Ledger filters">
+    <div class="asta-field">
+        <div class="asta-field-head"><label class="asta-label" for="account">Account</label></div>
+        <div class="asta-select asta-select-sm min-w-[240px]">
+            <select id="account" name="account" class="asta-select-control">
+                <option value="">Select account</option>
+                {{$selID := (index $data "AccountID")}}
+                {{range (index $data "Accounts")}}
+                <option value="{{.ID}}" {{if eq .ID $selID}}selected{{end}}>{{.Code}} - {{.Name}}</option>
+                {{end}}
+            </select>
+            {{template "select-chevron"}}
+        </div>
     </div>
-    <div class="flex flex-col gap-1">
-        <label class="label text-xs">From</label>
-        <input type="date" name="from" value="{{index $data "From"}}" class="input input-sm">
+    <div class="asta-field">
+        <div class="asta-field-head"><label class="asta-label" for="from">From</label></div>
+        <label class="asta-input asta-input-sm"><input type="date" id="from" name="from" value="{{index $data "From"}}" class="asta-input-control tabular-nums"></label>
     </div>
-    <div class="flex flex-col gap-1">
-        <label class="label text-xs">To</label>
-        <input type="date" name="to" value="{{index $data "To"}}" class="input input-sm">
+    <div class="asta-field">
+        <div class="asta-field-head"><label class="asta-label" for="to">To</label></div>
+        <label class="asta-input asta-input-sm"><input type="date" id="to" name="to" value="{{index $data "To"}}" class="asta-input-control tabular-nums"></label>
     </div>
-    <button type="submit" class="btn btn-sm btn-primary">Apply</button>
+    <button type="submit" class="asta-btn asta-btn-accent asta-btn-sm"><span class="asta-btn-label">Apply</span></button>
 </form>
 
 {{if (index $data "SelectedAccount")}}
 {{$acct := (index $data "SelectedAccount")}}
-<div class="mb-4">
-    <span class="text-lg font-semibold">{{$acct.Code}} — {{$acct.Name}}</span>
-    <span class="badge badge-ghost badge-sm ml-2">{{$acct.AccountType}}</span>
+<div class="mb-3 flex flex-wrap items-center gap-2">
+    <h2 class="section-title"><span class="font-mono">{{$acct.Code}}</span> — {{$acct.Name}}</h2>
+    <span class="asta-badge asta-badge-sm">{{humanize $acct.AccountType}}</span>
 </div>
 {{end}}
 
-<div class="card bg-base-100 shadow">
-    <div class="card-body overflow-x-auto">
-        {{if gt (index $data "AccountID") 0}}
-        <table class="table table-sm">
-            <thead>
-                <tr>
-                    <th>Date</th>
-                    <th>Reference</th>
-                    <th>Description</th>
-                    <th>Source</th>
-                    <th class="text-right">Debit</th>
-                    <th class="text-right">Credit</th>
-                    <th class="text-right">Balance</th>
-                </tr>
-            </thead>
-            <tbody>
-                {{range (index $data "Entries")}}
-                <tr>
-                    <td class="text-sm">{{formatDate .EntryDate}}</td>
-                    <td class="font-mono text-sm">{{.Reference}}</td>
-                    <td>{{.Description}}</td>
-                    <td>
-                        {{if .SourceType}}
-                        <span class="badge badge-ghost badge-xs">{{.SourceType}}</span>
-                        {{else}}
-                        <span class="badge badge-ghost badge-xs">manual</span>
-                        {{end}}
-                    </td>
-                    <td class="text-right font-mono">{{if gt .Debit 0}}{{formatIDR .Debit}}{{end}}</td>
-                    <td class="text-right font-mono">{{if gt .Credit 0}}{{formatIDR .Credit}}{{end}}</td>
-                    <td class="text-right font-mono font-semibold">{{formatIDR .Balance}}</td>
-                </tr>
-                {{else}}
-                <tr><td colspan="7" class="text-center py-8 opacity-60">No transactions for this account</td></tr>
-                {{end}}
-            </tbody>
-            {{if (index $data "Entries")}}
-            <tfoot>
-                <tr class="font-semibold border-t-2">
-                    <td colspan="4" class="text-right">Total</td>
-                    <td class="text-right font-mono">{{formatIDR (index $data "TotalDebit")}}</td>
-                    <td class="text-right font-mono">{{formatIDR (index $data "TotalCredit")}}</td>
-                    <td class="text-right font-mono">{{formatIDR (index $data "Net")}}</td>
-                </tr>
-            </tfoot>
+{{if gt (index $data "AccountID") 0}}
+<div class="asta-table-wrap"><div class="asta-table-scroll">
+    <table class="asta-table">
+        <thead>
+            <tr>
+                <th class="asta-th" scope="col">Date</th>
+                <th class="asta-th" scope="col">Reference</th>
+                <th class="asta-th" scope="col">Description</th>
+                <th class="asta-th" scope="col">Source</th>
+                <th class="asta-th asta-th-right" scope="col">Debit</th>
+                <th class="asta-th asta-th-right" scope="col">Credit</th>
+                <th class="asta-th asta-th-right" scope="col">Balance</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range (index $data "Entries")}}
+            <tr class="asta-tr">
+                <td class="asta-td tabular-nums">{{formatDate .EntryDate}}</td>
+                <td class="asta-td font-mono">{{.Reference}}</td>
+                <td class="asta-td asta-td-wrap text-ink">{{.Description}}</td>
+                <td class="asta-td">
+                    {{if .SourceType}}
+                    <span class="asta-badge asta-badge-sm">{{humanize .SourceType}}</span>
+                    {{else}}
+                    <span class="asta-badge asta-badge-sm">manual</span>
+                    {{end}}
+                </td>
+                <td class="asta-td asta-td-right font-mono tabular-nums">{{if gt .Debit 0}}{{formatIDR .Debit}}{{end}}</td>
+                <td class="asta-td asta-td-right font-mono tabular-nums">{{if gt .Credit 0}}{{formatIDR .Credit}}{{end}}</td>
+                <td class="asta-td asta-td-right font-mono tabular-nums text-ink">{{formatIDR .Balance}}</td>
+            </tr>
+            {{else}}
+            <tr><td colspan="7" class="asta-td py-10 text-center text-mute">No transactions for this account</td></tr>
             {{end}}
-        </table>
-        {{else}}
-        <p class="text-center py-8 opacity-60">Select an account to view its ledger</p>
+        </tbody>
+        {{if (index $data "Entries")}}
+        <tfoot>
+            <tr>
+                <td colspan="4" class="asta-td asta-td-right bg-paper-2 font-medium text-ink">Total</td>
+                <td class="asta-td asta-td-right bg-paper-2 font-mono tabular-nums font-medium text-ink">{{formatIDR (index $data "TotalDebit")}}</td>
+                <td class="asta-td asta-td-right bg-paper-2 font-mono tabular-nums font-medium text-ink">{{formatIDR (index $data "TotalCredit")}}</td>
+                <td class="asta-td asta-td-right bg-paper-2 font-mono tabular-nums font-medium text-ink">{{formatIDR (index $data "Net")}}</td>
+            </tr>
+        </tfoot>
         {{end}}
-    </div>
-</div>
+    </table>
+</div></div>
+{{else}}
+<div class="asta-table-wrap"><p class="py-10 text-center text-[14px] text-mute">Select an account to view its ledger</p></div>
+{{end}}
 {{end}}

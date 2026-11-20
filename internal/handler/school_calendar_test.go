@@ -127,7 +127,7 @@ func TestSchoolCalendarPage_AdminRenders(t *testing.T) {
 	}
 	body, _ := io.ReadAll(resp.Body)
 	bodyText := string(body)
-	for _, want := range []string{"School Calendar", "Effective School Days", "Google Calendar", "Google OAuth is not configured"} {
+	for _, want := range []string{`page-title">School calendar<`, "Effective school days", "Google Calendar", "Google OAuth is not configured"} {
 		if !strings.Contains(bodyText, want) {
 			t.Errorf("body missing %q", want)
 		}

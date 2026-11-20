@@ -87,7 +87,7 @@ func TestListJournalsAccountFilterSummaryAndInvalidState(t *testing.T) {
 	if strings.Contains(body, fmt.Sprintf(`value="%d"`, unusedID)) {
 		t.Fatal("inactive account without journal history should not be in the selector")
 	}
-	if !strings.Contains(body, `href="/journals" class="btn btn-ghost btn-sm">Reset filters</a>`) {
+	if !strings.Contains(body, `href="/journals" class="asta-btn asta-btn-ghost asta-btn-sm"><span class="asta-btn-label">Reset filters</span></a>`) {
 		t.Fatal("journal list should provide a visible reset control")
 	}
 
@@ -194,7 +194,7 @@ func TestIncomeAndExpenseListsHaveViewOnlyActions(t *testing.T) {
 			}
 			body := readBody(t, resp)
 			resp.Body.Close()
-			if !strings.Contains(body, ">View</a>") || strings.Contains(body, ">Edit</a>") || strings.Contains(body, ">Delete</button>") || strings.Contains(body, "hx-delete=") {
+			if !strings.Contains(body, ">View</span></a>") || strings.Contains(body, ">Edit</span></a>") || strings.Contains(body, ">Delete</span></button>") || strings.Contains(body, "hx-delete=") {
 				t.Fatalf("%s list must expose only View actions", page)
 			}
 		}
@@ -253,7 +253,7 @@ func TestJournalDetailActionsFollowSourceCapabilityAndSafeReturnContext(t *testi
 			t.Errorf("%s detail should return to its exact originating list URL", test.source)
 		}
 		if test.editPath == "" {
-			if strings.Contains(body, "hx-delete=") || strings.Contains(body, ">Edit</a>") {
+			if strings.Contains(body, "hx-delete=") || strings.Contains(body, ">Edit</span></a>") {
 				t.Errorf("generated source %q must not expose edit/delete actions", test.source)
 			}
 			continue
@@ -281,7 +281,7 @@ func TestJournalDetailActionsFollowSourceCapabilityAndSafeReturnContext(t *testi
 	}
 	viewerBody := readBody(t, viewerResp)
 	viewerResp.Body.Close()
-	if strings.Contains(viewerBody, "hx-delete=") || strings.Contains(viewerBody, ">Edit</a>") {
+	if strings.Contains(viewerBody, "hx-delete=") || strings.Contains(viewerBody, ">Edit</span></a>") {
 		t.Fatal("read-only user should not see journal mutation actions")
 	}
 	for _, capabilityCase := range []struct {
@@ -305,7 +305,7 @@ func TestJournalDetailActionsFollowSourceCapabilityAndSafeReturnContext(t *testi
 			}
 			limitedBody := readBody(t, limitedResp)
 			limitedResp.Body.Close()
-			if strings.Contains(limitedBody, ">Edit</a>") != test.canEdit || strings.Contains(limitedBody, "hx-delete=") != test.canEdit {
+			if strings.Contains(limitedBody, ">Edit</span></a>") != test.canEdit || strings.Contains(limitedBody, "hx-delete=") != test.canEdit {
 				t.Errorf("%s capability rendered wrong actions for journal %d", capabilityCase.capability, test.id)
 			}
 		}

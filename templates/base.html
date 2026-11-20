@@ -1,11 +1,11 @@
 {{define "base"}}
 <!DOCTYPE html>
-<html lang="en" data-theme="silk">
+<html lang="en"{{if not .User}} data-theme="silk"{{end}}>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{if .Title}}{{.Title}} — {{end}}Latasya ERP</title>
-    <link rel="stylesheet" href="/static/css/app.css">
+    {{if .User}}{{template "theme-head" .}}{{else}}<link rel="stylesheet" href="/static/css/app.css">{{end}}
     <script src="/static/js/htmx.min.js"></script>
     <script src="/static/js/financial-charts.js"></script>
     <style>
@@ -16,37 +16,41 @@
         .htmx-indicator { opacity: 0; transition: opacity 200ms ease-in; }
         .htmx-request .htmx-indicator, .htmx-request.htmx-indicator { opacity: 1; }
         /* Top loading bar */
-        #page-loader { position: fixed; top: 0; left: 0; width: 100%; height: 3px; background: var(--color-primary); z-index: 9999; }
+        #page-loader { position: fixed; top: 0; left: 0; width: 100%; height: 3px; background: var(--brand, var(--color-primary)); z-index: 9999; }
         /* Full-page navigation loader (non-HTMX link clicks, form submits) */
         body.is-navigating #page-loader { opacity: 1; animation: page-loader-pulse 900ms ease-in-out infinite; }
         @keyframes page-loader-pulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
     </style>
 </head>
-<body class="min-h-screen bg-base-200"
-    {{if .CSRFToken}}hx-headers='{"X-CSRF-Token": "{{.CSRFToken}}"}'{{end}}>
+{{if .User}}
+<body class="latasya" {{if .CSRFToken}}hx-headers='{"X-CSRF-Token": "{{.CSRFToken}}"}'{{end}}>
     <!-- Global loading bar (shown during any HTMX request) -->
     <div id="page-loader" class="htmx-indicator"></div>
 
-    {{if .User}}
-    <div class="drawer lg:drawer-open" hx-indicator="#page-loader">
-        <input id="sidebar-toggle" type="checkbox" class="drawer-toggle">
-        <div class="drawer-content flex flex-col">
+    <div class="erp-shell" hx-indicator="#page-loader">
+        <aside class="asta-sidebar erp-sidebar" aria-label="Sidebar">{{template "sidebar" .}}</aside>
+        <div class="erp-main">
             {{template "nav" .}}
-            <main class="flex-1 p-4 lg:p-6">
+            <main class="erp-content">
                 {{template "flash" .}}
                 {{block "content" .}}{{end}}
             </main>
         </div>
-        <div class="drawer-side">
-            <label for="sidebar-toggle" class="drawer-overlay"></label>
-            {{template "sidebar" .}}
-        </div>
     </div>
-    {{else}}
+
+    <dialog id="erp-nav" class="asta-dialog asta-drawer erp-drawer" data-side="left" aria-label="Menu">
+        <div class="asta-drawer-inner"><div class="asta-sidebar">{{template "sidebar" .}}</div></div>
+        <button type="button" class="asta-drawer-close" data-asta-close aria-label="Close menu">
+            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M3 3l8 8M11 3 3 11"/></svg>
+        </button>
+    </dialog>
+{{else}}
+<body class="min-h-screen bg-base-200" {{if .CSRFToken}}hx-headers='{"X-CSRF-Token": "{{.CSRFToken}}"}'{{end}}>
+    <div id="page-loader" class="htmx-indicator"></div>
     <main class="min-h-screen flex items-center justify-center bg-base-200">
         {{block "content" .}}{{end}}
     </main>
-    {{end}}
+{{end}}
 
     <script>
     // HTMX error handling — show alert on network/server errors
@@ -57,6 +61,11 @@
         } else if (status >= 500) {
             alert('Server error. Please try again.');
         }
+    });
+    // htmx snapshots the page for Back before swapping; an open menu drawer
+    // would come back as a stuck non-modal dialog, so close it first.
+    document.body.addEventListener('htmx:beforeHistorySave', function() {
+        document.querySelectorAll('dialog[open]').forEach(function(d) { d.close(); });
     });
     document.body.addEventListener('htmx:sendError', function() {
         alert('Network error. Please check your connection.');

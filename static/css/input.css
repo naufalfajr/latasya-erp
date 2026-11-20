@@ -4,9 +4,9 @@
 @import "./asta/components.css";
 
 @source "../../templates";
+@source "../js/financial-charts.js";
 
-/* ponytail: DaisyUI stays until every template is on asta-* classes (PR3 removes it).
-   Page-level base rules (body, focus, selection) live in each migrated page until then. */
+/* ponytail: DaisyUI stays until login, portal and print move to asta-* (PR3 removes it). */
 @plugin "../../bin/daisyui.mjs" {
   themes: silk --default;
 }
@@ -17,15 +17,18 @@
   --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
-/* Latasya brand: one accent, Latasya navy. Dark navy is lifted so white
-   button text keeps 4.5:1 on it. --navy stays fixed for labels on white. */
+/* One accent, Latasya navy (dark lifted for 4.5:1 white text); --navy stays fixed.
+   --mute darkened so 12px labels pass 4.5:1 on paper and paper-2 (DESIGN.md). */
 :root {
   --navy: #1b2a55;
   --brand: var(--navy);
   --on-brand: #ffffff;
+  --danger: #e5484d;
+  --mute: #6f6f6b;
 }
 .dark {
   --brand: #5a72c0;
+  --mute: #8a8a8e;
   color-scheme: dark;
 }
 
@@ -36,4 +39,215 @@
 }
 .dark .theme-toggle-moon {
   display: block;
+}
+
+/* ---- Page base for migrated pages (body.latasya). Becomes global in PR3. ---- */
+html:has(> body.latasya) {
+  background: var(--paper);
+}
+body.latasya {
+  font-family: var(--font-sans);
+  background: var(--paper);
+  color: var(--ink);
+}
+.latasya :focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+.latasya ::selection {
+  background: color-mix(in srgb, var(--brand) 22%, transparent);
+}
+
+/* ---- ERP shell: kit sidebar on desktop, drawer on phones. ---- */
+.erp-shell {
+  display: flex;
+  min-height: 100dvh;
+}
+.erp-sidebar {
+  position: sticky;
+  top: 0;
+  height: 100dvh;
+}
+.erp-sidebar .asta-sidebar-nav,
+.erp-drawer .asta-sidebar-nav {
+  min-height: 0;
+  overflow-y: auto;
+  margin-inline: -4px;
+  padding-inline: 4px;
+}
+.erp-main {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+}
+.erp-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  height: 56px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  background: var(--paper);
+}
+.erp-content {
+  width: 100%;
+  max-width: 1280px;
+  padding: 24px 16px 64px;
+}
+@media (min-width: 1024px) {
+  .erp-topbar {
+    display: none;
+  }
+  .erp-content {
+    padding: 32px 40px 80px;
+  }
+}
+@media (max-width: 1023.98px) {
+  .erp-sidebar {
+    display: none;
+  }
+}
+.erp-drawer .asta-sidebar {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  background: transparent;
+}
+.erp-drawer .asta-drawer-inner {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+}
+.erp-drawer .asta-sidebar-link[aria-current="page"] {
+  background: var(--paper-2);
+}
+
+/* ---- Page header: title, optional subtitle, actions on the right. ---- */
+.page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.page-title {
+  font-size: 24px;
+  font-weight: 500;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+}
+.page-sub {
+  margin-top: 4px;
+  font-size: 14px;
+  color: var(--ink-2);
+}
+.page-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.section-title {
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+  color: var(--ink);
+}
+
+/* Inline text link. */
+.erp-link {
+  color: var(--brand);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--brand) 35%, transparent);
+  text-underline-offset: 3px;
+}
+.erp-link:hover {
+  text-decoration-color: var(--brand);
+}
+
+/* Segmented control made of links (filters, period switches): the kit's
+   segmented track and items, with the current link marked by aria-current. */
+.asta-segmented-item[aria-current="page"] {
+  color: var(--ink);
+  background: var(--paper);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.08), 0 3px 10px -4px rgb(0 0 0 / 0.18), inset 0 0 0 1px color-mix(in srgb, var(--ink) 8%, transparent);
+}
+
+/* Error alert: the kit's outlined warning alert with a danger-coloured icon.
+   Errors are the one status besides badges allowed to use red. */
+.asta-alert.asta-alert-danger {
+  background: var(--paper-2);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 45%, transparent);
+}
+.asta-alert-danger > .asta-alert-icon {
+  color: var(--danger);
+}
+
+/* Definition list for record details (label above value). */
+.erp-dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px 24px;
+}
+.erp-dl dt {
+  font-size: 12px;
+  color: var(--mute);
+}
+.erp-dl dd {
+  margin-top: 2px;
+  font-size: 14px;
+  color: var(--ink);
+}
+
+/* Dashboard chart tooltip (static/js/financial-charts.js). */
+.chart-tip {
+  position: fixed;
+  z-index: 50;
+  min-width: 10rem;
+  pointer-events: none;
+  border-radius: 10px;
+  background: var(--paper);
+  padding: 8px 12px;
+  font-size: 12px;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 10%, transparent), 0 16px 40px -12px rgb(0 0 0 / 0.35);
+}
+
+/* Current sidebar link: the kit's indicator surface, drawn statically because
+   pages are server-rendered (aria-current comes from the request path). */
+.asta-sidebar-link[aria-current="page"] {
+  background: var(--paper);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 8%, transparent), 0 1px 2px rgb(0 0 0 / 0.06);
+}
+
+/* Product screens load into the task: table rows keep the kit's hover
+   transition but skip its fade-in on every page load. */
+.latasya .asta-tr {
+  transition: background-color 150ms;
+}
+
+/* Server messages (sync errors, URLs) can be one unbreakable string. */
+.latasya .asta-alert-text {
+  overflow-wrap: anywhere;
+}
+
+/* Destructive actions: the kit's outline button with danger text, so navy
+   stays the only filled colour in any area. The confirm prompt carries the weight. */
+.asta-btn.erp-danger {
+  color: var(--danger);
+}
+.asta-btn.erp-danger:hover {
+  background: color-mix(in srgb, var(--danger) 8%, var(--paper));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 45%, transparent);
+}
+
+/* Inputs inside line-item tables follow their column's width instead of
+   forcing the browser's 20-character default, so the table fits its card. */
+.asta-table .asta-input-control {
+  width: 100%;
 }

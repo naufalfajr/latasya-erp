@@ -3,98 +3,71 @@
 {{$data := .Data}}
 
 <div class="max-w-2xl">
-    <h1 class="text-2xl font-bold mb-6">
-        {{if $data.IsEdit}}Edit Income{{else}}Record Income{{end}}
-    </h1>
+    <div class="page-head">
+        <h1 class="page-title">{{if $data.IsEdit}}Edit income{{else}}Record income{{end}}</h1>
+    </div>
 
     {{if index $data.Errors "general"}}
-    <div class="alert alert-error mb-4">
-        <span>{{index $data.Errors "general"}}</span>
-    </div>
+    <div class="asta-alert asta-alert-danger mb-4" role="alert">{{template "alert-icon"}}<div class="asta-alert-body"><p class="asta-alert-text">{{index $data.Errors "general"}}</p></div></div>
     {{end}}
 
-    <form method="POST" action="{{$.BasePath}}{{if $data.IsEdit}}/income/{{$data.Entry.ID}}{{else}}/income{{end}}"
-        class="card bg-base-100 shadow">
+    <form method="POST" action="{{$.BasePath}}{{if $data.IsEdit}}/income/{{$data.Entry.ID}}{{else}}/income{{end}}" class="asta-card">
         {{template "csrf" $}}
         {{if $data.IsEdit}}<input type="hidden" name="return_to" value="{{$data.ReturnTo}}">{{end}}
-        <div class="card-body">
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <!-- Date -->
-                <div class="flex flex-col gap-1">
-                    <label class="label">Date *</label>
-                    <input type="date" name="entry_date"
-                        class="input {{if index $data.Errors "entry_date"}}input-error{{end}}"
-                        value="{{$data.Entry.EntryDate}}" required>
-                    {{if index $data.Errors "entry_date"}}
-                    <span class="text-xs text-error">{{index $data.Errors "entry_date"}}</span>
-                    {{end}}
-                </div>
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="entry_date">Date<span class="asta-label-required" aria-hidden="true">*</span></label></div>
+                <label class="asta-input"><input type="date" id="entry_date" name="entry_date" class="asta-input-control" value="{{$data.Entry.EntryDate}}" required{{if index $data.Errors "entry_date"}} aria-invalid="true"{{end}}></label>
+                {{if index $data.Errors "entry_date"}}<p class="asta-error" role="alert">{{index $data.Errors "entry_date"}}</p>{{end}}
+            </div>
 
-                <!-- Amount -->
-                <div class="flex flex-col gap-1">
-                    <label class="label">Amount (Rp) *</label>
-                    <input type="number" name="amount" placeholder="e.g. 5000000"
-                        class="input font-mono {{if index $data.Errors "amount"}}input-error{{end}}"
-                        value="{{if gt $data.Amount 0}}{{$data.Amount}}{{end}}" min="1" required>
-                    {{if index $data.Errors "amount"}}
-                    <span class="text-xs text-error">{{index $data.Errors "amount"}}</span>
-                    {{end}}
-                </div>
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="amount">Amount (Rp)<span class="asta-label-required" aria-hidden="true">*</span></label></div>
+                <label class="asta-input"><input type="number" id="amount" name="amount" placeholder="e.g. 5000000" class="asta-input-control font-mono tabular-nums" value="{{if gt $data.Amount 0}}{{$data.Amount}}{{end}}" min="1" required{{if index $data.Errors "amount"}} aria-invalid="true"{{end}}></label>
+                {{if index $data.Errors "amount"}}<p class="asta-error" role="alert">{{index $data.Errors "amount"}}</p>{{end}}
+            </div>
 
-                <!-- Revenue Account -->
-                <div class="flex flex-col gap-1">
-                    <label class="label">Revenue Account *</label>
-                    <select name="revenue_account"
-                        class="select {{if index $data.Errors "revenue_account"}}select-error{{end}}" required>
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="revenue_account">Revenue account<span class="asta-label-required" aria-hidden="true">*</span></label></div>
+                <div class="asta-select">
+                    <select id="revenue_account" name="revenue_account" class="asta-select-control" required{{if index $data.Errors "revenue_account"}} aria-invalid="true"{{end}}>
                         <option value="">Select revenue account</option>
                         {{range $data.RevenueAccounts}}
                         <option value="{{.ID}}" {{if eq .ID $data.RevenueAccount}}selected{{end}}>{{.Code}} - {{.Name}}</option>
                         {{end}}
                     </select>
-                    {{if index $data.Errors "revenue_account"}}
-                    <span class="text-xs text-error">{{index $data.Errors "revenue_account"}}</span>
-                    {{end}}
+                    {{template "select-chevron"}}
                 </div>
+                {{if index $data.Errors "revenue_account"}}<p class="asta-error" role="alert">{{index $data.Errors "revenue_account"}}</p>{{end}}
+            </div>
 
-                <!-- Deposit To -->
-                <div class="flex flex-col gap-1">
-                    <label class="label">Deposit To *</label>
-                    <select name="deposit_account"
-                        class="select {{if index $data.Errors "deposit_account"}}select-error{{end}}" required>
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="deposit_account">Deposit to<span class="asta-label-required" aria-hidden="true">*</span></label></div>
+                <div class="asta-select">
+                    <select id="deposit_account" name="deposit_account" class="asta-select-control" required{{if index $data.Errors "deposit_account"}} aria-invalid="true"{{end}}>
                         <option value="">Select deposit account</option>
                         {{range $data.DepositAccounts}}
                         <option value="{{.ID}}" {{if eq .ID $data.DepositAccount}}selected{{end}}>{{.Code}} - {{.Name}}</option>
                         {{end}}
                     </select>
-                    {{if index $data.Errors "deposit_account"}}
-                    <span class="text-xs text-error">{{index $data.Errors "deposit_account"}}</span>
-                    {{end}}
+                    {{template "select-chevron"}}
                 </div>
+                {{if index $data.Errors "deposit_account"}}<p class="asta-error" role="alert">{{index $data.Errors "deposit_account"}}</p>{{end}}
             </div>
 
-            <!-- Description -->
-            <div class="flex flex-col gap-1 mt-2">
-                <label class="label">Description *</label>
-                <input type="text" name="description" placeholder="e.g. Monthly school bus fee from SD Negeri 1"
-                    class="input {{if index $data.Errors "description"}}input-error{{end}}"
-                    value="{{$data.Entry.Description}}" required>
-                {{if index $data.Errors "description"}}
-                <span class="text-xs text-error">{{index $data.Errors "description"}}</span>
-                {{end}}
+            <div class="asta-field sm:col-span-2">
+                <div class="asta-field-head"><label class="asta-label" for="description">Description<span class="asta-label-required" aria-hidden="true">*</span></label></div>
+                <label class="asta-input"><input type="text" id="description" name="description" placeholder="e.g. Monthly school bus fee from SD Negeri 1" class="asta-input-control" value="{{$data.Entry.Description}}" required{{if index $data.Errors "description"}} aria-invalid="true"{{end}}></label>
+                {{if index $data.Errors "description"}}<p class="asta-error" role="alert">{{index $data.Errors "description"}}</p>{{end}}
             </div>
+        </div>
 
-            <div class="bg-base-200 rounded-lg p-3 mt-4 text-sm">
-                <p class="font-semibold mb-1">What happens:</p>
-                <p class="opacity-70">This creates a journal entry that debits your deposit account (increases cash/bank) and credits the revenue account (records income).</p>
-            </div>
+        <div class="asta-alert asta-alert-neutral mt-6" role="status">{{template "alert-icon"}}<div class="asta-alert-body"><p class="asta-alert-title">What happens</p><p class="asta-alert-text">This creates a journal entry that debits your deposit account (increases cash/bank) and credits the revenue account (records income).</p></div></div>
 
-            <div class="card-actions justify-end mt-4">
-                <a href="{{if $data.IsEdit}}{{$.BasePath}}/journals/{{$data.Entry.ID}}?return_to={{urlquery $data.ReturnTo}}{{else}}{{$.BasePath}}/income{{end}}" class="btn btn-ghost">Cancel</a>
-                <button type="submit" class="btn btn-primary">
-                    {{if $data.IsEdit}}Update{{else}}Record{{end}} Income
-                </button>
-            </div>
+        <div class="asta-card-footer">
+            <a href="{{if $data.IsEdit}}{{$.BasePath}}/journals/{{$data.Entry.ID}}?return_to={{urlquery $data.ReturnTo}}{{else}}{{$.BasePath}}/income{{end}}" class="asta-btn asta-btn-ghost"><span class="asta-btn-label">Cancel</span></a>
+            <button type="submit" class="asta-btn asta-btn-accent"><span class="asta-btn-label">{{if $data.IsEdit}}Update income{{else}}Record income{{end}}</span></button>
         </div>
     </form>
 </div>

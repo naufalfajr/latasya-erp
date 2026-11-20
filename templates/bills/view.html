@@ -3,132 +3,124 @@
 {{$bill := (index .Data "Bill")}}
 {{$assetAccounts := (index .Data "AssetAccounts")}}
 
-<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+<div class="page-head">
     <div>
-        <h1 class="text-2xl font-bold">{{$bill.BillNumber}}</h1>
-        <p class="text-sm opacity-60">{{$bill.ContactName}} &middot; {{formatDate $bill.BillDate}}</p>
+        <div class="flex flex-wrap items-center gap-3">
+            <h1 class="page-title font-mono">{{$bill.BillNumber}}</h1>
+            {{template "status-badge" $bill.Status}}
+        </div>
+        <p class="page-sub">{{$bill.ContactName}} &middot; {{formatDate $bill.BillDate}}{{if $bill.JournalID}} &middot; <a href="{{$.BasePath}}/journals/{{$bill.JournalID}}" class="erp-link">View journal entry</a>{{end}}</p>
     </div>
-    <div class="flex gap-2 flex-wrap">
-        <a href="{{$.BasePath}}/bills" class="btn btn-ghost btn-sm">Back</a>
+    <div class="page-actions">
+        <a href="{{$.BasePath}}/bills" class="asta-btn asta-btn-ghost asta-btn-sm"><span class="asta-btn-label">Back</span></a>
         {{if .User.HasCapability "bills.manage"}}
             {{if eq $bill.Status "draft"}}
-            <a href="{{$.BasePath}}/bills/{{$bill.ID}}/edit" class="btn btn-sm">Edit</a>
-            <form method="POST" action="{{$.BasePath}}/bills/{{$bill.ID}}/receive" class="inline">
-                {{template "csrf" $}}
-                <button type="submit" class="btn btn-info btn-sm"
-                    onclick="return confirm('Mark as received? This will create a journal entry.')">Mark as Received</button>
-            </form>
-            <button class="btn btn-error btn-sm"
+            <a href="{{$.BasePath}}/bills/{{$bill.ID}}/edit" class="asta-btn asta-btn-outline asta-btn-sm"><span class="asta-btn-label">Edit</span></a>
+            <button class="asta-btn asta-btn-outline erp-danger asta-btn-sm"
                 hx-delete="{{$.BasePath}}/bills/{{$bill.ID}}"
                 hx-confirm="Delete this draft bill?"
-                hx-target="body">Delete</button>
+                hx-target="body"><span class="asta-btn-label">Delete</span></button>
+            <form method="POST" action="{{$.BasePath}}/bills/{{$bill.ID}}/receive" class="inline">
+                {{template "csrf" $}}
+                <button type="submit" class="asta-btn asta-btn-accent asta-btn-sm"
+                    onclick="return confirm('Mark as received? This will create a journal entry.')"><span class="asta-btn-label">Mark as received</span></button>
+            </form>
             {{end}}
         {{end}}
     </div>
 </div>
 
-<div class="mb-4">
-    <span class="badge
-        {{if eq $bill.Status "draft"}}badge-ghost
-        {{else if eq $bill.Status "received"}}badge-info
-        {{else if eq $bill.Status "partial"}}badge-warning
-        {{else if eq $bill.Status "paid"}}badge-success
-        {{end}} badge-lg">{{$bill.Status}}</span>
-    {{if $bill.JournalID}}
-    <a href="{{$.BasePath}}/journals/{{$bill.JournalID}}" class="link link-primary text-sm ml-2">View Journal Entry</a>
-    {{end}}
-</div>
+<section class="asta-card mb-4" aria-label="Bill details">
+    <dl class="erp-dl mb-6">
+        <div><dt>Bill date</dt><dd class="tabular-nums">{{formatDate $bill.BillDate}}</dd></div>
+        <div><dt>Due date</dt><dd class="tabular-nums">{{formatDate $bill.DueDate}}</dd></div>
+        <div><dt>Total</dt><dd class="font-mono tabular-nums">{{formatIDR $bill.Total}}</dd></div>
+        <div><dt>Amount due</dt><dd class="font-mono tabular-nums font-medium">{{formatIDR $bill.AmountDue}}</dd></div>
+    </dl>
 
-<div class="card bg-base-100 shadow mb-4">
-    <div class="card-body">
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
-            <div>
-                <p class="text-sm opacity-60">Bill Date</p>
-                <p class="font-semibold">{{formatDate $bill.BillDate}}</p>
-            </div>
-            <div>
-                <p class="text-sm opacity-60">Due Date</p>
-                <p class="font-semibold">{{formatDate $bill.DueDate}}</p>
-            </div>
-            <div>
-                <p class="text-sm opacity-60">Total</p>
-                <p class="font-semibold font-mono">{{formatIDR $bill.Total}}</p>
-            </div>
-            <div>
-                <p class="text-sm opacity-60">Amount Due</p>
-                <p class="font-semibold font-mono {{if gt $bill.AmountDue 0}}text-error{{else}}text-success{{end}}">{{formatIDR $bill.AmountDue}}</p>
-            </div>
-        </div>
-
-        <div class="overflow-x-auto">
-            <table class="table table-sm">
-                <thead>
-                    <tr>
-                        <th>Description</th>
-                        <th>Account</th>
-                        <th class="text-right">Qty</th>
-                        <th class="text-right">Unit Price</th>
-                        <th class="text-right">Amount</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {{range $bill.Lines}}
-                    <tr>
-                        <td>{{.Description}}</td>
-                        <td class="text-sm">{{.AccountCode}} - {{.AccountName}}</td>
-                        <td class="text-right">{{formatQty .Quantity}}</td>
-                        <td class="text-right font-mono">{{formatIDR .UnitPrice}}</td>
-                        <td class="text-right font-mono">{{formatIDR .Amount}}</td>
-                    </tr>
-                    {{end}}
-                </tbody>
-                <tfoot>
-                    <tr><td colspan="4" class="text-right">Subtotal</td><td class="text-right font-mono">{{formatIDR $bill.Subtotal}}</td></tr>
-                    {{if gt $bill.TaxAmount 0}}
-                    <tr><td colspan="4" class="text-right">Tax</td><td class="text-right font-mono">{{formatIDR $bill.TaxAmount}}</td></tr>
-                    {{end}}
-                    <tr class="font-bold"><td colspan="4" class="text-right">Total</td><td class="text-right font-mono">{{formatIDR $bill.Total}}</td></tr>
-                    {{if gt $bill.AmountPaid 0}}
-                    <tr class="text-success"><td colspan="4" class="text-right">Paid</td><td class="text-right font-mono">{{formatIDR $bill.AmountPaid}}</td></tr>
-                    <tr class="font-bold"><td colspan="4" class="text-right">Balance Due</td><td class="text-right font-mono">{{formatIDR $bill.AmountDue}}</td></tr>
-                    {{end}}
-                </tfoot>
-            </table>
-        </div>
-    </div>
-</div>
+    <div class="asta-table-wrap"><div class="asta-table-scroll">
+        <table class="asta-table">
+            <thead>
+                <tr>
+                    <th class="asta-th" scope="col">Description</th>
+                    <th class="asta-th" scope="col">Account</th>
+                    <th class="asta-th asta-th-right" scope="col">Qty</th>
+                    <th class="asta-th asta-th-right" scope="col">Unit price</th>
+                    <th class="asta-th asta-th-right" scope="col">Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range $bill.Lines}}
+                <tr class="asta-tr">
+                    <td class="asta-td asta-td-wrap text-ink">{{.Description}}</td>
+                    <td class="asta-td"><span class="font-mono">{{.AccountCode}}</span> <span class="ml-1">{{.AccountName}}</span></td>
+                    <td class="asta-td asta-td-right tabular-nums">{{formatQty .Quantity}}</td>
+                    <td class="asta-td asta-td-right font-mono tabular-nums">{{formatIDR .UnitPrice}}</td>
+                    <td class="asta-td asta-td-right font-mono tabular-nums">{{formatIDR .Amount}}</td>
+                </tr>
+                {{end}}
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td colspan="4" class="asta-td asta-td-right">Subtotal</td>
+                    <td class="asta-td asta-td-right font-mono tabular-nums">{{formatIDR $bill.Subtotal}}</td>
+                </tr>
+                {{if gt $bill.TaxAmount 0}}
+                <tr>
+                    <td colspan="4" class="asta-td asta-td-right">Tax</td>
+                    <td class="asta-td asta-td-right font-mono tabular-nums">{{formatIDR $bill.TaxAmount}}</td>
+                </tr>
+                {{end}}
+                <tr>
+                    <td colspan="4" class="asta-td asta-td-right font-medium text-ink">Total</td>
+                    <td class="asta-td asta-td-right font-mono tabular-nums font-medium text-ink">{{formatIDR $bill.Total}}</td>
+                </tr>
+                {{if gt $bill.AmountPaid 0}}
+                <tr>
+                    <td colspan="4" class="asta-td asta-td-right">Paid</td>
+                    <td class="asta-td asta-td-right font-mono tabular-nums">−{{formatIDR $bill.AmountPaid}}</td>
+                </tr>
+                <tr>
+                    <td colspan="4" class="asta-td asta-td-right font-medium text-ink">Balance due</td>
+                    <td class="asta-td asta-td-right font-mono tabular-nums font-medium text-ink">{{formatIDR $bill.AmountDue}}</td>
+                </tr>
+                {{end}}
+            </tfoot>
+        </table>
+    </div></div>
+</section>
 
 {{if and (.User.HasCapability "bills.manage") (or (eq $bill.Status "received") (eq $bill.Status "partial") (eq $bill.Status "overdue"))}}
-<div class="card bg-base-100 shadow">
-    <div class="card-body">
-        <h2 class="card-title text-lg">Record Payment</h2>
-        <form method="POST" action="{{$.BasePath}}/bills/{{$bill.ID}}/payment">
-            {{template "csrf" $}}
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div class="flex flex-col gap-1">
-                    <label class="label">Date *</label>
-                    <input type="date" name="payment_date" class="input input-sm" required>
-                </div>
-                <div class="flex flex-col gap-1">
-                    <label class="label">Amount (Rp) *</label>
-                    <input type="number" name="amount" class="input input-sm font-mono"
-                        value="{{$bill.AmountDue}}" min="1" max="{{$bill.AmountDue}}" required>
-                </div>
-                <div class="flex flex-col gap-1">
-                    <label class="label">Paid From *</label>
-                    <select name="payment_account" class="select select-sm" required>
+<section class="asta-card" aria-labelledby="payment-heading">
+    <div class="asta-card-header"><h2 id="payment-heading" class="asta-card-title">Record payment</h2></div>
+    <form method="POST" action="{{$.BasePath}}/bills/{{$bill.ID}}/payment">
+        {{template "csrf" $}}
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="payment_date">Date<span class="asta-label-required" aria-hidden="true">*</span></label></div>
+                <label class="asta-input asta-input-sm"><input type="date" id="payment_date" name="payment_date" class="asta-input-control" required></label>
+            </div>
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="payment_amount">Amount (Rp)<span class="asta-label-required" aria-hidden="true">*</span></label></div>
+                <label class="asta-input asta-input-sm"><input type="number" id="payment_amount" name="amount" class="asta-input-control font-mono tabular-nums" value="{{$bill.AmountDue}}" min="1" max="{{$bill.AmountDue}}" required></label>
+            </div>
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="payment_account">Paid from<span class="asta-label-required" aria-hidden="true">*</span></label></div>
+                <div class="asta-select asta-select-sm">
+                    <select id="payment_account" name="payment_account" class="asta-select-control" required>
                         <option value="">Select account</option>
                         {{range $assetAccounts}}
                         <option value="{{.ID}}">{{.Code}} - {{.Name}}</option>
                         {{end}}
                     </select>
+                    {{template "select-chevron"}}
                 </div>
             </div>
-            <div class="mt-3">
-                <button type="submit" class="btn btn-success btn-sm">Record Payment</button>
-            </div>
-        </form>
-    </div>
-</div>
+        </div>
+        <div class="asta-card-footer">
+            <button type="submit" class="asta-btn asta-btn-accent asta-btn-sm"><span class="asta-btn-label">Record payment</span></button>
+        </div>
+    </form>
+</section>
 {{end}}
 {{end}}

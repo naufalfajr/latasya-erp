@@ -63,8 +63,8 @@ func TestCompanyProfilePage_AdminRenders(t *testing.T) {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
 	}
 	body, _ := io.ReadAll(resp.Body)
-	if !strings.Contains(string(body), "Company Profile") {
-		t.Error("body missing 'Company Profile'")
+	if !strings.Contains(string(body), `page-title">Company profile<`) {
+		t.Error("body missing 'Company profile'")
 	}
 	if !strings.Contains(string(body), "Latasya Transport") {
 		t.Error("body missing seeded company name")

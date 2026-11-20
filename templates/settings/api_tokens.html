@@ -1,135 +1,133 @@
 {{template "base" .}}
 {{define "content"}}
 {{$data := .Data}}
-<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-    <h1 class="text-2xl font-bold">API Tokens</h1>
-    <a href="{{$.BasePath}}/settings/api-tokens/new" class="btn btn-primary btn-sm">Create new token</a>
+<div class="page-head">
+    <h1 class="page-title">API tokens</h1>
+    <div class="page-actions">
+        <a href="{{$.BasePath}}/settings/api-tokens/new" class="asta-btn asta-btn-accent asta-btn-sm"><span class="asta-btn-label">Create new token</span></a>
+    </div>
 </div>
 
 {{if $data.Errors.general}}
-<div class="alert alert-error mb-4">{{$data.Errors.general}}</div>
+<div class="asta-alert asta-alert-danger mb-4" role="alert">{{template "alert-icon"}}<div class="asta-alert-body"><p class="asta-alert-text">{{$data.Errors.general}}</p></div></div>
 {{end}}
 
 {{$tokens := $data.Tokens}}
-<div class="overflow-x-auto">
-    <table class="table table-sm">
+<div class="asta-table-wrap"><div class="asta-table-scroll">
+    <table class="asta-table">
         <thead>
             <tr>
-                <th>Name</th>
-                <th>Prefix</th>
-                <th>Scopes</th>
-                <th>Created</th>
-                <th>Last Used</th>
-                <th>Expires</th>
-                <th>Actions</th>
+                <th class="asta-th" scope="col">Name</th>
+                <th class="asta-th" scope="col">Prefix</th>
+                <th class="asta-th" scope="col">Scopes</th>
+                <th class="asta-th" scope="col">Created</th>
+                <th class="asta-th" scope="col">Last used</th>
+                <th class="asta-th" scope="col">Expires</th>
+                <th class="asta-th" scope="col">Actions</th>
             </tr>
         </thead>
         <tbody>
             {{range $tokens}}
-            <tr>
-                <td class="font-semibold">{{.Name}}</td>
+            <tr class="asta-tr">
+                <td class="asta-td font-medium text-ink">{{.Name}}</td>
                 {{template "api-token-cells" .}}
-                <td>
+                <td class="asta-td">
                     {{if not .RevokedAt}}
                     <form method="POST" action="{{$.BasePath}}/settings/api-tokens/{{.ID}}/revoke" class="inline" onsubmit="return confirm('Revoke this token? This cannot be undone.')">
                         {{template "csrf" $}}
-                        <button type="submit" class="btn btn-error btn-xs">Revoke</button>
+                        <button type="submit" class="asta-btn asta-btn-outline erp-danger asta-btn-xs"><span class="asta-btn-label">Revoke</span></button>
                     </form>
                     {{else}}
-                    <span class="badge badge-error badge-sm">Revoked</span>
+                    <span class="asta-badge asta-badge-sm asta-badge-danger">Revoked</span>
                     {{end}}
                 </td>
             </tr>
             {{else}}
             <tr>
-                <td colspan="7">
-                    <div class="card bg-base-200 my-4">
-                        <div class="card-body items-center text-center">
-                            <p class="opacity-60">No API tokens yet.</p>
-                            <p class="text-sm opacity-50">Create a token to use with bots, scripts, or MCP integrations.</p>
-                        </div>
-                    </div>
+                <td colspan="7" class="asta-td py-10 text-center">
+                    <p class="text-ink-2">No API tokens yet.</p>
+                    <p class="mt-1 text-[13px] text-mute">Create a token to use with bots, scripts, or MCP integrations.</p>
                 </td>
             </tr>
             {{end}}
         </tbody>
     </table>
-</div>
+</div></div>
 
-<div class="divider mt-6">Token Usage</div>
-<div class="card bg-base-200">
-    <div class="card-body">
-        <p class="text-sm">Use this token in the <code>Authorization</code> header:</p>
-        <pre class="bg-base-300 p-2 rounded text-xs overflow-x-auto"><code>Authorization: Bearer lat_yourtokenhere</code></pre>
-        <p class="text-sm opacity-60 mt-2">Token scopes are intersected with your current role capabilities at request time. If your role is downgraded, your tokens immediately lose the lost capabilities. Tokens cannot gain capabilities beyond their original scope set.</p>
-    </div>
-</div>
+<section class="asta-card mt-6">
+    <div class="asta-card-header"><h2 class="asta-card-title">Token usage</h2></div>
+    <p class="text-[14px] text-ink-2">Use this token in the <code class="font-mono">Authorization</code> header:</p>
+    <pre class="mt-2 overflow-x-auto rounded-lg bg-paper-2 p-3 font-mono text-[12.5px] text-ink"><code>Authorization: Bearer lat_yourtokenhere</code></pre>
+    <p class="mt-3 text-[13px] text-mute">Token scopes are intersected with your current role capabilities at request time. If your role is downgraded, your tokens immediately lose the lost capabilities. Tokens cannot gain capabilities beyond their original scope set.</p>
+</section>
 
 {{if $.User.HasCapability "users.manage"}}
-<div id="all-tokens" class="divider mt-6">All Users' Tokens</div>
-<p class="text-sm opacity-60 mb-4">Every user's tokens, including the Telegram bot's. Revoke one to cut it off without deactivating its owner.</p>
+<div class="mt-8 mb-4">
+    <h2 id="all-tokens" class="section-title">All users' tokens</h2>
+    <p class="mt-1 text-[14px] text-ink-2">Every user's tokens, including the Telegram bot's. Revoke one to cut it off without deactivating its owner.</p>
+</div>
 
 {{if $data.Errors.all}}
-<div class="alert alert-error mb-4">{{$data.Errors.all}}</div>
+<div class="asta-alert asta-alert-danger mb-4" role="alert">{{template "alert-icon"}}<div class="asta-alert-body"><p class="asta-alert-text">{{$data.Errors.all}}</p></div></div>
 {{end}}
 
-<div class="overflow-x-auto">
-    <table class="table table-sm">
+<div class="asta-table-wrap"><div class="asta-table-scroll">
+    <table class="asta-table">
         <thead>
             <tr>
-                <th>Owner</th>
-                <th>Name</th>
-                <th>Prefix</th>
-                <th>Scopes</th>
-                <th>Created</th>
-                <th>Last Used</th>
-                <th>Expires</th>
-                <th>Actions</th>
+                <th class="asta-th" scope="col">Owner</th>
+                <th class="asta-th" scope="col">Name</th>
+                <th class="asta-th" scope="col">Prefix</th>
+                <th class="asta-th" scope="col">Scopes</th>
+                <th class="asta-th" scope="col">Created</th>
+                <th class="asta-th" scope="col">Last used</th>
+                <th class="asta-th" scope="col">Expires</th>
+                <th class="asta-th" scope="col">Actions</th>
             </tr>
         </thead>
         <tbody>
             {{range $data.AllTokens}}
-            <tr>
-                <td>
-                    <div class="font-semibold">{{.OwnerUsername}}</div>
-                    <div class="text-xs opacity-60">{{.OwnerName}}</div>
+            <tr class="asta-tr">
+                <td class="asta-td">
+                    <div class="font-medium text-ink">{{.OwnerUsername}}</div>
+                    <div class="text-[12px] text-mute">{{.OwnerName}}</div>
                 </td>
-                <td>{{.Name}}</td>
+                <td class="asta-td">{{.Name}}</td>
                 {{template "api-token-cells" .}}
-                <td>
+                <td class="asta-td">
                     {{if .RevokedAt}}
-                    <span class="badge badge-error badge-sm">Revoked</span>
+                    <span class="asta-badge asta-badge-sm asta-badge-danger">Revoked</span>
                     {{else if index $data.Manageable .OwnerRole}}
                     <form method="POST" action="{{$.BasePath}}/settings/api-tokens/all/{{.ID}}/revoke" class="inline" onsubmit="return confirm('Revoke this token? Anything using it, such as the Telegram bot, stops working immediately.')">
                         {{template "csrf" $}}
-                        <button type="submit" class="btn btn-error btn-xs">Revoke</button>
+                        <button type="submit" class="asta-btn asta-btn-outline erp-danger asta-btn-xs"><span class="asta-btn-label">Revoke</span></button>
                     </form>
                     {{end}}
                 </td>
             </tr>
             {{else}}
             <tr>
-                <td colspan="8" class="text-center py-8 opacity-60">No API tokens yet.</td>
+                <td colspan="8" class="asta-td py-10 text-center text-mute">No API tokens yet.</td>
             </tr>
             {{end}}
         </tbody>
     </table>
-</div>
+</div></div>
 {{end}}
 {{end}}
 
 {{define "api-token-cells"}}
-<td><code class="text-xs">{{.TokenPrefix}}</code></td>
-<td>
+<td class="asta-td"><code class="font-mono text-[12px]">{{.TokenPrefix}}</code></td>
+<td class="asta-td">
     <div class="flex flex-wrap gap-1">
-        {{range .Scopes}}<span class="badge badge-info badge-sm">{{.}}</span>{{end}}
+        {{range .Scopes}}<span class="asta-badge asta-badge-sm font-mono">{{.}}</span>{{end}}
     </div>
 </td>
-<td class="text-sm">{{.CreatedAt.Format "Jan 2, 2006"}}</td>
-<td class="text-sm">
-    {{if .LastUsedAt}}{{.LastUsedAt.Format "Jan 2, 2006 15:04"}}{{else}}<span class="opacity-50">Never</span>{{end}}
+<td class="asta-td tabular-nums">{{.CreatedAt.Format "2 Jan 2006"}}</td>
+<td class="asta-td tabular-nums">
+    {{if .LastUsedAt}}{{.LastUsedAt.Format "2 Jan 2006 15:04"}}{{else}}<span class="text-mute">Never</span>{{end}}
 </td>
-<td class="text-sm">
-    {{if .ExpiresAt}}{{.ExpiresAt.Format "Jan 2, 2006"}}{{else}}<span class="opacity-50">Never</span>{{end}}
+<td class="asta-td tabular-nums">
+    {{if .ExpiresAt}}{{.ExpiresAt.Format "2 Jan 2006"}}{{else}}<span class="text-mute">Never</span>{{end}}
 </td>
 {{end}}

@@ -1,61 +1,61 @@
 {{template "base" .}}
 {{define "content"}}
-<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-    <h1 class="text-2xl font-bold">Bills</h1>
+<div class="page-head">
+    <h1 class="page-title">Bills</h1>
     {{if .User.HasCapability "bills.manage"}}
-    <a href="{{$.BasePath}}/bills/new" class="btn btn-primary btn-sm">+ New Bill</a>
+    <div class="page-actions">
+        <a href="{{$.BasePath}}/bills/new" class="asta-btn asta-btn-accent asta-btn-sm"><span class="asta-btn-label">New bill</span></a>
+    </div>
     {{end}}
 </div>
 
 {{$data := .Data}}
+{{$filter := index $data "Filter"}}
 
-<div class="tabs tabs-boxed mb-4 flex-wrap">
-    <a href="{{$.BasePath}}/bills" class="tab {{if eq (index $data "Filter") ""}}tab-active{{end}}">All</a>
-    <a href="{{$.BasePath}}/bills?status=draft" class="tab {{if eq (index $data "Filter") "draft"}}tab-active{{end}}">Draft</a>
-    <a href="{{$.BasePath}}/bills?status=received" class="tab {{if eq (index $data "Filter") "received"}}tab-active{{end}}">Received</a>
-    <a href="{{$.BasePath}}/bills?status=partial" class="tab {{if eq (index $data "Filter") "partial"}}tab-active{{end}}">Partial</a>
-    <a href="{{$.BasePath}}/bills?status=paid" class="tab {{if eq (index $data "Filter") "paid"}}tab-active{{end}}">Paid</a>
-</div>
+<nav class="asta-segmented asta-segmented-sm mb-4 max-w-full overflow-x-auto" aria-label="Filter by status">
+    <a href="{{$.BasePath}}/bills" class="asta-segmented-item"{{if eq $filter ""}} aria-current="page"{{end}}>All</a>
+    <a href="{{$.BasePath}}/bills?status=draft" class="asta-segmented-item"{{if eq $filter "draft"}} aria-current="page"{{end}}>Draft</a>
+    <a href="{{$.BasePath}}/bills?status=received" class="asta-segmented-item"{{if eq $filter "received"}} aria-current="page"{{end}}>Received</a>
+    <a href="{{$.BasePath}}/bills?status=partial" class="asta-segmented-item"{{if eq $filter "partial"}} aria-current="page"{{end}}>Partial</a>
+    <a href="{{$.BasePath}}/bills?status=paid" class="asta-segmented-item"{{if eq $filter "paid"}} aria-current="page"{{end}}>Paid</a>
+</nav>
 
-<div class="overflow-x-auto">
-    <table class="table table-sm">
+<div class="asta-table-wrap"><div class="asta-table-scroll">
+    <table class="asta-table">
         <thead>
             <tr>
-                <th>Number</th>
-                <th>Supplier</th>
-                <th>Date</th>
-                <th>Due Date</th>
-                <th>Status</th>
-                <th class="text-right">Total</th>
-                <th class="text-right">Paid</th>
-                <th class="text-right">Due</th>
-                <th>Actions</th>
+                <th class="asta-th" scope="col">Number</th>
+                <th class="asta-th hidden sm:table-cell" scope="col">Supplier</th>
+                <th class="asta-th hidden sm:table-cell" scope="col">Date</th>
+                <th class="asta-th hidden sm:table-cell" scope="col">Due date</th>
+                <th class="asta-th hidden sm:table-cell" scope="col">Status</th>
+                <th class="asta-th asta-th-right hidden sm:table-cell" scope="col">Total</th>
+                <th class="asta-th asta-th-right hidden sm:table-cell" scope="col">Paid</th>
+                <th class="asta-th asta-th-right" scope="col">Due</th>
+                <th class="asta-th hidden sm:table-cell" scope="col"><span class="sr-only">Actions</span></th>
             </tr>
         </thead>
         <tbody>
             {{range (index $data "Bills")}}
-            <tr>
-                <td class="font-mono text-sm">{{.BillNumber}}</td>
-                <td>{{.ContactName}}</td>
-                <td class="text-sm">{{formatDate .BillDate}}</td>
-                <td class="text-sm">{{formatDate .DueDate}}</td>
-                <td><span class="badge badge-sm
-                    {{if eq .Status "draft"}}badge-ghost
-                    {{else if eq .Status "received"}}badge-info
-                    {{else if eq .Status "partial"}}badge-warning
-                    {{else if eq .Status "paid"}}badge-success
-                    {{end}}">{{.Status}}</span></td>
-                <td class="text-right font-mono text-sm">{{formatIDR .Total}}</td>
-                <td class="text-right font-mono text-sm">{{formatIDR .AmountPaid}}</td>
-                <td class="text-right font-mono text-sm">{{formatIDR .AmountDue}}</td>
-                <td><a href="{{$.BasePath}}/bills/{{.ID}}" class="btn btn-ghost btn-xs">View</a></td>
+            <tr class="asta-tr">
+                <td class="asta-td font-mono"><a class="erp-link" href="{{$.BasePath}}/bills/{{.ID}}">{{.BillNumber}}</a><span class="mt-0.5 block max-w-[180px] truncate font-sans text-[12.5px] text-ink-2 sm:hidden">{{.ContactName}}</span><span class="mt-1 block sm:hidden">{{template "status-badge" .Status}}</span></td>
+                <td class="asta-td text-ink hidden sm:table-cell">{{.ContactName}}</td>
+                <td class="asta-td tabular-nums hidden sm:table-cell">{{formatDate .BillDate}}</td>
+                <td class="asta-td tabular-nums hidden sm:table-cell">{{formatDate .DueDate}}</td>
+                <td class="asta-td hidden sm:table-cell">{{template "status-badge" .Status}}</td>
+                <td class="asta-td asta-td-right font-mono tabular-nums hidden sm:table-cell">{{formatIDR .Total}}</td>
+                <td class="asta-td asta-td-right font-mono tabular-nums hidden sm:table-cell">{{formatIDR .AmountPaid}}</td>
+                <td class="asta-td asta-td-right font-mono tabular-nums text-ink">{{formatIDR .AmountDue}}</td>
+                <td class="asta-td hidden sm:table-cell"><a href="{{$.BasePath}}/bills/{{.ID}}" class="asta-btn asta-btn-outline asta-btn-xs"><span class="asta-btn-label">View</span></a></td>
             </tr>
             {{else}}
-            <tr><td colspan="9" class="text-center py-8 opacity-60">No bills found</td></tr>
+            <tr>
+                <td colspan="9" class="asta-td py-10 text-center text-mute">No bills found</td>
+            </tr>
             {{end}}
         </tbody>
     </table>
-</div>
+</div></div>
 
 {{template "pagination" (index $data "Pagination")}}
 {{end}}

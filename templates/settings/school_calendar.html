@@ -2,166 +2,160 @@
 {{define "content"}}
 {{$data := .Data}}
 {{$conn := $data.GoogleConnection}}
-<div class="flex flex-col gap-2 mb-6">
-    <h1 class="text-2xl font-bold">School Calendar</h1>
-    <p class="text-sm opacity-60">Manage no-school days used by recurring invoice adjustments. School days are Monday through Saturday.</p>
+<div class="page-head">
+    <div>
+        <h1 class="page-title">School calendar</h1>
+        <p class="page-sub">Manage no-school days used by recurring invoice adjustments. School days are Monday through Saturday.</p>
+    </div>
 </div>
 
 {{if $data.Errors.general}}
-<div class="alert alert-error mb-4">{{$data.Errors.general}}</div>
+<div class="asta-alert asta-alert-danger mb-4" role="alert">{{template "alert-icon"}}<div class="asta-alert-body"><p class="asta-alert-text">{{$data.Errors.general}}</p></div></div>
 {{end}}
 
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-    <form method="GET" action="{{$.BasePath}}/settings/school-calendar" class="card bg-base-100 shadow lg:col-span-2">
-        <div class="card-body">
-            <h2 class="card-title">Month Preview</h2>
-            <div class="form-control max-w-xs">
-                <label class="label" for="month"><span class="label-text">Month</span></label>
-                <input id="month" name="month" type="month" value="{{$data.Month}}" class="input input-bordered">
+<div class="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
+    <form method="GET" action="{{$.BasePath}}/settings/school-calendar" class="asta-card lg:col-span-2">
+        <div class="asta-card-header"><h2 class="asta-card-title">Month preview</h2></div>
+        <div class="flex flex-wrap items-end gap-3">
+            <div class="asta-field w-full max-w-xs">
+                <div class="asta-field-head"><label class="asta-label" for="month">Month</label></div>
+                <label class="asta-input"><input id="month" name="month" type="month" value="{{$data.Month}}" class="asta-input-control"></label>
             </div>
-            <div class="card-actions justify-end">
-                <button type="submit" class="btn btn-primary btn-sm">Preview</button>
-            </div>
+            <button type="submit" class="asta-btn asta-btn-outline"><span class="asta-btn-label">Preview</span></button>
         </div>
     </form>
-    <div class="stats stats-vertical bg-base-100 shadow">
-        <div class="stat">
-            <div class="stat-title">Effective School Days</div>
-            <div class="stat-value text-primary">{{$data.EffectiveSchoolDays}}</div>
-            <div class="stat-desc">Monday-Saturday after closures</div>
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-1">
+        <div class="asta-stat-card">
+            <p class="asta-stat-card-label">Effective school days</p>
+            <p class="asta-stat-card-value font-mono text-[22px]">{{$data.EffectiveSchoolDays}}</p>
+            <p class="asta-stat-card-note text-[12.5px]">Monday-Saturday after closures</p>
         </div>
-        <div class="stat">
-            <div class="stat-title">Invoice Multiplier</div>
-            <div class="stat-value text-secondary">{{$data.MultiplierPercent}}%</div>
-            <div class="stat-desc">Applied when recurring invoices are generated</div>
+        <div class="asta-stat-card">
+            <p class="asta-stat-card-label">Invoice multiplier</p>
+            <p class="asta-stat-card-value font-mono text-[22px]">{{$data.MultiplierPercent}}%</p>
+            <p class="asta-stat-card-note text-[12.5px]">Applied when recurring invoices are generated</p>
         </div>
     </div>
 </div>
 
-<div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
-    <div class="xl:col-span-2 flex flex-col gap-4">
-        <form method="POST" action="{{$.BasePath}}/settings/school-calendar/closures?month={{$data.Month}}" class="card bg-base-100 shadow">
+<div class="grid grid-cols-1 gap-6 xl:grid-cols-3">
+    <div class="flex flex-col gap-4 xl:col-span-2">
+        <form method="POST" action="{{$.BasePath}}/settings/school-calendar/closures?month={{$data.Month}}" class="asta-card">
             {{template "csrf" $}}
-            <div class="card-body">
-                <h2 class="card-title">Add Manual Closure</h2>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <div class="form-control md:col-span-3">
-                        <label class="label" for="title"><span class="label-text">Title <span class="text-error">*</span></span></label>
-                        <input id="title" name="title" type="text" value="{{$data.ManualClosure.Title}}" class="input input-bordered {{if $data.Errors.title}}input-error{{end}}" placeholder="Midterm break" required>
-                        {{if $data.Errors.title}}<span class="text-error text-sm mt-1">{{$data.Errors.title}}</span>{{end}}
-                    </div>
-                    <div class="form-control">
-                        <label class="label" for="start_date"><span class="label-text">Start date <span class="text-error">*</span></span></label>
-                        <input id="start_date" name="start_date" type="date" value="{{$data.ManualClosure.StartDate}}" class="input input-bordered {{if $data.Errors.start_date}}input-error{{end}}" required>
-                        {{if $data.Errors.start_date}}<span class="text-error text-sm mt-1">{{$data.Errors.start_date}}</span>{{end}}
-                    </div>
-                    <div class="form-control">
-                        <label class="label" for="end_date"><span class="label-text">End date <span class="text-error">*</span></span></label>
-                        <input id="end_date" name="end_date" type="date" value="{{$data.ManualClosure.EndDate}}" class="input input-bordered {{if $data.Errors.end_date}}input-error{{end}}" required>
-                        {{if $data.Errors.end_date}}<span class="text-error text-sm mt-1">{{$data.Errors.end_date}}</span>{{end}}
-                    </div>
+            <div class="asta-card-header"><h2 class="asta-card-title">Add manual closure</h2></div>
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div class="asta-field md:col-span-2">
+                    <div class="asta-field-head"><label class="asta-label" for="title">Title<span class="asta-label-required" aria-hidden="true">*</span></label></div>
+                    <label class="asta-input"><input id="title" name="title" type="text" value="{{$data.ManualClosure.Title}}" class="asta-input-control" placeholder="Midterm break" required{{if $data.Errors.title}} aria-invalid="true"{{end}}></label>
+                    {{if $data.Errors.title}}<p class="asta-error" role="alert">{{$data.Errors.title}}</p>{{end}}
                 </div>
-                <div class="card-actions justify-end">
-                    <button type="submit" class="btn btn-primary btn-sm">Add closure</button>
+                <div class="asta-field">
+                    <div class="asta-field-head"><label class="asta-label" for="start_date">Start date<span class="asta-label-required" aria-hidden="true">*</span></label></div>
+                    <label class="asta-input"><input id="start_date" name="start_date" type="date" value="{{$data.ManualClosure.StartDate}}" class="asta-input-control" required{{if $data.Errors.start_date}} aria-invalid="true"{{end}}></label>
+                    {{if $data.Errors.start_date}}<p class="asta-error" role="alert">{{$data.Errors.start_date}}</p>{{end}}
                 </div>
+                <div class="asta-field">
+                    <div class="asta-field-head"><label class="asta-label" for="end_date">End date<span class="asta-label-required" aria-hidden="true">*</span></label></div>
+                    <label class="asta-input"><input id="end_date" name="end_date" type="date" value="{{$data.ManualClosure.EndDate}}" class="asta-input-control" required{{if $data.Errors.end_date}} aria-invalid="true"{{end}}></label>
+                    {{if $data.Errors.end_date}}<p class="asta-error" role="alert">{{$data.Errors.end_date}}</p>{{end}}
+                </div>
+            </div>
+            <div class="asta-card-footer">
+                <button type="submit" class="asta-btn asta-btn-accent asta-btn-sm"><span class="asta-btn-label">Add closure</span></button>
             </div>
         </form>
 
-        <div class="card bg-base-100 shadow">
-            <div class="card-body">
-                <h2 class="card-title">Closures for {{$data.Month}}</h2>
-                <div class="overflow-x-auto">
-                    <table class="table table-sm">
-                        <thead>
-                            <tr>
-                                <th>Title</th>
-                                <th>Dates</th>
-                                <th>Source</th>
-                                <th class="text-right">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {{range $data.Closures}}
-                            <tr>
-                                <td class="font-semibold">{{.Title}}</td>
-                                <td class="text-sm">{{formatDate .StartDate}} to {{formatDate .EndDate}}</td>
-                                <td>
-                                    <span class="badge badge-sm {{if eq .Source "manual"}}badge-info{{else}}badge-success{{end}}">{{.Source}}</span>
-                                </td>
-                                <td class="text-right">
-                                    <form method="POST" action="{{$.BasePath}}/settings/school-calendar/closures/{{.ID}}/delete?month={{$data.Month}}" class="inline" onsubmit="return confirm('Delete this closure?')">
-                                        {{template "csrf" $}}
-                                        <button type="submit" class="btn btn-ghost btn-xs text-error">Delete</button>
-                                    </form>
-                                </td>
-                            </tr>
-                            {{else}}
-                            <tr>
-                                <td colspan="4" class="text-center py-8 opacity-60">No closures for this month.</td>
-                            </tr>
-                            {{end}}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
+        <section class="asta-card">
+            <div class="asta-card-header"><h2 class="asta-card-title">Closures for {{$data.Month}}</h2></div>
+            <div class="asta-table-wrap"><div class="asta-table-scroll">
+                <table class="asta-table">
+                    <thead>
+                        <tr>
+                            <th class="asta-th" scope="col">Title</th>
+                            <th class="asta-th" scope="col">Dates</th>
+                            <th class="asta-th" scope="col">Source</th>
+                            <th class="asta-th asta-th-right" scope="col">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{range $data.Closures}}
+                        <tr class="asta-tr">
+                            <td class="asta-td asta-td-wrap font-medium text-ink">{{.Title}}</td>
+                            <td class="asta-td tabular-nums">{{formatDate .StartDate}} to {{formatDate .EndDate}}</td>
+                            <td class="asta-td"><span class="asta-badge asta-badge-sm">{{humanize .Source}}</span></td>
+                            <td class="asta-td asta-td-right">
+                                <form method="POST" action="{{$.BasePath}}/settings/school-calendar/closures/{{.ID}}/delete?month={{$data.Month}}" class="inline" onsubmit="return confirm('Delete this closure?')">
+                                    {{template "csrf" $}}
+                                    <button type="submit" class="asta-btn asta-btn-outline erp-danger asta-btn-xs"><span class="asta-btn-label">Delete</span></button>
+                                </form>
+                            </td>
+                        </tr>
+                        {{else}}
+                        <tr>
+                            <td colspan="4" class="asta-td py-10 text-center text-mute">No closures for this month.</td>
+                        </tr>
+                        {{end}}
+                    </tbody>
+                </table>
+            </div></div>
+        </section>
     </div>
 
-    <div class="card bg-base-100 shadow h-fit">
-        <div class="card-body">
-            <h2 class="card-title">Google Calendar</h2>
-            {{if not $data.GoogleConfigEnabled}}
-            <div class="alert alert-warning text-sm">Google OAuth is not configured on the server.</div>
-            {{end}}
-            <p class="text-sm opacity-60">Paste the private school closure calendar ID, then connect Google to sync events into local closures.</p>
+    <section class="asta-card h-fit">
+        <div class="asta-card-header">
+            <h2 class="asta-card-title">Google Calendar</h2>
+            <p class="asta-card-description">Paste the private school closure calendar ID, then connect Google to sync events into local closures.</p>
+        </div>
+        {{if not $data.GoogleConfigEnabled}}
+        <div class="asta-alert asta-alert-warning mb-4" role="status">{{template "alert-icon"}}<div class="asta-alert-body"><p class="asta-alert-text">Google OAuth is not configured on the server.</p></div></div>
+        {{end}}
 
-            <form method="POST" action="{{$.BasePath}}/settings/school-calendar/google-calendar-id?month={{$data.Month}}" class="flex flex-col gap-3">
+        <form method="POST" action="{{$.BasePath}}/settings/school-calendar/google-calendar-id?month={{$data.Month}}" class="flex flex-col gap-3">
+            {{template "csrf" $}}
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="calendar_id">Private calendar ID</label></div>
+                <label class="asta-input"><input id="calendar_id" name="calendar_id" type="text" value="{{$data.GoogleCalendarID}}" class="asta-input-control" placeholder="school@example.com"></label>
+            </div>
+            <button type="submit" class="asta-btn asta-btn-outline asta-btn-sm"><span class="asta-btn-label">Save calendar ID</span></button>
+        </form>
+
+        <h3 class="section-title mt-6 mb-3">Connection</h3>
+        <div class="mb-4 flex flex-wrap gap-2">
+            {{if $data.GoogleConnectionActive}}
+            <span class="asta-badge asta-badge-sm asta-badge-success">Connected</span>
+            {{else}}
+            <span class="asta-badge asta-badge-sm">Not connected</span>
+            {{end}}
+            {{if $data.GoogleCalendarIDSaved}}
+            <span class="asta-badge asta-badge-sm">Calendar ID saved</span>
+            {{else}}
+            <span class="asta-badge asta-badge-sm asta-badge-warning">Calendar ID missing</span>
+            {{end}}
+        </div>
+
+        <div class="flex flex-col gap-2">
+            <form method="POST" action="{{$.BasePath}}/integrations/google-calendar/connect?month={{$data.Month}}">
                 {{template "csrf" $}}
-                <div class="form-control">
-                    <label class="label" for="calendar_id"><span class="label-text">Private calendar ID</span></label>
-                    <input id="calendar_id" name="calendar_id" type="text" value="{{$data.GoogleCalendarID}}" class="input input-bordered" placeholder="school@example.com">
-                </div>
-                <button type="submit" class="btn btn-primary btn-sm">Save calendar ID</button>
+                <button type="submit" class="asta-btn {{if $data.GoogleConnectionActive}}asta-btn-outline{{else}}asta-btn-accent{{end}} asta-btn-sm w-full" {{if not $data.GoogleConfigEnabled}}disabled{{end}}><span class="asta-btn-label">{{if $data.GoogleConnectionActive}}Reconnect Google{{else}}Connect Google{{end}}</span></button>
             </form>
-
-            <div class="divider">Connection</div>
-            <div class="flex flex-wrap gap-2">
-                {{if $data.GoogleConnectionActive}}
-                <span class="badge badge-success">Connected</span>
-                {{else}}
-                <span class="badge badge-ghost">Not connected</span>
-                {{end}}
-                {{if $data.GoogleCalendarIDSaved}}
-                <span class="badge badge-info">Calendar ID saved</span>
-                {{else}}
-                <span class="badge badge-warning">Calendar ID missing</span>
-                {{end}}
-            </div>
-
-            <div class="flex flex-col gap-2">
-                <form method="POST" action="{{$.BasePath}}/integrations/google-calendar/connect?month={{$data.Month}}">
-                    {{template "csrf" $}}
-                    <button type="submit" class="btn btn-secondary btn-sm w-full" {{if not $data.GoogleConfigEnabled}}disabled{{end}}>{{if $data.GoogleConnectionActive}}Reconnect Google{{else}}Connect Google{{end}}</button>
-                </form>
-                <form method="POST" action="{{$.BasePath}}/integrations/google-calendar/sync?month={{$data.Month}}">
-                    {{template "csrf" $}}
-                    <button type="submit" class="btn btn-primary btn-sm w-full" {{if or (not $data.GoogleConfigEnabled) (not $data.GoogleConnectionActive) (not $data.GoogleCalendarIDSaved)}}disabled{{end}}>Sync now</button>
-                </form>
-                <form method="POST" action="{{$.BasePath}}/integrations/google-calendar/disconnect?month={{$data.Month}}" onsubmit="return confirm('Disconnect Google Calendar and remove synced Google closures? Manual closures stay.')">
-                    {{template "csrf" $}}
-                    <button type="submit" class="btn btn-error btn-sm w-full" {{if not $data.GoogleConnectionActive}}disabled{{end}}>Disconnect</button>
-                </form>
-            </div>
-
-            {{if $conn}}
-            <div class="divider">Last Sync</div>
-            <div class="text-sm space-y-1">
-                <p><span class="font-semibold">Status:</span> {{if $conn.LastSyncStatus}}{{$conn.LastSyncStatus}}{{else}}<span class="opacity-60">Never synced</span>{{end}}</p>
-                <p><span class="font-semibold">Time:</span> {{if $conn.LastSyncAt}}{{$conn.LastSyncAt}}{{else}}<span class="opacity-60">None</span>{{end}}</p>
-                {{if $conn.LastSyncError}}<div class="alert alert-error text-sm mt-2">{{$conn.LastSyncError}}</div>{{end}}
-            </div>
-            {{end}}
+            <form method="POST" action="{{$.BasePath}}/integrations/google-calendar/sync?month={{$data.Month}}">
+                {{template "csrf" $}}
+                <button type="submit" class="asta-btn {{if $data.GoogleConnectionActive}}asta-btn-accent{{else}}asta-btn-outline{{end}} asta-btn-sm w-full" {{if or (not $data.GoogleConfigEnabled) (not $data.GoogleConnectionActive) (not $data.GoogleCalendarIDSaved)}}disabled{{end}}><span class="asta-btn-label">Sync now</span></button>
+            </form>
+            <form method="POST" action="{{$.BasePath}}/integrations/google-calendar/disconnect?month={{$data.Month}}" onsubmit="return confirm('Disconnect Google Calendar and remove synced Google closures? Manual closures stay.')">
+                {{template "csrf" $}}
+                <button type="submit" class="asta-btn asta-btn-outline erp-danger asta-btn-sm w-full" {{if not $data.GoogleConnectionActive}}disabled{{end}}><span class="asta-btn-label">Disconnect</span></button>
+            </form>
         </div>
-    </div>
+
+        {{if $conn}}
+        <h3 class="section-title mt-6 mb-3">Last sync</h3>
+        <dl class="erp-dl">
+            <div><dt>Status</dt><dd>{{if $conn.LastSyncStatus}}{{$conn.LastSyncStatus}}{{else}}<span class="text-mute">Never synced</span>{{end}}</dd></div>
+            <div><dt>Time</dt><dd class="tabular-nums">{{if $conn.LastSyncAt}}{{$conn.LastSyncAt}}{{else}}<span class="text-mute">None</span>{{end}}</dd></div>
+        </dl>
+        {{if $conn.LastSyncError}}<div class="asta-alert asta-alert-danger mt-3" role="alert">{{template "alert-icon"}}<div class="asta-alert-body"><p class="asta-alert-text">{{$conn.LastSyncError}}</p></div></div>{{end}}
+        {{end}}
+    </section>
 </div>
 {{end}}

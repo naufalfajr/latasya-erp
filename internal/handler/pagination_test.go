@@ -124,7 +124,7 @@ func TestListCreditNotes_Renders(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("expected 200, got %d", resp.StatusCode)
 	}
-	if body := readBody(t, resp); !strings.Contains(body, "Credit Notes") {
-		t.Error("body should contain 'Credit Notes'")
+	if body := readBody(t, resp); !strings.Contains(body, "Credit notes") {
+		t.Error("body should contain 'Credit notes'")
 	}
 }

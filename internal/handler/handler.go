@@ -76,6 +76,7 @@ var sharedTemplates = []string{
 	"templates/partials/csrf.html",
 	"templates/partials/pagination.html",
 	"templates/partials/theme.html",
+	"templates/partials/ui.html",
 }
 
 func (h *Handler) getTemplate(pages ...string) (*template.Template, error) {

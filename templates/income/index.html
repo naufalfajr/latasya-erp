@@ -1,9 +1,11 @@
 {{template "base" .}}
 {{define "content"}}
-<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-    <h1 class="text-2xl font-bold">Income</h1>
+<div class="page-head">
+    <h1 class="page-title">Income</h1>
     {{if .User.HasCapability "income.manage"}}
-    <a href="{{$.BasePath}}/income/new" class="btn btn-primary btn-sm">+ Record Income</a>
+    <div class="page-actions">
+        <a href="{{$.BasePath}}/income/new" class="asta-btn asta-btn-accent asta-btn-sm"><span class="asta-btn-label">Record income</span></a>
+    </div>
     {{end}}
 </div>
 
@@ -12,41 +14,41 @@
 {{$pg := index $data "Pagination"}}
 {{$n := add (mul (sub $pg.Page 1) $pg.PageSize) 1}}
 
-<div id="income-table" class="overflow-x-auto">
-    <table class="table table-sm">
+<div id="income-table" class="asta-table-wrap"><div class="asta-table-scroll">
+    <table class="asta-table">
         <thead>
             <tr>
-                <th class="w-8">#</th>
-                <th>Date</th>
-                <th>Reference</th>
-                <th>Description</th>
-                <th>Account</th>
-                <th class="text-right">Amount</th>
-                <th>Actions</th>
+                <th class="asta-th w-8 hidden sm:table-cell" scope="col">#</th>
+                <th class="asta-th hidden sm:table-cell" scope="col">Date</th>
+                <th class="asta-th hidden sm:table-cell" scope="col">Reference</th>
+                <th class="asta-th" scope="col">Description</th>
+                <th class="asta-th hidden sm:table-cell" scope="col">Account</th>
+                <th class="asta-th asta-th-right" scope="col">Amount</th>
+                <th class="asta-th hidden sm:table-cell" scope="col"><span class="sr-only">Actions</span></th>
             </tr>
         </thead>
         <tbody>
             {{range $entries}}
-            <tr id="income-{{.ID}}">
-                <td class="text-sm opacity-60">{{$n}}</td>
-                <td class="text-sm">{{formatDate .EntryDate}}</td>
-                <td><span class="font-mono text-sm">{{.Reference}}</span></td>
-                <td>{{.Description}}</td>
-                <td><span class="font-mono text-xs">{{.AccountSummary}}</span></td>
-                <td class="text-right font-mono text-success">{{formatIDR .TotalDebit}}</td>
-                <td>
-                    <a href="{{$.BasePath}}/journals/{{.ID}}?return_to={{urlquery $data.ReturnTo}}" class="btn btn-ghost btn-xs">View</a>
+            <tr class="asta-tr" id="income-{{.ID}}">
+                <td class="asta-td text-mute tabular-nums hidden sm:table-cell">{{$n}}</td>
+                <td class="asta-td tabular-nums hidden sm:table-cell">{{formatDate .EntryDate}}</td>
+                <td class="asta-td font-mono hidden sm:table-cell">{{.Reference}}</td>
+                <td class="asta-td asta-td-wrap text-ink">{{.Description}}<span class="mt-0.5 block text-[12.5px] text-ink-2 sm:hidden tabular-nums"><a class="erp-link font-mono" href="{{$.BasePath}}/journals/{{.ID}}?return_to={{urlquery $data.ReturnTo}}">{{.Reference}}</a> · {{formatDate .EntryDate}}</span><span class="mt-0.5 block text-[12.5px] text-ink-2 sm:hidden">{{.AccountSummary}}</span></td>
+                <td class="asta-td asta-td-wrap hidden sm:table-cell">{{with .AccountSummary}}{{$p := splitN . " " 2}}<span class="font-mono">{{index $p 0}}</span>{{if gt (len $p) 1}} <span class="ml-1">{{index $p 1}}</span>{{end}}{{end}}</td>
+                <td class="asta-td asta-td-right font-mono tabular-nums">{{formatIDR .TotalDebit}}</td>
+                <td class="asta-td hidden sm:table-cell">
+                    <a href="{{$.BasePath}}/journals/{{.ID}}?return_to={{urlquery $data.ReturnTo}}" class="asta-btn asta-btn-outline asta-btn-xs"><span class="asta-btn-label">View</span></a>
                 </td>
             </tr>
             {{$n = add $n 1}}
             {{else}}
             <tr>
-                <td colspan="7" class="text-center py-8 opacity-60">No income recorded yet</td>
+                <td colspan="7" class="asta-td py-10 text-center text-mute">No income recorded yet</td>
             </tr>
             {{end}}
         </tbody>
     </table>
-</div>
+</div></div>
 
 {{template "pagination" (index $data "Pagination")}}
 {{end}}

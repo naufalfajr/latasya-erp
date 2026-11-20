@@ -3,73 +3,74 @@
 {{$data := .Data}}
 {{$report := (index $data "Report")}}
 
-<h1 class="text-2xl font-bold mb-6">Cash Flow</h1>
+<div class="page-head">
+    <h1 class="page-title">Cash flow</h1>
+</div>
 
-<form class="flex flex-wrap gap-2 mb-4 items-end">
-    <div class="flex flex-col gap-1">
-        <label class="label text-xs">From</label>
-        <input type="date" name="from" value="{{index $data "From"}}" class="input input-sm">
+<form class="mb-4 flex flex-wrap items-end gap-3" aria-label="Report period">
+    <div class="asta-field">
+        <div class="asta-field-head"><label class="asta-label" for="from">From</label></div>
+        <label class="asta-input asta-input-sm"><input type="date" id="from" name="from" value="{{index $data "From"}}" class="asta-input-control tabular-nums"></label>
     </div>
-    <div class="flex flex-col gap-1">
-        <label class="label text-xs">To</label>
-        <input type="date" name="to" value="{{index $data "To"}}" class="input input-sm">
+    <div class="asta-field">
+        <div class="asta-field-head"><label class="asta-label" for="to">To</label></div>
+        <label class="asta-input asta-input-sm"><input type="date" id="to" name="to" value="{{index $data "To"}}" class="asta-input-control tabular-nums"></label>
     </div>
-    <button type="submit" class="btn btn-sm btn-primary">Apply</button>
+    <button type="submit" class="asta-btn asta-btn-accent asta-btn-sm"><span class="asta-btn-label">Apply</span></button>
 </form>
 
-<div class="card bg-base-100 shadow">
-    <div class="card-body overflow-x-auto">
-        {{if not $report.CashConfigured}}
-        <div class="alert alert-warning mb-4">
-            <span>Cash figures are unavailable because no accounts are classified as Cash / Bank.</span>
-            {{if $.User.IsAdmin}}<a class="btn btn-sm" href="{{$.BasePath}}/accounts">Configure accounts</a>{{end}}
-        </div>
-        {{else}}
-        <!-- Summary cards -->
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-            <div class="stat bg-base-200 rounded-box p-4">
-                <div class="stat-title text-xs">Opening Cash</div>
-                <div class="stat-value text-lg font-mono">{{formatIDR $report.OpeningCash}}</div>
-            </div>
-            <div class="stat bg-base-200 rounded-box p-4">
-                <div class="stat-title text-xs">Net Change</div>
-                <div class="stat-value text-lg font-mono {{if ge $report.NetCashChange 0}}text-success{{else}}text-error{{end}}">{{formatIDR $report.NetCashChange}}</div>
-            </div>
-            <div class="stat bg-base-200 rounded-box p-4">
-                <div class="stat-title text-xs">Closing Cash</div>
-                <div class="stat-value text-lg font-mono">{{formatIDR $report.ClosingCash}}</div>
-            </div>
-        </div>
+{{if not $report.CashConfigured}}
+<div class="asta-alert asta-alert-warning" role="status">
+    {{template "alert-icon"}}
+    <div class="asta-alert-body"><p class="asta-alert-text">Cash figures are unavailable because no accounts are classified as Cash / Bank.</p></div>
+    {{if $.User.IsAdmin}}<a class="asta-btn asta-btn-outline asta-btn-xs" href="{{$.BasePath}}/accounts"><span class="asta-btn-label">Configure accounts</span></a>{{end}}
+</div>
+{{else}}
+<div class="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+    <div class="asta-stat-card">
+        <p class="asta-stat-card-label">Opening cash</p>
+        <p class="asta-stat-card-value font-mono text-[22px]">{{formatIDR $report.OpeningCash}}</p>
+    </div>
+    <div class="asta-stat-card">
+        <p class="asta-stat-card-label">Net change</p>
+        <p class="asta-stat-card-value font-mono text-[22px]">{{formatIDR $report.NetCashChange}}</p>
+    </div>
+    <div class="asta-stat-card">
+        <p class="asta-stat-card-label">Closing cash</p>
+        <p class="asta-stat-card-value font-mono text-[22px]">{{formatIDR $report.ClosingCash}}</p>
+    </div>
+</div>
 
-        <!-- Detail -->
-        <h2 class="font-semibold mb-2">Cash Movements</h2>
-        <table class="table table-sm">
+<section aria-labelledby="cash-movements-heading">
+    <h2 id="cash-movements-heading" class="section-title mb-3">Cash movements</h2>
+    <div class="asta-table-wrap"><div class="asta-table-scroll">
+        <table class="asta-table">
             <thead>
-                <tr class="bg-base-200">
-                    <th>Code</th>
-                    <th>Account</th>
-                    <th class="text-right">Amount</th>
+                <tr>
+                    <th class="asta-th w-28" scope="col">Code</th>
+                    <th class="asta-th" scope="col">Account</th>
+                    <th class="asta-th asta-th-right" scope="col">Amount</th>
                 </tr>
             </thead>
             <tbody>
                 {{range $report.Movements}}
-                <tr>
-                    <td class="font-mono text-sm">{{.AccountCode}}</td>
-                    <td>{{.AccountName}}</td>
-                    <td class="text-right font-mono {{if ge .Amount 0}}text-success{{else}}text-error{{end}}">{{formatIDR .Amount}}</td>
+                <tr class="asta-tr">
+                    <td class="asta-td font-mono">{{.AccountCode}}</td>
+                    <td class="asta-td text-ink">{{.AccountName}}</td>
+                    <td class="asta-td asta-td-right font-mono tabular-nums">{{formatIDR .Amount}}</td>
                 </tr>
                 {{else}}
-                <tr><td colspan="3" class="text-center py-8 opacity-60">No cash transactions in this period</td></tr>
+                <tr><td colspan="3" class="asta-td py-10 text-center text-mute">No cash transactions in this period</td></tr>
                 {{end}}
             </tbody>
             <tfoot>
-                <tr class="font-bold">
-                    <td colspan="2" class="text-right">Total Cash Movements</td>
-                    <td class="text-right font-mono {{if ge $report.TotalMovement 0}}text-success{{else}}text-error{{end}}">{{formatIDR $report.TotalMovement}}</td>
+                <tr>
+                    <td colspan="2" class="asta-td asta-td-right font-medium text-ink">Total cash movements</td>
+                    <td class="asta-td asta-td-right font-mono tabular-nums font-medium text-ink">{{formatIDR $report.TotalMovement}}</td>
                 </tr>
             </tfoot>
         </table>
-        {{end}}
-    </div>
-</div>
+    </div></div>
+</section>
+{{end}}
 {{end}}

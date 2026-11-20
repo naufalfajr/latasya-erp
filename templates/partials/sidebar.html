@@ -1,61 +1,97 @@
 {{define "sidebar"}}
-<ul class="menu p-4 w-64 min-h-full bg-base-100 text-base-content" hx-boost="true">
-    <li class="mb-4">
-        <span class="text-xl font-bold">Latasya ERP</span>
-    </li>
+{{$bp := .BasePath}}{{$path := .Path}}
+<div class="flex h-11 items-center gap-2.5 px-3">
+    <span class="asta-sidebar-ws-logo" aria-hidden="true">L</span>
+    <span class="flex flex-col leading-tight"><span class="text-[13.5px] font-medium text-ink">Latasya ERP</span><span class="text-[11.5px] text-mute">Latasya Trans</span></span>
+</div>
 
-    <li><a href="{{$.BasePath}}/" class="{{if eq .Path "/"}}active{{end}}">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0h4"/></svg>
-        Dashboard
-    </a></li>
+<nav class="asta-sidebar-nav" aria-label="Main" hx-boost="true"><div>
+    <div class="asta-sidebar-group"><ul>
+        <li>{{template "sidebar-link" (dict "Href" (printf "%s/" $bp) "Label" "Dashboard" "Current" (eq $path "/") "Icon" "home")}}</li>
+    </ul></div>
 
-    <li class="menu-title mt-4"><span>Transactions</span></li>
-    <li><a href="{{$.BasePath}}/income" class="{{if eq .Path "/income"}}active{{end}}">Income</a></li>
-    <li><a href="{{$.BasePath}}/expenses" class="{{if eq .Path "/expenses"}}active{{end}}">Expenses</a></li>
-    <li><a href="{{$.BasePath}}/journals" class="{{if eq .Path "/journals"}}active{{end}}">Journal Entries</a></li>
+    <div class="asta-sidebar-group"><div class="asta-sidebar-group-label"><span>Transactions</span><span aria-hidden="true"></span></div><ul>
+        <li>{{template "sidebar-link" (dict "Href" (printf "%s/income" $bp) "Label" "Income" "Current" (navActive $path "/income") "Icon" "in")}}</li>
+        <li>{{template "sidebar-link" (dict "Href" (printf "%s/expenses" $bp) "Label" "Expenses" "Current" (navActive $path "/expenses") "Icon" "out")}}</li>
+        <li>{{template "sidebar-link" (dict "Href" (printf "%s/journals" $bp) "Label" "Journal entries" "Current" (navActive $path "/journals") "Icon" "book")}}</li>
+    </ul></div>
 
-    <li class="menu-title mt-4"><span>Sales & Purchases</span></li>
-    <li><a href="{{$.BasePath}}/invoices" class="{{if eq .Path "/invoices"}}active{{end}}">Invoices</a></li>
-    <li><a href="{{$.BasePath}}/credit-notes" class="{{if eq .Path "/credit-notes"}}active{{end}}">Credit Notes</a></li>
-    <li><a href="{{$.BasePath}}/bills" class="{{if eq .Path "/bills"}}active{{end}}">Bills</a></li>
-    <li><a href="{{$.BasePath}}/contacts" class="{{if eq .Path "/contacts"}}active{{end}}">Contacts</a></li>
+    <div class="asta-sidebar-group"><div class="asta-sidebar-group-label"><span>Sales and purchases</span><span aria-hidden="true"></span></div><ul>
+        <li>{{template "sidebar-link" (dict "Href" (printf "%s/invoices" $bp) "Label" "Invoices" "Current" (navActive $path "/invoices") "Icon" "doc")}}</li>
+        <li>{{template "sidebar-link" (dict "Href" (printf "%s/credit-notes" $bp) "Label" "Credit notes" "Current" (navActive $path "/credit-notes") "Icon" "credit")}}</li>
+        <li>{{template "sidebar-link" (dict "Href" (printf "%s/bills" $bp) "Label" "Bills" "Current" (navActive $path "/bills") "Icon" "bill")}}</li>
+        <li>{{template "sidebar-link" (dict "Href" (printf "%s/contacts" $bp) "Label" "Contacts" "Current" (navActive $path "/contacts") "Icon" "people")}}</li>
+    </ul></div>
 
-    {{if .User.HasCapability "reports.view"}}<li class="menu-title mt-4"><span>Reports</span></li>
-    <li><a href="{{$.BasePath}}/reports/profit-loss" class="{{if eq .Path "/reports/profit-loss"}}active{{end}}">Profit & Loss</a></li>
-    <li><a href="{{$.BasePath}}/reports/balance-sheet" class="{{if eq .Path "/reports/balance-sheet"}}active{{end}}">Balance Sheet</a></li>
-    <li><a href="{{$.BasePath}}/reports/cash-flow" class="{{if eq .Path "/reports/cash-flow"}}active{{end}}">Cash Flow</a></li>
-    <li><a href="{{$.BasePath}}/reports/trial-balance" class="{{if eq .Path "/reports/trial-balance"}}active{{end}}">Trial Balance</a></li>
-    <li><a href="{{$.BasePath}}/reports/general-ledger" class="{{if eq .Path "/reports/general-ledger"}}active{{end}}">General Ledger</a></li>
+    {{if .User.HasCapability "reports.view"}}
+    <div class="asta-sidebar-group"><div class="asta-sidebar-group-label"><span>Reports</span><span aria-hidden="true"></span></div><ul>
+        <li>{{template "sidebar-link" (dict "Href" (printf "%s/reports/profit-loss" $bp) "Label" "Profit and loss" "Current" (navActive $path "/reports/profit-loss") "Icon" "chart")}}</li>
+        <li>{{template "sidebar-link" (dict "Href" (printf "%s/reports/balance-sheet" $bp) "Label" "Balance sheet" "Current" (navActive $path "/reports/balance-sheet") "Icon" "scale")}}</li>
+        <li>{{template "sidebar-link" (dict "Href" (printf "%s/reports/cash-flow" $bp) "Label" "Cash flow" "Current" (navActive $path "/reports/cash-flow") "Icon" "flow")}}</li>
+        <li>{{template "sidebar-link" (dict "Href" (printf "%s/reports/trial-balance" $bp) "Label" "Trial balance" "Current" (navActive $path "/reports/trial-balance") "Icon" "list")}}</li>
+        <li>{{template "sidebar-link" (dict "Href" (printf "%s/reports/general-ledger" $bp) "Label" "General ledger" "Current" (navActive $path "/reports/general-ledger") "Icon" "book")}}</li>
+    </ul></div>
     {{end}}
 
-    <li class="menu-title mt-4"><span>Settings</span></li>
-    <li><a href="{{$.BasePath}}/accounts" class="{{if eq .Path "/accounts"}}active{{end}}">Chart of Accounts</a></li>
-    {{if .User.IsAdmin}}
-    <li><a href="{{$.BasePath}}/settings/company" class="{{if eq .Path "/settings/company"}}active{{end}}">Company Profile</a></li>
-    <li><a href="{{$.BasePath}}/settings/school-calendar" class="{{if eq .Path "/settings/school-calendar"}}active{{end}}">School Calendar</a></li>
-    {{end}}
-    {{if .User.HasCapability "users.manage"}}
-    <li><a href="{{$.BasePath}}/users" class="{{if eq .Path "/users"}}active{{end}}">Users</a></li>
-    {{end}}
-    {{if .User.HasCapability "roles.manage"}}
-    <li><a href="{{$.BasePath}}/roles" class="{{if eq .Path "/roles"}}active{{end}}">Roles</a></li>
-    {{end}}
-    {{if .User.HasCapability "audit.view"}}
-    <li><a href="{{$.BasePath}}/audit" class="{{if eq .Path "/audit"}}active{{end}}">Audit Log</a></li>
-    {{end}}
+    <div class="asta-sidebar-group"><div class="asta-sidebar-group-label"><span>Settings</span><span aria-hidden="true"></span></div><ul>
+        <li>{{template "sidebar-link" (dict "Href" (printf "%s/accounts" $bp) "Label" "Chart of accounts" "Current" (navActive $path "/accounts") "Icon" "list")}}</li>
+        {{if .User.IsAdmin}}
+        <li>{{template "sidebar-link" (dict "Href" (printf "%s/settings/company" $bp) "Label" "Company profile" "Current" (navActive $path "/settings/company") "Icon" "building")}}</li>
+        <li>{{template "sidebar-link" (dict "Href" (printf "%s/settings/school-calendar" $bp) "Label" "School calendar" "Current" (navActive $path "/settings/school-calendar") "Icon" "calendar")}}</li>
+        {{end}}
+        {{if .User.HasCapability "users.manage"}}
+        <li>{{template "sidebar-link" (dict "Href" (printf "%s/users" $bp) "Label" "Users" "Current" (navActive $path "/users") "Icon" "people")}}</li>
+        {{end}}
+        {{if .User.HasCapability "roles.manage"}}
+        <li>{{template "sidebar-link" (dict "Href" (printf "%s/roles" $bp) "Label" "Roles" "Current" (navActive $path "/roles") "Icon" "key")}}</li>
+        {{end}}
+        {{if .User.HasCapability "audit.view"}}
+        <li>{{template "sidebar-link" (dict "Href" (printf "%s/audit" $bp) "Label" "Audit log" "Current" (navActive $path "/audit") "Icon" "clock")}}</li>
+        {{end}}
+    </ul></div>
 
-    <li class="mt-auto pt-4 border-t border-base-300">
-        <div class="flex flex-col gap-1">
-            <span class="text-sm font-semibold">{{.User.FullName}}</span>
-            <span class="text-xs opacity-60">{{.User.Role}}</span>
-        </div>
-    </li>
-    <li><a href="{{$.BasePath}}/password/change" class="{{if eq .Path "/password/change"}}active{{end}}">Change Password</a></li>
-    <li><a href="{{$.BasePath}}/settings/api-tokens" class="{{if eq .Path "/settings/api-tokens"}}active{{end}}">API Tokens</a></li>
-    <li>
-        <form method="POST" action="{{$.BasePath}}/logout">
-            <button type="submit" class="w-full text-left text-error">Logout</button>
-        </form>
-    </li>
-</ul>
+    <div class="asta-sidebar-group"><div class="asta-sidebar-group-label"><span>Account</span><span aria-hidden="true"></span></div><ul>
+        <li>{{template "sidebar-link" (dict "Href" (printf "%s/password/change" $bp) "Label" "Change password" "Current" (navActive $path "/password/change") "Icon" "lock")}}</li>
+        <li>{{template "sidebar-link" (dict "Href" (printf "%s/settings/api-tokens" $bp) "Label" "API tokens" "Current" (navActive $path "/settings/api-tokens") "Icon" "key")}}</li>
+    </ul></div>
+</div></nav>
+
+<div class="asta-sidebar-user">
+    <span class="asta-sidebar-slot"><span class="asta-sidebar-ws-option-logo" aria-hidden="true"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 7.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM3 13.5c.6-2.3 2.6-3.5 5-3.5s4.4 1.2 5 3.5"/></svg></span></span>
+    <span class="asta-sidebar-user-text min-w-0 flex-1"><span>{{.User.FullName}}</span><span>{{.User.Role}}</span></span>
+    {{template "theme-toggle" "Toggle dark mode"}}
+</div>
+<form method="POST" action="{{$bp}}/logout">
+    {{template "csrf" .}}
+    <button type="submit" class="asta-sidebar-link">
+        <span class="asta-sidebar-icon"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2.5H3.5v11H6M10.5 5l3 3-3 3M13.5 8H6"/></svg></span>
+        <span class="asta-sidebar-label">Log out</span>
+    </button>
+</form>
+{{end}}
+
+{{define "sidebar-link"}}
+<a href="{{.Href}}" class="asta-sidebar-link"{{if .Current}} aria-current="page"{{end}}>
+    <span class="asta-sidebar-icon"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    {{- if eq .Icon "home"}}<path d="M2.5 7 8 2.5 13.5 7v6.5h-11z"/>
+    {{- else if eq .Icon "in"}}<path d="M8 2.5v8M4.5 7 8 10.5 11.5 7M3 13.5h10"/>
+    {{- else if eq .Icon "out"}}<path d="M8 10.5v-8M4.5 6 8 2.5 11.5 6M3 13.5h10"/>
+    {{- else if eq .Icon "book"}}<path d="M3 3h4a1.5 1.5 0 0 1 1 .5 1.5 1.5 0 0 1 1-.5h4v10H9a1 1 0 0 0-1 1 1 1 0 0 0-1-1H3z"/>
+    {{- else if eq .Icon "doc"}}<path d="M4 2.5h5.5L12 5v8.5H4zM6 8h4M6 10.5h4"/>
+    {{- else if eq .Icon "credit"}}<path d="M4 2.5h5.5L12 5v8.5H4zM6 9h4"/>
+    {{- else if eq .Icon "bill"}}<path d="M4 2.5h8v11l-2-1-2 1-2-1-2 1zM6 6h4M6 8.5h4"/>
+    {{- else if eq .Icon "people"}}<path d="M6 7.5a2.25 2.25 0 1 0 0-4.5 2.25 2.25 0 0 0 0 4.5zM2 13c.5-2 2-3 4-3s3.5 1 4 3M10.5 3.3a2.25 2.25 0 0 1 0 4.2M12 10.2c1 .5 1.7 1.4 2 2.8"/>
+    {{- else if eq .Icon "chart"}}<path d="M3 13V8M8 13V3M13 13V6"/>
+    {{- else if eq .Icon "scale"}}<path d="M8 2.5v11M4 13.5h8M3 5h10M3 5l-1.5 4h3zM13 5l-1.5 4h3z"/>
+    {{- else if eq .Icon "flow"}}<path d="M2.5 5h9M9 2.5 11.5 5 9 7.5M13.5 11h-9M7 8.5 4.5 11 7 13.5"/>
+    {{- else if eq .Icon "list"}}<path d="M6 4h7.5M6 8h7.5M6 12h7.5M2.5 4h1M2.5 8h1M2.5 12h1"/>
+    {{- else if eq .Icon "building"}}<path d="M3 13.5V3.5h6v10M9 6.5h4v7M2 13.5h12M5 6h2M5 8.5h2M5 11h2"/>
+    {{- else if eq .Icon "calendar"}}<path d="M3 4h10v9.5H3zM3 7h10M6 2.5v3M10 2.5v3"/>
+    {{- else if eq .Icon "key"}}<path d="M5.5 10.5a3 3 0 1 1 2.1-.9L13.5 3.7M11 6.2l1.5 1.5"/>
+    {{- else if eq .Icon "clock"}}<path d="M8 2.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11zM8 5v3l2 1.5"/>
+    {{- else if eq .Icon "lock"}}<path d="M4 7.5h8v6H4zM5.5 7.5V5.5a2.5 2.5 0 0 1 5 0v2"/>
+    {{- end}}
+    </svg></span>
+    <span class="asta-sidebar-label">{{.Label}}</span>
+</a>
 {{end}}

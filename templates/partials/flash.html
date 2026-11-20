@@ -1,7 +1,9 @@
 {{define "flash"}}
 {{if .Flash}}
-<div class="alert alert-success mb-4">
-    <span>{{.Flash}}</span>
+<div class="asta-alert asta-alert-success mb-6" role="status">
+    <span class="asta-alert-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="m6.75 10.25 2.25 2.25 4.25-4.75"/></svg></span>
+    <div class="asta-alert-body"><p class="asta-alert-text">{{.Flash}}</p></div>
+    <label class="asta-alert-dismiss"><input type="checkbox" data-asta-dismiss aria-label="Dismiss"><svg viewBox="0 0 14 14" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M3 3l8 8M11 3 3 11"/></svg></label>
 </div>
 {{end}}
 {{end}}

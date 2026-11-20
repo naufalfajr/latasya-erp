@@ -3,185 +3,165 @@
 {{$data := .Data}}
 
 <div class="max-w-2xl">
-    <h1 class="text-2xl font-bold mb-6">
-        {{if $data.IsEdit}}Edit Contact{{else}}New Contact{{end}}
-    </h1>
+    <div class="page-head">
+        <h1 class="page-title">{{if $data.IsEdit}}Edit contact{{else}}New contact{{end}}</h1>
+    </div>
 
     <form method="POST" action="{{$.BasePath}}{{if $data.IsEdit}}/contacts/{{$data.Contact.ID}}{{else}}/contacts{{end}}"
-        class="card bg-base-100 shadow">
+        class="asta-card">
         {{template "csrf" $}}
-        <div class="card-body">
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <!-- Name -->
-                <div class="flex flex-col gap-1">
-                    <label class="label" for="name">Name *</label>
-                    <input type="text" id="name" name="name" placeholder="Contact name"
-                        class="input {{if index $data.Errors "name"}}input-error{{end}}"
-                        value="{{$data.Contact.Name}}" required>
-                    {{if index $data.Errors "name"}}
-                    <span class="text-xs text-error">{{index $data.Errors "name"}}</span>
-                    {{end}}
-                </div>
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="name">Name<span class="asta-label-required" aria-hidden="true">*</span></label></div>
+                <label class="asta-input"><input type="text" id="name" name="name" placeholder="Contact name"
+                    class="asta-input-control"
+                    value="{{$data.Contact.Name}}" required{{if index $data.Errors "name"}} aria-invalid="true"{{end}}></label>
+                {{if index $data.Errors "name"}}<p class="asta-error" role="alert">{{index $data.Errors "name"}}</p>{{end}}
+            </div>
 
-                <!-- Contact Type -->
-                <div class="flex flex-col gap-1">
-                    <label class="label" for="contact_type">Type *</label>
-                    <select id="contact_type" name="contact_type"
-                        class="select {{if index $data.Errors "contact_type"}}select-error{{end}}" required>
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="contact_type">Type<span class="asta-label-required" aria-hidden="true">*</span></label></div>
+                <div class="asta-select">
+                    <select id="contact_type" name="contact_type" class="asta-select-control" required{{if index $data.Errors "contact_type"}} aria-invalid="true"{{end}}>
                         <option value="" disabled {{if eq $data.Contact.ContactType ""}}selected{{end}}>Select type</option>
                         <option value="customer" {{if eq $data.Contact.ContactType "customer"}}selected{{end}}>Customer</option>
                         <option value="supplier" {{if eq $data.Contact.ContactType "supplier"}}selected{{end}}>Supplier</option>
                         <option value="both" {{if eq $data.Contact.ContactType "both"}}selected{{end}}>Both</option>
                     </select>
-                    {{if index $data.Errors "contact_type"}}
-                    <span class="text-xs text-error">{{index $data.Errors "contact_type"}}</span>
-                    {{end}}
+                    {{template "select-chevron"}}
                 </div>
+                {{if index $data.Errors "contact_type"}}<p class="asta-error" role="alert">{{index $data.Errors "contact_type"}}</p>{{end}}
+            </div>
 
-                <!-- Phone -->
-                <div class="flex flex-col gap-1">
-                    <label class="label" for="phone">Phone</label>
-                    <input type="tel" id="phone" name="phone" placeholder="e.g. 08123456789"
-                        class="input" value="{{$data.Contact.Phone}}">
-                </div>
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="phone">Phone</label></div>
+                <label class="asta-input"><input type="tel" id="phone" name="phone" placeholder="e.g. 08123456789"
+                    class="asta-input-control tabular-nums" value="{{$data.Contact.Phone}}"></label>
+            </div>
 
-                <!-- Email -->
-                <div class="flex flex-col gap-1">
-                    <label class="label" for="email">Email</label>
-                    <input type="email" id="email" name="email" placeholder="email@example.com"
-                        class="input" value="{{$data.Contact.Email}}">
-                </div>
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="email">Email</label></div>
+                <label class="asta-input"><input type="email" id="email" name="email" placeholder="email@example.com"
+                    class="asta-input-control" value="{{$data.Contact.Email}}"></label>
+            </div>
 
-                <!-- Class -->
-                <div class="flex flex-col gap-1">
-                    <label class="label" for="class">Class</label>
-                    <input type="text" id="class" name="class" placeholder="e.g. 6B"
-                        class="input {{if index $data.Errors "class"}}input-error{{end}}"
-                        maxlength="5" value="{{$data.Contact.Class}}">
-                    {{if index $data.Errors "class"}}
-                    <span class="text-xs text-error">{{index $data.Errors "class"}}</span>
-                    {{end}}
-                </div>
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="class">Class</label></div>
+                <label class="asta-input"><input type="text" id="class" name="class" placeholder="e.g. 6B"
+                    class="asta-input-control"
+                    maxlength="5" value="{{$data.Contact.Class}}"{{if index $data.Errors "class"}} aria-invalid="true"{{end}}></label>
+                {{if index $data.Errors "class"}}<p class="asta-error" role="alert">{{index $data.Errors "class"}}</p>{{end}}
+            </div>
 
-                <!-- Distance -->
-                <div class="flex flex-col gap-1">
-                    <label class="label" for="distance_km">Distance (KM)</label>
-                    <input type="number" id="distance_km" name="distance_km" placeholder="0"
-                        class="input font-mono"
-                        min="0" step="0.1" value="{{if gt $data.Contact.DistanceKm 0.0}}{{$data.Contact.DistanceKm}}{{end}}">
-                    {{if index $data.Errors "distance_km"}}
-                    <span class="text-xs text-error">{{index $data.Errors "distance_km"}}</span>
-                    {{end}}
-                </div>
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="distance_km">Distance (km)</label></div>
+                <label class="asta-input"><input type="number" id="distance_km" name="distance_km" placeholder="0"
+                    class="asta-input-control font-mono tabular-nums"
+                    min="0" step="0.1" value="{{if gt $data.Contact.DistanceKm 0.0}}{{$data.Contact.DistanceKm}}{{end}}"{{if index $data.Errors "distance_km"}} aria-invalid="true"{{end}}></label>
+                {{if index $data.Errors "distance_km"}}<p class="asta-error" role="alert">{{index $data.Errors "distance_km"}}</p>{{end}}
+            </div>
 
-                <!-- Route -->
-                <div class="flex flex-col gap-1">
-                    <label class="label" for="route_id">Route</label>
-                    <select id="route_id" name="route_id" class="select">
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="route_id">Route</label></div>
+                <div class="asta-select">
+                    <select id="route_id" name="route_id" class="asta-select-control">
                         <option value="">No route</option>
                         {{range $data.Routes}}
                         <option value="{{.ID}}" {{if eq .ID $data.Contact.RouteID}}selected{{end}}>{{.Name}}</option>
                         {{end}}
                     </select>
+                    {{template "select-chevron"}}
                 </div>
             </div>
+        </div>
 
-            <!-- Maps Link -->
-            <div class="flex flex-col gap-1 mt-2">
-                <label class="label" for="maps_link">
-                    Titik Maps Penjemput
+        <div class="mt-4 flex flex-col gap-4">
+            <div class="asta-field">
+                <div class="asta-field-head">
+                    <label class="asta-label" for="maps_link">Pickup map pin</label>
                     {{if and $data.IsEdit $data.Contact.MapsLink}}
-                    <a href="{{$data.Contact.MapsLink}}" target="_blank" rel="noopener noreferrer"
-                        class="link link-primary text-xs ml-2">Open map ↗</a>
+                    <a href="{{$data.Contact.MapsLink}}" target="_blank" rel="noopener noreferrer" class="erp-link text-[12.5px]">Open map ↗</a>
                     {{end}}
-                </label>
-                <input type="text" id="maps_link" name="maps_link"
+                </div>
+                <label class="asta-input"><input type="text" id="maps_link" name="maps_link"
                     placeholder="Google Maps URL, Plus Code, or coordinates"
-                    class="input" value="{{$data.Contact.MapsLink}}">
+                    class="asta-input-control" value="{{$data.Contact.MapsLink}}"></label>
             </div>
 
-            <!-- Address -->
-            <div class="flex flex-col gap-1 mt-2">
-                <label class="label" for="address">Address</label>
-                <textarea id="address" name="address" placeholder="Full address"
-                    class="textarea" rows="2">{{$data.Contact.Address}}</textarea>
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="address">Address</label></div>
+                <div class="asta-textarea"><textarea id="address" name="address" placeholder="Full address"
+                    class="asta-textarea-control" rows="2">{{$data.Contact.Address}}</textarea></div>
             </div>
 
-            <!-- Notes -->
-            <div class="flex flex-col gap-1 mt-2">
-                <label class="label" for="notes">Notes</label>
-                <textarea id="notes" name="notes" placeholder="Additional notes"
-                    class="textarea" rows="2">{{$data.Contact.Notes}}</textarea>
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="notes">Notes</label></div>
+                <div class="asta-textarea"><textarea id="notes" name="notes" placeholder="Additional notes"
+                    class="asta-textarea-control" rows="2">{{$data.Contact.Notes}}</textarea></div>
             </div>
 
-            <!-- Active -->
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2">
-                <label class="label cursor-pointer justify-start gap-2">
-                    <input type="checkbox" name="has_sibling_discount" class="checkbox checkbox-sm"
-                        {{if $data.Contact.HasSiblingDiscount}}checked{{end}}>
-                    <span>Sibling discount</span>
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <label class="asta-checkbox">
+                    <span class="asta-checkbox-box"><input type="checkbox" name="has_sibling_discount" class="asta-checkbox-input"
+                        {{if $data.Contact.HasSiblingDiscount}}checked{{end}}>{{template "check-icon"}}</span>
+                    <span><span class="asta-checkbox-label">Sibling discount</span></span>
                 </label>
-                <label class="label cursor-pointer justify-start gap-2">
-                    <input type="checkbox" name="is_return_only" class="checkbox checkbox-sm"
-                        {{if $data.Contact.IsReturnOnly}}checked{{end}}>
-                    <span>Return only</span>
+                <label class="asta-checkbox">
+                    <span class="asta-checkbox-box"><input type="checkbox" name="is_return_only" class="asta-checkbox-input"
+                        {{if $data.Contact.IsReturnOnly}}checked{{end}}>{{template "check-icon"}}</span>
+                    <span><span class="asta-checkbox-label">Return only</span></span>
                 </label>
-                <label class="label cursor-pointer justify-start gap-2">
-                    <input type="checkbox" name="is_active" class="checkbox checkbox-sm"
-                        {{if $data.Contact.IsActive}}checked{{end}}>
-                    <span>Active</span>
+                <label class="asta-checkbox">
+                    <span class="asta-checkbox-box"><input type="checkbox" name="is_active" class="asta-checkbox-input"
+                        {{if $data.Contact.IsActive}}checked{{end}}>{{template "check-icon"}}</span>
+                    <span><span class="asta-checkbox-label">Active</span></span>
                 </label>
             </div>
+        </div>
 
-            <!-- Actions -->
-            <div class="card-actions justify-end mt-4">
-                <a href="{{$.BasePath}}/contacts" class="btn btn-ghost">Cancel</a>
-                <button type="submit" class="btn btn-primary">
-                    {{if $data.IsEdit}}Update{{else}}Create{{end}} Contact
-                </button>
-            </div>
+        <div class="asta-card-footer">
+            <a href="{{$.BasePath}}/contacts" class="asta-btn asta-btn-ghost"><span class="asta-btn-label">Cancel</span></a>
+            <button type="submit" class="asta-btn asta-btn-accent"><span class="asta-btn-label">{{if $data.IsEdit}}Update contact{{else}}Create contact{{end}}</span></button>
         </div>
     </form>
 
     {{if $data.IsEdit}}
-    <div class="card bg-base-100 shadow mt-4">
-        <div class="card-body">
-            <h2 class="card-title text-base">Link Portal Orang Tua</h2>
-            {{if $data.PortalURL}}
-            <div class="flex items-center gap-2">
-                <input type="text" readonly value="{{$data.PortalURL}}" class="input input-sm font-mono flex-1"
-                    onclick="this.select()">
-                <button type="button" class="btn btn-ghost btn-sm"
-                    onclick="navigator.clipboard.writeText('{{$data.PortalURL}}')">Salin</button>
-            </div>
-            {{else}}
-            <p class="text-sm opacity-60">Belum ada link portal untuk kontak ini.</p>
-            {{end}}
-
-            {{if $.User.IsAdmin}}
-            <div class="flex items-end gap-2 mt-3">
-                <label class="form-control flex-1">
-                    <span class="label-text text-xs opacity-60">Kode link</span>
-                    <div class="join">
-                        <span class="join-item btn btn-sm btn-disabled font-mono">/p/</span>
-                        <input type="text" id="portal-code-input" name="portal_code"
-                            value="{{$data.Contact.PortalCode}}" placeholder="andi-829"
-                            class="join-item input input-sm input-bordered font-mono flex-1">
-                    </div>
-                </label>
-                <button type="button" class="btn btn-warning btn-sm"
-                    hx-post="{{$.BasePath}}/contacts/{{$data.Contact.ID}}/portal-code"
-                    hx-include="#portal-code-input"
-                    hx-target="body"
-                    hx-confirm="Simpan link baru? Link lama akan langsung tidak berlaku.">
-                    Simpan Link Baru
-                </button>
-            </div>
-            <p class="text-xs opacity-60 mt-1">Huruf, angka dan strip. Kosongkan untuk dibuatkan acak. Makin mudah ditebak, makin mudah orang lain membukanya.</p>
-            {{end}}
+    <section class="asta-card mt-4" aria-labelledby="portal-link-heading">
+        <div class="asta-card-header">
+            <h2 id="portal-link-heading" class="asta-card-title">Parent portal link</h2>
         </div>
-    </div>
+        {{if $data.PortalURL}}
+        <div class="flex flex-wrap items-center gap-2">
+            <label class="asta-input asta-input-sm min-w-[200px] flex-1"><input type="text" readonly value="{{$data.PortalURL}}" class="asta-input-control font-mono"
+                aria-label="Parent portal link" onclick="this.select()"></label>
+            <button type="button" class="asta-btn asta-btn-outline asta-btn-sm"
+                onclick="navigator.clipboard.writeText('{{$data.PortalURL}}')"><span class="asta-btn-label">Copy</span></button>
+        </div>
+        {{else}}
+        <p class="text-[14px] text-ink-2">No portal link for this contact yet.</p>
+        {{end}}
+
+        {{if $.User.IsAdmin}}
+        <div class="mt-4 flex flex-wrap items-end gap-2">
+            <div class="asta-field min-w-[200px] flex-1">
+                <div class="asta-field-head"><label class="asta-label" for="portal-code-input">Link code</label></div>
+                <label class="asta-input asta-input-sm">
+                    <span class="asta-input-icon font-mono">/p/</span>
+                    <input type="text" id="portal-code-input" name="portal_code"
+                        value="{{$data.Contact.PortalCode}}" placeholder="andi-829"
+                        class="asta-input-control font-mono" aria-describedby="portal-code-hint">
+                </label>
+            </div>
+            <button type="button" class="asta-btn asta-btn-outline asta-btn-sm"
+                hx-post="{{$.BasePath}}/contacts/{{$data.Contact.ID}}/portal-code"
+                hx-include="#portal-code-input"
+                hx-target="body"
+                hx-confirm="Save the new link? The old link stops working immediately."><span class="asta-btn-label">Save new link</span></button>
+        </div>
+        <p id="portal-code-hint" class="asta-hint mt-1.5">Letters, numbers and hyphens. Leave empty for a random code. The easier it is to guess, the easier it is for someone else to open.</p>
+        {{end}}
+    </section>
     {{end}}
 </div>
 {{end}}

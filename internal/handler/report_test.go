@@ -79,10 +79,10 @@ func TestReport_GeneralLedger_WithAccountFilter(t *testing.T) {
 		t.Errorf("expected 200, got %d", resp.StatusCode)
 	}
 	body := readBody(t, resp)
-	// Source column renders a "manual" badge for the blank source_type, and the
+	// Source column renders a "Manual" badge for the blank source_type, and the
 	// totals footer renders for the non-empty entries branch.
-	if !strings.Contains(body, "manual") {
-		t.Errorf("expected Source column badge 'manual' in body")
+	if !strings.Contains(body, "Manual") {
+		t.Errorf("expected Source column badge 'Manual' in body")
 	}
 	if !strings.Contains(body, "Total") {
 		t.Errorf("expected totals footer ('Total') in body")

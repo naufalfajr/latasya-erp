@@ -29,7 +29,7 @@ func TestNewAccount_RendersForm(t *testing.T) {
 	if !strings.Contains(body, `action="/accounts"`) {
 		t.Error("expected new-account form to post to /accounts")
 	}
-	if !strings.Contains(body, "New Account") {
+	if !strings.Contains(body, "New account") {
 		t.Error("expected 'New Account' heading")
 	}
 }
@@ -55,7 +55,7 @@ func TestEditAccount_RendersForm(t *testing.T) {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
 	}
 	body := readBody(t, resp)
-	if !strings.Contains(body, "Edit Account") {
+	if !strings.Contains(body, "Edit account") {
 		t.Error("expected 'Edit Account' heading")
 	}
 	if !strings.Contains(body, "1-1002") {

@@ -138,7 +138,7 @@ func TestNewAPIToken_RendersForm(t *testing.T) {
 	bodyStr := string(body)
 
 	mustContain := []string{
-		"Create API Token",
+		"Create API token",
 		`name="name"`,
 		`name="scopes"`,
 		`name="expires_at"`,
@@ -777,7 +777,7 @@ func TestListAPITokens_AllTokensOnlyForUsersManage(t *testing.T) {
 	bookkeeper := loginAsBookkeeper(t, ts, db)
 	seedAdminToken(t, db)
 	resp, body := sendRequest(t, db, bookkeeper, "GET", ts.URL+"/settings/api-tokens", "")
-	if resp.StatusCode != http.StatusOK || strings.Contains(body, "All Users") || strings.Contains(body, "lat_ADMN") {
+	if resp.StatusCode != http.StatusOK || strings.Contains(body, "All users") || strings.Contains(body, "lat_ADMN") {
 		t.Errorf("bookkeeper sees other users' tokens (status %d)", resp.StatusCode)
 	}
 	if _, body := sendRequest(t, db, loginAsAdmin(t, ts), "GET", ts.URL+"/users", ""); !strings.Contains(body, `href="/settings/api-tokens#all-tokens"`) {
@@ -836,7 +836,7 @@ func TestRevokeAnyAPIToken_HappyPath(t *testing.T) {
 	if actor != "admin" || !strings.Contains(metadata, `"owner_username":"bookkeeper"`) {
 		t.Errorf("audit: actor %q metadata %s, want admin revoking bookkeeper's token", actor, metadata)
 	}
-	if _, body := sendRequest(t, db, admin, "GET", ts.URL+"/settings/api-tokens", ""); !strings.Contains(body, `badge-error badge-sm">Revoked`) {
+	if _, body := sendRequest(t, db, admin, "GET", ts.URL+"/settings/api-tokens", ""); !strings.Contains(body, `asta-badge-danger">Revoked`) {
 		t.Error("revoked token not marked on the list")
 	}
 }

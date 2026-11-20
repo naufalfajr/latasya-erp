@@ -6,6 +6,8 @@ import (
 	"html/template"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/naufal/latasya-erp/internal/contact"
 )
@@ -21,9 +23,23 @@ func FuncMap() template.FuncMap {
 			b, _ := json.Marshal(v)
 			return template.JS(b) //nolint:gosec // JSON encoding escapes script-breaking characters.
 		},
-		"add": func(a, b int) int { return a + b },
-		"sub": func(a, b int) int { return a - b },
-		"mul": func(a, b int) int { return a * b },
+		// navActive marks a sidebar section current on its index and every page under it.
+		"navActive": func(path, section string) bool {
+			return path == section || strings.HasPrefix(path, section+"/")
+		},
+		// humanize turns a stored enum ("credit_note") into a sentence-case label ("Credit note").
+		"humanize": func(s string) string {
+			s = strings.ReplaceAll(s, "_", " ")
+			r, size := utf8.DecodeRuneInString(s)
+			if size == 0 {
+				return s
+			}
+			return string(unicode.ToUpper(r)) + s[size:]
+		},
+		"splitN": strings.SplitN,
+		"add":    func(a, b int) int { return a + b },
+		"sub":    func(a, b int) int { return a - b },
+		"mul":    func(a, b int) int { return a * b },
 		// Go templates have built-in eq that handles multiple types
 		"seq": func(n int) []int {
 			s := make([]int, n)

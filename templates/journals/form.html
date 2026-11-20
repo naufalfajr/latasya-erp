@@ -2,104 +2,79 @@
 {{define "content"}}
 {{$data := .Data}}
 
-<div class="max-w-4xl">
-    <h1 class="text-2xl font-bold mb-6">
-        {{if $data.IsEdit}}Edit Journal Entry{{else}}New Journal Entry{{end}}
-    </h1>
+<div class="max-w-5xl">
+    <div class="page-head">
+        <h1 class="page-title">{{if $data.IsEdit}}Edit journal entry{{else}}New journal entry{{end}}</h1>
+    </div>
 
     {{if index $data.Errors "general"}}
-    <div class="alert alert-error mb-4">
-        <span>{{index $data.Errors "general"}}</span>
-    </div>
+    <div class="asta-alert asta-alert-danger mb-4" role="alert">{{template "alert-icon"}}<div class="asta-alert-body"><p class="asta-alert-text">{{index $data.Errors "general"}}</p></div></div>
     {{end}}
     {{if index $data.Errors "balance"}}
-    <div class="alert alert-error mb-4">
-        <span>{{index $data.Errors "balance"}}</span>
-    </div>
+    <div class="asta-alert asta-alert-danger mb-4" role="alert">{{template "alert-icon"}}<div class="asta-alert-body"><p class="asta-alert-text">{{index $data.Errors "balance"}}</p></div></div>
     {{end}}
 
-    <form method="POST" action="{{$.BasePath}}{{if $data.IsEdit}}/journals/{{$data.Entry.ID}}{{else}}/journals{{end}}"
-        class="card bg-base-100 shadow">
+    <form method="POST" action="{{$.BasePath}}{{if $data.IsEdit}}/journals/{{$data.Entry.ID}}{{else}}/journals{{end}}" class="asta-card">
         {{template "csrf" $}}
         {{if $data.IsEdit}}<input type="hidden" name="return_to" value="{{$data.ReturnTo}}">{{end}}
-        <div class="card-body">
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-                <!-- Date -->
-                <div class="flex flex-col gap-1">
-                    <label class="label" for="entry_date">Date *</label>
-                    <input type="date" id="entry_date" name="entry_date"
-                        class="input {{if index $data.Errors "entry_date"}}input-error{{end}}"
-                        value="{{$data.Entry.EntryDate}}" required>
-                    {{if index $data.Errors "entry_date"}}
-                    <span class="text-xs text-error">{{index $data.Errors "entry_date"}}</span>
-                    {{end}}
-                </div>
-
-                <!-- Description -->
-                <div class="flex flex-col gap-1">
-                    <label class="label" for="description">Description *</label>
-                    <input type="text" id="description" name="description" placeholder="e.g. Fuel purchase for Bus 01"
-                        class="input {{if index $data.Errors "description"}}input-error{{end}}"
-                        value="{{$data.Entry.Description}}" required>
-                    {{if index $data.Errors "description"}}
-                    <span class="text-xs text-error">{{index $data.Errors "description"}}</span>
-                    {{end}}
-                </div>
+        <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="entry_date">Date<span class="asta-label-required" aria-hidden="true">*</span></label></div>
+                <label class="asta-input"><input type="date" id="entry_date" name="entry_date" class="asta-input-control" value="{{$data.Entry.EntryDate}}" required{{if index $data.Errors "entry_date"}} aria-invalid="true"{{end}}></label>
+                {{if index $data.Errors "entry_date"}}<p class="asta-error" role="alert">{{index $data.Errors "entry_date"}}</p>{{end}}
             </div>
 
-            <!-- Journal Lines -->
-            <div class="mb-4">
-                <div class="flex justify-between items-center mb-2">
-                    <label class="font-semibold">Lines *</label>
-                    {{if index $data.Errors "lines"}}
-                    <span class="text-error text-sm">{{index $data.Errors "lines"}}</span>
-                    {{end}}
-                </div>
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="description">Description<span class="asta-label-required" aria-hidden="true">*</span></label></div>
+                <label class="asta-input"><input type="text" id="description" name="description" placeholder="e.g. Fuel purchase for Bus 01" class="asta-input-control" value="{{$data.Entry.Description}}" required{{if index $data.Errors "description"}} aria-invalid="true"{{end}}></label>
+                {{if index $data.Errors "description"}}<p class="asta-error" role="alert">{{index $data.Errors "description"}}</p>{{end}}
+            </div>
+        </div>
 
-                <div class="overflow-x-auto">
-                    <table class="table table-sm" id="lines-table">
-                        <thead>
-                            <tr>
-                                <th class="w-2/5">Account</th>
-                                <th>Memo</th>
-                                <th class="w-1/6">Debit</th>
-                                <th class="w-1/6">Credit</th>
-                                <th class="w-10"></th>
-                            </tr>
-                        </thead>
-                        <tbody id="lines-body">
-                            {{range $i, $line := $data.Lines}}
-                            {{template "journal-line-row" (dict "Index" $i "Line" $line "Accounts" $data.Accounts)}}
-                            {{end}}
-                        </tbody>
-                        <tfoot>
-                            <tr class="font-bold">
-                                <td colspan="2" class="text-right">Total</td>
-                                <td><input type="text" id="total-debit" class="input input-sm w-full font-mono bg-base-200" readonly value="0"></td>
-                                <td><input type="text" id="total-credit" class="input input-sm w-full font-mono bg-base-200" readonly value="0"></td>
-                                <td></td>
-                            </tr>
-                        </tfoot>
-                    </table>
-                </div>
-
-                <button type="button" class="btn btn-ghost btn-sm mt-2"
-                    hx-get="{{$.BasePath}}/htmx/journal-line"
-                    hx-target="#lines-body"
-                    hx-swap="beforeend"
-                    hx-vals="js:{idx: document.querySelectorAll('#lines-body tr').length}">
-                    + Add Line
-                </button>
+        <div class="mb-2">
+            <div class="mb-2 flex items-center justify-between gap-4">
+                <h2 class="section-title">Lines<span class="asta-label-required" aria-hidden="true">*</span></h2>
+                {{if index $data.Errors "lines"}}<p class="asta-error" role="alert">{{index $data.Errors "lines"}}</p>{{end}}
             </div>
 
-            <!-- Actions -->
-            <div class="card-actions justify-end mt-4">
-                <a href="{{if $data.IsEdit}}{{$.BasePath}}/journals/{{$data.Entry.ID}}?return_to={{urlquery $data.ReturnTo}}{{else}}{{$.BasePath}}/journals{{end}}" class="btn btn-ghost">Cancel</a>
-                <button type="submit" class="btn btn-primary">
-                    {{if $data.IsEdit}}Update{{else}}Create{{end}} Journal Entry
-                </button>
-            </div>
+            <div class="asta-table-wrap"><div class="asta-table-scroll">
+                <table class="asta-table" id="lines-table">
+                    <thead>
+                        <tr>
+                            <th class="asta-th w-2/5" scope="col">Account</th>
+                            <th class="asta-th" scope="col">Memo</th>
+                            <th class="asta-th w-1/6" scope="col">Debit</th>
+                            <th class="asta-th w-1/6" scope="col">Credit</th>
+                            <th class="asta-th w-12" scope="col"><span class="sr-only">Remove</span></th>
+                        </tr>
+                    </thead>
+                    <tbody id="lines-body">
+                        {{range $i, $line := $data.Lines}}
+                        {{template "journal-line-row" (dict "Index" $i "Line" $line "Accounts" $data.Accounts)}}
+                        {{end}}
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="2" class="asta-td asta-td-right font-medium text-ink">Total</td>
+                            <td class="asta-td"><label class="asta-input asta-input-sm"><input type="text" id="total-debit" class="asta-input-control font-mono tabular-nums" aria-label="Total debit" readonly value="0"></label></td>
+                            <td class="asta-td"><label class="asta-input asta-input-sm"><input type="text" id="total-credit" class="asta-input-control font-mono tabular-nums" aria-label="Total credit" readonly value="0"></label></td>
+                            <td class="asta-td"></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div></div>
+
+            <button type="button" class="asta-btn asta-btn-ghost asta-btn-sm mt-2"
+                hx-get="{{$.BasePath}}/htmx/journal-line"
+                hx-target="#lines-body"
+                hx-swap="beforeend"
+                hx-vals="js:{idx: document.querySelectorAll('#lines-body tr').length}"><span class="asta-btn-label">Add line</span></button>
+        </div>
+
+        <div class="asta-card-footer">
+            <a href="{{if $data.IsEdit}}{{$.BasePath}}/journals/{{$data.Entry.ID}}?return_to={{urlquery $data.ReturnTo}}{{else}}{{$.BasePath}}/journals{{end}}" class="asta-btn asta-btn-ghost"><span class="asta-btn-label">Cancel</span></a>
+            <button type="submit" class="asta-btn asta-btn-accent"><span class="asta-btn-label">{{if $data.IsEdit}}Update journal entry{{else}}Create journal entry{{end}}</span></button>
         </div>
     </form>
 </div>
@@ -135,13 +110,15 @@ function updateTotals() {
     document.getElementById('total-debit').value = totalDebit.toLocaleString('id-ID');
     document.getElementById('total-credit').value = totalCredit.toLocaleString('id-ID');
 
-    // Highlight if unbalanced
-    const footer = document.querySelector('#lines-table tfoot tr');
-    if (totalDebit !== totalCredit && (totalDebit > 0 || totalCredit > 0)) {
-        footer.classList.add('text-error');
-    } else {
-        footer.classList.remove('text-error');
-    }
+    // Flag the totals as invalid while unbalanced (asta-input error state)
+    const unbalanced = totalDebit !== totalCredit && (totalDebit > 0 || totalCredit > 0);
+    document.querySelectorAll('#lines-table tfoot input').forEach(function(el) {
+        if (unbalanced) {
+            el.setAttribute('aria-invalid', 'true');
+        } else {
+            el.removeAttribute('aria-invalid');
+        }
+    });
 }
 
 function removeLine(btn) {
@@ -155,30 +132,34 @@ updateTotals();
 {{end}}
 
 {{define "journal-line-row"}}
-<tr>
-    <td>
-        <select name="line_account_id" class="select select-sm w-full">
-            <option value="">Select account</option>
-            {{$selectedID := .Line.AccountID}}
-            {{range .Accounts}}
-            <option value="{{.ID}}" {{if eq .ID $selectedID}}selected{{end}}>{{.Code}} - {{.Name}}</option>
-            {{end}}
-        </select>
+<tr class="asta-tr">
+    <td class="asta-td">
+        <div class="asta-select asta-select-sm min-w-[220px]">
+            <select name="line_account_id" class="asta-select-control" aria-label="Account">
+                <option value="">Select account</option>
+                {{$selectedID := .Line.AccountID}}
+                {{range .Accounts}}
+                <option value="{{.ID}}" {{if eq .ID $selectedID}}selected{{end}}>{{.Code}} - {{.Name}}</option>
+                {{end}}
+            </select>
+            <svg class="asta-select-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
+        </div>
     </td>
-    <td>
-        <input type="text" name="line_memo" placeholder="Memo" class="input input-sm w-full"
-            value="{{.Line.Memo}}">
+    <td class="asta-td">
+        <label class="asta-input asta-input-sm"><input type="text" name="line_memo" placeholder="Memo" aria-label="Memo" class="asta-input-control" value="{{.Line.Memo}}"></label>
     </td>
-    <td>
-        <input type="number" name="line_debit" placeholder="0" class="input input-sm w-full font-mono"
-            value="{{if gt .Line.Debit 0}}{{.Line.Debit}}{{end}}" min="0">
+    <td class="asta-td">
+        <label class="asta-input asta-input-sm"><input type="number" name="line_debit" placeholder="0" aria-label="Debit" class="asta-input-control font-mono tabular-nums"
+            value="{{if gt .Line.Debit 0}}{{.Line.Debit}}{{end}}" min="0"></label>
     </td>
-    <td>
-        <input type="number" name="line_credit" placeholder="0" class="input input-sm w-full font-mono"
-            value="{{if gt .Line.Credit 0}}{{.Line.Credit}}{{end}}" min="0">
+    <td class="asta-td">
+        <label class="asta-input asta-input-sm"><input type="number" name="line_credit" placeholder="0" aria-label="Credit" class="asta-input-control font-mono tabular-nums"
+            value="{{if gt .Line.Credit 0}}{{.Line.Credit}}{{end}}" min="0"></label>
     </td>
-    <td>
-        <button type="button" class="btn btn-ghost btn-xs text-error" onclick="removeLine(this)">X</button>
+    <td class="asta-td">
+        <button type="button" class="asta-btn asta-btn-ghost asta-btn-icon asta-btn-xs" onclick="removeLine(this)" aria-label="Remove line">
+            <svg viewBox="0 0 14 14" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M3 3l8 8M11 3 3 11"/></svg>
+        </button>
     </td>
 </tr>
 {{end}}

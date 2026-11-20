@@ -3,68 +3,59 @@
 {{$view := .Data}}
 {{$je := $view.Entry}}
 
-<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+<div class="page-head">
     <div>
-        <h1 class="text-2xl font-bold">{{$je.Reference}}</h1>
-        <p class="text-sm opacity-60">{{formatDate $je.EntryDate}} &middot; Created by {{$je.CreatedByName}}</p>
+        <h1 class="page-title font-mono">{{$je.Reference}}</h1>
+        <p class="page-sub">{{formatDate $je.EntryDate}} &middot; Created by {{$je.CreatedByName}}</p>
     </div>
-    <div class="flex gap-2">
-        <a href="{{$view.BackURL}}" class="btn btn-ghost btn-sm">Back</a>
+    <div class="page-actions">
+        <a href="{{$view.BackURL}}" class="asta-btn asta-btn-ghost asta-btn-sm"><span class="asta-btn-label">Back</span></a>
         {{if $view.CanMutate}}
-        <a href="{{$view.EditURL}}" class="btn btn-sm">Edit</a>
-        <button class="btn btn-error btn-sm"
+        <a href="{{$view.EditURL}}" class="asta-btn asta-btn-outline asta-btn-sm"><span class="asta-btn-label">Edit</span></a>
+        <button class="asta-btn asta-btn-outline erp-danger asta-btn-sm"
             hx-delete="{{$view.DeleteURL}}"
             hx-confirm="Delete this journal entry?"
-            hx-target="body">Delete</button>
+            hx-target="body"><span class="asta-btn-label">Delete</span></button>
         {{end}}
     </div>
 </div>
 
-<div class="card bg-base-100 shadow">
-    <div class="card-body">
-        <div class="mb-4">
-            <h2 class="font-semibold text-lg mb-1">{{$je.Description}}</h2>
-            {{if and $je.SourceType (ne $je.SourceType "manual")}}
-            <span class="badge badge-ghost">Auto-generated from {{$je.SourceType}}</span>
-            {{end}}
-        </div>
-
-        <div class="overflow-x-auto">
-            <table class="table table-sm">
-                <thead>
-                    <tr>
-                        <th>Account</th>
-                        <th>Memo</th>
-                        <th class="text-right">Debit</th>
-                        <th class="text-right">Credit</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {{range $je.Lines}}
-                    <tr>
-                        <td>
-                            <span class="font-mono text-sm">{{.AccountCode}}</span>
-                            <span class="ml-1">{{.AccountName}}</span>
-                        </td>
-                        <td class="text-sm opacity-60">{{.Memo}}</td>
-                        <td class="text-right font-mono">
-                            {{if gt .Debit 0}}{{formatIDR .Debit}}{{end}}
-                        </td>
-                        <td class="text-right font-mono">
-                            {{if gt .Credit 0}}{{formatIDR .Credit}}{{end}}
-                        </td>
-                    </tr>
-                    {{end}}
-                </tbody>
-                <tfoot>
-                    <tr class="font-bold">
-                        <td colspan="2" class="text-right">Total</td>
-                        <td class="text-right font-mono">{{formatIDR $je.TotalDebit}}</td>
-                        <td class="text-right font-mono">{{formatIDR $je.TotalCredit}}</td>
-                    </tr>
-                </tfoot>
-            </table>
-        </div>
+<section class="asta-card" aria-labelledby="journal-description">
+    <div class="asta-card-header">
+        <h2 id="journal-description" class="asta-card-title">{{$je.Description}}</h2>
+        {{if and $je.SourceType (ne $je.SourceType "manual")}}
+        <p class="asta-card-description"><span class="asta-badge asta-badge-sm">Auto-generated from {{humanize $je.SourceType}}</span></p>
+        {{end}}
     </div>
-</div>
+
+    <div class="asta-table-wrap"><div class="asta-table-scroll">
+        <table class="asta-table">
+            <thead>
+                <tr>
+                    <th class="asta-th" scope="col">Account</th>
+                    <th class="asta-th" scope="col">Memo</th>
+                    <th class="asta-th asta-th-right" scope="col">Debit</th>
+                    <th class="asta-th asta-th-right" scope="col">Credit</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range $je.Lines}}
+                <tr class="asta-tr">
+                    <td class="asta-td text-ink"><span class="font-mono">{{.AccountCode}}</span> <span class="ml-1">{{.AccountName}}</span></td>
+                    <td class="asta-td asta-td-wrap text-ink-2">{{.Memo}}</td>
+                    <td class="asta-td asta-td-right font-mono tabular-nums">{{if gt .Debit 0}}{{formatIDR .Debit}}{{end}}</td>
+                    <td class="asta-td asta-td-right font-mono tabular-nums">{{if gt .Credit 0}}{{formatIDR .Credit}}{{end}}</td>
+                </tr>
+                {{end}}
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td colspan="2" class="asta-td asta-td-right font-medium text-ink">Total</td>
+                    <td class="asta-td asta-td-right font-mono tabular-nums font-medium text-ink">{{formatIDR $je.TotalDebit}}</td>
+                    <td class="asta-td asta-td-right font-mono tabular-nums font-medium text-ink">{{formatIDR $je.TotalCredit}}</td>
+                </tr>
+            </tfoot>
+        </table>
+    </div></div>
+</section>
 {{end}}

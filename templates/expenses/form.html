@@ -3,109 +3,84 @@
 {{$data := .Data}}
 
 <div class="max-w-2xl">
-    <h1 class="text-2xl font-bold mb-6">
-        {{if $data.IsEdit}}Edit Expense{{else}}Record Expense{{end}}
-    </h1>
+    <div class="page-head">
+        <h1 class="page-title">{{if $data.IsEdit}}Edit expense{{else}}Record expense{{end}}</h1>
+    </div>
 
     {{if index $data.Errors "general"}}
-    <div class="alert alert-error mb-4">
-        <span>{{index $data.Errors "general"}}</span>
-    </div>
+    <div class="asta-alert asta-alert-danger mb-4" role="alert">{{template "alert-icon"}}<div class="asta-alert-body"><p class="asta-alert-text">{{index $data.Errors "general"}}</p></div></div>
     {{end}}
 
-    <form method="POST" action="{{$.BasePath}}{{if $data.IsEdit}}/expenses/{{$data.Entry.ID}}{{else}}/expenses{{end}}"
-        class="card bg-base-100 shadow">
+    <form method="POST" action="{{$.BasePath}}{{if $data.IsEdit}}/expenses/{{$data.Entry.ID}}{{else}}/expenses{{end}}" class="asta-card">
         {{template "csrf" $}}
         {{if $data.IsEdit}}<input type="hidden" name="return_to" value="{{$data.ReturnTo}}">{{end}}
-        <div class="card-body">
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <!-- Date -->
-                <div class="flex flex-col gap-1">
-                    <label class="label">Date *</label>
-                    <input type="date" name="entry_date"
-                        class="input {{if index $data.Errors "entry_date"}}input-error{{end}}"
-                        value="{{$data.Entry.EntryDate}}" required>
-                    {{if index $data.Errors "entry_date"}}
-                    <span class="text-xs text-error">{{index $data.Errors "entry_date"}}</span>
-                    {{end}}
-                </div>
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="entry_date">Date<span class="asta-label-required" aria-hidden="true">*</span></label></div>
+                <label class="asta-input"><input type="date" id="entry_date" name="entry_date" class="asta-input-control" value="{{$data.Entry.EntryDate}}" required{{if index $data.Errors "entry_date"}} aria-invalid="true"{{end}}></label>
+                {{if index $data.Errors "entry_date"}}<p class="asta-error" role="alert">{{index $data.Errors "entry_date"}}</p>{{end}}
+            </div>
 
-                <!-- Amount -->
-                <div class="flex flex-col gap-1">
-                    <label class="label">Amount (Rp) *</label>
-                    <input type="number" name="amount" placeholder="e.g. 500000"
-                        class="input font-mono {{if index $data.Errors "amount"}}input-error{{end}}"
-                        value="{{if gt $data.Amount 0}}{{$data.Amount}}{{end}}" min="1" required>
-                    {{if index $data.Errors "amount"}}
-                    <span class="text-xs text-error">{{index $data.Errors "amount"}}</span>
-                    {{end}}
-                </div>
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="amount">Amount (Rp)<span class="asta-label-required" aria-hidden="true">*</span></label></div>
+                <label class="asta-input"><input type="number" id="amount" name="amount" placeholder="e.g. 500000" class="asta-input-control font-mono tabular-nums" value="{{if gt $data.Amount 0}}{{$data.Amount}}{{end}}" min="1" required{{if index $data.Errors "amount"}} aria-invalid="true"{{end}}></label>
+                {{if index $data.Errors "amount"}}<p class="asta-error" role="alert">{{index $data.Errors "amount"}}</p>{{end}}
+            </div>
 
-                <!-- Expense Account -->
-                <div class="flex flex-col gap-1">
-                    <label class="label">Expense Account *</label>
-                    <select name="expense_account"
-                        class="select {{if index $data.Errors "expense_account"}}select-error{{end}}" required>
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="expense_account">Expense account<span class="asta-label-required" aria-hidden="true">*</span></label></div>
+                <div class="asta-select">
+                    <select id="expense_account" name="expense_account" class="asta-select-control" required{{if index $data.Errors "expense_account"}} aria-invalid="true"{{end}}>
                         <option value="">Select expense account</option>
                         {{range $data.ExpenseAccounts}}
                         <option value="{{.ID}}" {{if eq .ID $data.ExpenseAccount}}selected{{end}}>{{.Code}} - {{.Name}}</option>
                         {{end}}
                     </select>
-                    {{if index $data.Errors "expense_account"}}
-                    <span class="text-xs text-error">{{index $data.Errors "expense_account"}}</span>
-                    {{end}}
+                    {{template "select-chevron"}}
                 </div>
+                {{if index $data.Errors "expense_account"}}<p class="asta-error" role="alert">{{index $data.Errors "expense_account"}}</p>{{end}}
+            </div>
 
-                <!-- Paid From -->
-                <div class="flex flex-col gap-1">
-                    <label class="label">Paid From *</label>
-                    <select name="payment_account"
-                        class="select {{if index $data.Errors "payment_account"}}select-error{{end}}" required>
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="payment_account">Paid from<span class="asta-label-required" aria-hidden="true">*</span></label></div>
+                <div class="asta-select">
+                    <select id="payment_account" name="payment_account" class="asta-select-control" required{{if index $data.Errors "payment_account"}} aria-invalid="true"{{end}}>
                         <option value="">Select payment account</option>
                         {{range $data.PaymentAccounts}}
                         <option value="{{.ID}}" {{if eq .ID $data.PaymentAccount}}selected{{end}}>{{.Code}} - {{.Name}}</option>
                         {{end}}
                     </select>
-                    {{if index $data.Errors "payment_account"}}
-                    <span class="text-xs text-error">{{index $data.Errors "payment_account"}}</span>
-                    {{end}}
+                    {{template "select-chevron"}}
                 </div>
+                {{if index $data.Errors "payment_account"}}<p class="asta-error" role="alert">{{index $data.Errors "payment_account"}}</p>{{end}}
+            </div>
 
-                <!-- Vehicle -->
-                <div class="flex flex-col gap-1">
-                    <label class="label">Vehicle</label>
-                    <select name="vehicle_id" class="select">
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="vehicle_id">Vehicle</label></div>
+                <div class="asta-select">
+                    <select id="vehicle_id" name="vehicle_id" class="asta-select-control">
                         <option value="">No vehicle</option>
                         {{range $data.Vehicles}}
                         <option value="{{.ID}}" {{if eq .ID $data.VehicleID}}selected{{end}}>{{.Code}}</option>
                         {{end}}
                     </select>
+                    {{template "select-chevron"}}
                 </div>
             </div>
 
-            <!-- Description -->
-            <div class="flex flex-col gap-1 mt-2">
-                <label class="label">Description *</label>
-                <input type="text" name="description" placeholder="e.g. Diesel fuel for Bus 01"
-                    class="input {{if index $data.Errors "description"}}input-error{{end}}"
-                    value="{{$data.Entry.Description}}" required>
-                {{if index $data.Errors "description"}}
-                <span class="text-xs text-error">{{index $data.Errors "description"}}</span>
-                {{end}}
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="description">Description<span class="asta-label-required" aria-hidden="true">*</span></label></div>
+                <label class="asta-input"><input type="text" id="description" name="description" placeholder="e.g. Diesel fuel for Bus 01" class="asta-input-control" value="{{$data.Entry.Description}}" required{{if index $data.Errors "description"}} aria-invalid="true"{{end}}></label>
+                {{if index $data.Errors "description"}}<p class="asta-error" role="alert">{{index $data.Errors "description"}}</p>{{end}}
             </div>
+        </div>
 
-            <div class="bg-base-200 rounded-lg p-3 mt-4 text-sm">
-                <p class="font-semibold mb-1">What happens:</p>
-                <p class="opacity-70">This creates a journal entry that debits the expense account (records the expense) and credits your payment account (decreases cash/bank).</p>
-            </div>
+        <div class="asta-alert asta-alert-neutral mt-6" role="status">{{template "alert-icon"}}<div class="asta-alert-body"><p class="asta-alert-title">What happens</p><p class="asta-alert-text">This creates a journal entry that debits the expense account (records the expense) and credits your payment account (decreases cash/bank).</p></div></div>
 
-            <div class="card-actions justify-end mt-4">
-                <a href="{{if $data.IsEdit}}{{$.BasePath}}/journals/{{$data.Entry.ID}}?return_to={{urlquery $data.ReturnTo}}{{else}}{{$.BasePath}}/expenses{{end}}" class="btn btn-ghost">Cancel</a>
-                <button type="submit" class="btn btn-primary">
-                    {{if $data.IsEdit}}Update{{else}}Record{{end}} Expense
-                </button>
-            </div>
+        <div class="asta-card-footer">
+            <a href="{{if $data.IsEdit}}{{$.BasePath}}/journals/{{$data.Entry.ID}}?return_to={{urlquery $data.ReturnTo}}{{else}}{{$.BasePath}}/expenses{{end}}" class="asta-btn asta-btn-ghost"><span class="asta-btn-label">Cancel</span></a>
+            <button type="submit" class="asta-btn asta-btn-accent"><span class="asta-btn-label">{{if $data.IsEdit}}Update expense{{else}}Record expense{{end}}</span></button>
         </div>
     </form>
 </div>

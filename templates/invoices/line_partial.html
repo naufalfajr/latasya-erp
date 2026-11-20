@@ -1,30 +1,33 @@
 {{define "invoice-line-row"}}
-<tr>
-    <td>
-        <input type="text" name="line_description" placeholder="Description"
-            class="input input-sm w-full" value="{{.Line.Description}}">
+<tr class="asta-tr">
+    <td class="asta-td">
+        <label class="asta-input asta-input-sm"><input type="text" name="line_description" placeholder="Description" aria-label="Description" class="asta-input-control" value="{{.Line.Description}}"></label>
     </td>
-    <td>
-        <select name="line_account_id" class="select select-sm w-full">
-            <option value="">Account</option>
-            {{$selAcct := .Line.AccountID}}
-            {{range .Accounts}}
-            <option value="{{.ID}}" {{if eq .ID $selAcct}}selected{{end}}>{{.Code}} - {{.Name}}</option>
-            {{end}}
-        </select>
+    <td class="asta-td">
+        <div class="asta-select asta-select-sm min-w-[220px]">
+            <select name="line_account_id" class="asta-select-control" aria-label="Revenue account">
+                <option value="">Account</option>
+                {{$selAcct := .Line.AccountID}}
+                {{range .Accounts}}
+                <option value="{{.ID}}" {{if eq .ID $selAcct}}selected{{end}}>{{.Code}} - {{.Name}}</option>
+                {{end}}
+            </select>
+            <svg class="asta-select-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
+        </div>
     </td>
-    <td>
-        <input type="number" name="line_quantity" class="input input-sm w-full"
-            value="{{if gt .Line.Quantity 0}}{{formatQty .Line.Quantity}}{{else}}1{{end}}"
-            step="0.01" min="0">
+    <td class="asta-td">
+        <label class="asta-input asta-input-sm"><input type="number" name="line_quantity" aria-label="Quantity" class="asta-input-control tabular-nums"
+            value="{{if gt .Line.Quantity 0}}{{formatQty .Line.Quantity}}{{else}}1{{end}}" step="0.01" min="0"></label>
     </td>
-    <td>
-        <input type="number" name="line_unit_price" placeholder="0" class="input input-sm w-full font-mono"
-            value="{{if gt .Line.UnitPrice 0}}{{.Line.UnitPrice}}{{end}}" min="0">
+    <td class="asta-td">
+        <label class="asta-input asta-input-sm"><input type="number" name="line_unit_price" placeholder="0" aria-label="Unit price" class="asta-input-control font-mono tabular-nums"
+            value="{{if gt .Line.UnitPrice 0}}{{.Line.UnitPrice}}{{end}}" min="0"></label>
     </td>
-    <td class="font-mono text-sm line-amount">{{if gt .Line.Amount 0}}{{.Line.Amount}}{{else}}0{{end}}</td>
-    <td>
-        <button type="button" class="btn btn-ghost btn-xs text-error" onclick="removeInvLine(this)">X</button>
+    <td class="asta-td asta-td-right font-mono tabular-nums line-amount">{{if gt .Line.Amount 0}}{{.Line.Amount}}{{else}}0{{end}}</td>
+    <td class="asta-td">
+        <button type="button" class="asta-btn asta-btn-ghost asta-btn-icon asta-btn-xs" onclick="removeInvLine(this)" aria-label="Remove line">
+            <svg viewBox="0 0 14 14" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M3 3l8 8M11 3 3 11"/></svg>
+        </button>
     </td>
 </tr>
 {{end}}

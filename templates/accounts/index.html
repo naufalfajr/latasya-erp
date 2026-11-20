@@ -1,93 +1,77 @@
 {{template "base" .}}
 {{define "content"}}
-<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-    <h1 class="text-2xl font-bold">Chart of Accounts</h1>
+<div class="page-head">
+    <h1 class="page-title">Chart of accounts</h1>
     {{if .User.IsAdmin}}
-    <a href="{{$.BasePath}}/accounts/new" class="btn btn-primary btn-sm">+ New Account</a>
+    <div class="page-actions">
+        <a href="{{$.BasePath}}/accounts/new" class="asta-btn asta-btn-accent asta-btn-sm"><span class="asta-btn-label">New account</span></a>
+    </div>
     {{end}}
 </div>
 
 {{$data := .Data}}
 
-<!-- Filter tabs -->
-<div class="tabs tabs-boxed mb-4 flex-wrap">
-    <a href="{{$.BasePath}}/accounts" class="tab {{if eq $data.Filter ""}}tab-active{{end}}">
-        All ({{index $data.TypeCounts "all"}})
-    </a>
-    <a href="{{$.BasePath}}/accounts?type=asset" class="tab {{if eq $data.Filter "asset"}}tab-active{{end}}">
-        Asset ({{index $data.TypeCounts "asset"}})
-    </a>
-    <a href="{{$.BasePath}}/accounts?type=liability" class="tab {{if eq $data.Filter "liability"}}tab-active{{end}}">
-        Liability ({{index $data.TypeCounts "liability"}})
-    </a>
-    <a href="{{$.BasePath}}/accounts?type=equity" class="tab {{if eq $data.Filter "equity"}}tab-active{{end}}">
-        Equity ({{index $data.TypeCounts "equity"}})
-    </a>
-    <a href="{{$.BasePath}}/accounts?type=revenue" class="tab {{if eq $data.Filter "revenue"}}tab-active{{end}}">
-        Revenue ({{index $data.TypeCounts "revenue"}})
-    </a>
-    <a href="{{$.BasePath}}/accounts?type=expense" class="tab {{if eq $data.Filter "expense"}}tab-active{{end}}">
-        Expense ({{index $data.TypeCounts "expense"}})
-    </a>
+<nav class="asta-segmented asta-segmented-sm mb-4 max-w-full overflow-x-auto" aria-label="Filter by account type">
+    <a href="{{$.BasePath}}/accounts" class="asta-segmented-item"{{if eq $data.Filter ""}} aria-current="page"{{end}}>All ({{index $data.TypeCounts "all"}})</a>
+    <a href="{{$.BasePath}}/accounts?type=asset" class="asta-segmented-item"{{if eq $data.Filter "asset"}} aria-current="page"{{end}}>Asset ({{index $data.TypeCounts "asset"}})</a>
+    <a href="{{$.BasePath}}/accounts?type=liability" class="asta-segmented-item"{{if eq $data.Filter "liability"}} aria-current="page"{{end}}>Liability ({{index $data.TypeCounts "liability"}})</a>
+    <a href="{{$.BasePath}}/accounts?type=equity" class="asta-segmented-item"{{if eq $data.Filter "equity"}} aria-current="page"{{end}}>Equity ({{index $data.TypeCounts "equity"}})</a>
+    <a href="{{$.BasePath}}/accounts?type=revenue" class="asta-segmented-item"{{if eq $data.Filter "revenue"}} aria-current="page"{{end}}>Revenue ({{index $data.TypeCounts "revenue"}})</a>
+    <a href="{{$.BasePath}}/accounts?type=expense" class="asta-segmented-item"{{if eq $data.Filter "expense"}} aria-current="page"{{end}}>Expense ({{index $data.TypeCounts "expense"}})</a>
+</nav>
+
+<div class="mb-4">
+    <label class="asta-input asta-input-sm w-full max-w-xs">
+        <span class="asta-input-icon"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></svg></span>
+        <input type="text" placeholder="Search accounts…" aria-label="Search accounts"
+            class="asta-input-control"
+            hx-get="{{$.BasePath}}/accounts{{if $data.Filter}}?type={{$data.Filter}}{{end}}"
+            hx-trigger="keyup changed delay:300ms"
+            hx-target="#account-table"
+            hx-swap="outerHTML"
+            hx-push-url="false"
+            name="search"
+            value="{{$data.Search}}">
+    </label>
 </div>
 
-<!-- Search -->
-<div class="flex flex-col gap-1 mb-4">
-    <input type="text" placeholder="Search accounts..."
-        class="input input-sm w-full max-w-xs"
-        hx-get="{{$.BasePath}}/accounts{{if $data.Filter}}?type={{$data.Filter}}{{end}}"
-        hx-trigger="keyup changed delay:300ms"
-        hx-target="#account-table"
-		hx-swap="outerHTML"
-        hx-push-url="false"
-        name="search"
-        value="{{$data.Search}}">
-</div>
-
-<!-- Account table -->
 {{template "account-table" .}}
 {{end}}
 {{define "account-table"}}
 {{$data := .Data}}
-<div id="account-table" class="overflow-x-auto">
-    <table class="table table-sm">
+<div id="account-table" class="asta-table-wrap"><div class="asta-table-scroll">
+    <table class="asta-table">
         <thead>
             <tr>
-                <th>Code</th>
-                <th>Name</th>
-                <th>Type</th>
-                <th>Normal Balance</th>
-                <th class="hidden sm:table-cell">Description</th>
-                {{if .User.IsAdmin}}<th>Actions</th>{{end}}
+                <th class="asta-th" scope="col">Code</th>
+                <th class="asta-th" scope="col">Name</th>
+                <th class="asta-th" scope="col">Type</th>
+                <th class="asta-th" scope="col">Normal balance</th>
+                <th class="asta-th hidden sm:table-cell" scope="col">Description</th>
+                {{if .User.IsAdmin}}<th class="asta-th" scope="col"><span class="sr-only">Actions</span></th>{{end}}
             </tr>
         </thead>
         <tbody>
             {{range $data.Accounts}}
-            <tr id="account-{{.ID}}">
-                <td class="font-mono text-sm">{{.Code}}</td>
-                <td>
+            <tr class="asta-tr" id="account-{{.ID}}">
+                <td class="asta-td font-mono">{{.Code}}</td>
+                <td class="asta-td text-ink">
                     {{.Name}}
-                    {{if .IsSystem}}<span class="badge badge-ghost badge-xs">system</span>{{end}}
+                    {{if .IsSystem}}<span class="asta-badge asta-badge-sm asta-badge-outline ml-1">system</span>{{end}}
                 </td>
-                <td><span class="badge badge-sm
-                    {{if eq .AccountType "asset"}}badge-info
-                    {{else if eq .AccountType "liability"}}badge-warning
-                    {{else if eq .AccountType "equity"}}badge-secondary
-                    {{else if eq .AccountType "revenue"}}badge-success
-                    {{else if eq .AccountType "expense"}}badge-error
-                    {{end}}">{{.AccountType}}</span></td>
-                <td class="text-sm">{{.NormalBalance}}</td>
-                <td class="hidden sm:table-cell text-sm opacity-60">{{.Description}}</td>
+                <td class="asta-td"><span class="asta-badge asta-badge-sm">{{humanize .AccountType}}</span></td>
+                <td class="asta-td">{{.NormalBalance}}</td>
+                <td class="asta-td asta-td-wrap hidden sm:table-cell">{{.Description}}</td>
                 {{if $.User.IsAdmin}}
-                <td>
+                <td class="asta-td">
                     <div class="flex gap-1">
-                        <a href="{{$.BasePath}}/accounts/{{.ID}}/edit" class="btn btn-ghost btn-xs">Edit</a>
+                        <a href="{{$.BasePath}}/accounts/{{.ID}}/edit" class="asta-btn asta-btn-outline asta-btn-xs"><span class="asta-btn-label">Edit</span></a>
                         {{if not .IsSystem}}
-                        <button class="btn btn-ghost btn-xs text-error"
+                        <button class="asta-btn asta-btn-outline erp-danger asta-btn-xs"
                             hx-delete="{{$.BasePath}}/accounts/{{.ID}}"
                             hx-target="#account-{{.ID}}"
                             hx-swap="outerHTML"
-                            hx-confirm="Delete account {{.Code}} - {{.Name}}?">Delete</button>
+                            hx-confirm="Delete account {{.Code}} - {{.Name}}?"><span class="asta-btn-label">Delete</span></button>
                         {{end}}
                     </div>
                 </td>
@@ -95,10 +79,10 @@
             </tr>
             {{else}}
             <tr>
-                <td colspan="6" class="text-center py-8 opacity-60">No accounts found</td>
+                <td colspan="{{if $.User.IsAdmin}}6{{else}}5{{end}}" class="asta-td py-10 text-center text-mute">No accounts found</td>
             </tr>
             {{end}}
         </tbody>
     </table>
-</div>
+</div></div>
 {{end}}
