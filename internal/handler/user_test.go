@@ -51,8 +51,8 @@ func TestNewUser_RendersForm(t *testing.T) {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
 	}
 	body := readBody(t, resp)
-	if !strings.Contains(body, "New User") {
-		t.Error("expected 'New User' heading")
+	if !strings.Contains(body, "New user") {
+		t.Error("expected 'New user' heading")
 	}
 }
 

@@ -363,7 +363,7 @@ func TestContactEditPage_ShowsPortalLinkControl(t *testing.T) {
 	body, _ := io.ReadAll(resp.Body)
 	text := string(body)
 
-	if !strings.Contains(text, "Simpan Link Baru") {
+	if !strings.Contains(text, "Save new link") {
 		t.Error("expected the save-link control before any code exists")
 	}
 
@@ -630,7 +630,7 @@ func TestContactEditPage_HidesCodeEditorFromNonAdmin(t *testing.T) {
 	body, _ := io.ReadAll(resp.Body)
 	text := string(body)
 
-	if strings.Contains(text, "Simpan Link Baru") || strings.Contains(text, `name="portal_code"`) {
+	if strings.Contains(text, "Save new link") || strings.Contains(text, `name="portal_code"`) {
 		t.Error("non-admin should not see the portal-code editor")
 	}
 	if !strings.Contains(text, "/p/") {

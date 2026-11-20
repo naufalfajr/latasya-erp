@@ -3,79 +3,66 @@
 {{$data := .Data}}
 {{$report := (index $data "Report")}}
 
-<h1 class="text-2xl font-bold mb-6">Profit & Loss</h1>
+<div class="page-head">
+    <h1 class="page-title">Profit and loss</h1>
+</div>
 
-<form class="flex flex-wrap gap-2 mb-4 items-end">
-    <div class="flex flex-col gap-1">
-        <label class="label text-xs">From</label>
-        <input type="date" name="from" value="{{index $data "From"}}" class="input input-sm">
+<form class="mb-4 flex flex-wrap items-end gap-3" aria-label="Report period">
+    <div class="asta-field">
+        <div class="asta-field-head"><label class="asta-label" for="from">From</label></div>
+        <label class="asta-input asta-input-sm"><input type="date" id="from" name="from" value="{{index $data "From"}}" class="asta-input-control tabular-nums"></label>
     </div>
-    <div class="flex flex-col gap-1">
-        <label class="label text-xs">To</label>
-        <input type="date" name="to" value="{{index $data "To"}}" class="input input-sm">
+    <div class="asta-field">
+        <div class="asta-field-head"><label class="asta-label" for="to">To</label></div>
+        <label class="asta-input asta-input-sm"><input type="date" id="to" name="to" value="{{index $data "To"}}" class="asta-input-control tabular-nums"></label>
     </div>
-    <button type="submit" class="btn btn-sm btn-primary">Apply</button>
+    <button type="submit" class="asta-btn asta-btn-accent asta-btn-sm"><span class="asta-btn-label">Apply</span></button>
 </form>
 
-<div class="card bg-base-100 shadow">
-    <div class="card-body overflow-x-auto">
-        <table class="table table-sm">
-            <!-- Revenue -->
-            <thead>
-                <tr class="bg-base-200">
-                    <th colspan="2">Revenue</th>
-                    <th class="text-right">Amount</th>
-                </tr>
-            </thead>
-            <tbody>
-                {{range $report.Revenue}}
-                <tr>
-                    <td class="font-mono text-sm">{{.AccountCode}}</td>
-                    <td>{{.AccountName}}</td>
-                    <td class="text-right font-mono text-success">{{formatIDR .Amount}}</td>
-                </tr>
-                {{else}}
-                <tr><td colspan="3" class="text-center opacity-60">No revenue</td></tr>
-                {{end}}
-            </tbody>
-            <tfoot>
-                <tr class="font-bold">
-                    <td colspan="2" class="text-right">Total Revenue</td>
-                    <td class="text-right font-mono text-success">{{formatIDR $report.TotalRevenue}}</td>
-                </tr>
-            </tfoot>
-
-            <!-- Expenses -->
-            <thead>
-                <tr class="bg-base-200">
-                    <th colspan="2">Expenses</th>
-                    <th class="text-right">Amount</th>
-                </tr>
-            </thead>
-            <tbody>
-                {{range $report.Expenses}}
-                <tr>
-                    <td class="font-mono text-sm">{{.AccountCode}}</td>
-                    <td>{{.AccountName}}</td>
-                    <td class="text-right font-mono text-error">{{formatIDR .Amount}}</td>
-                </tr>
-                {{else}}
-                <tr><td colspan="3" class="text-center opacity-60">No expenses</td></tr>
-                {{end}}
-            </tbody>
-            <tfoot>
-                <tr class="font-bold">
-                    <td colspan="2" class="text-right">Total Expenses</td>
-                    <td class="text-right font-mono text-error">{{formatIDR $report.TotalExpense}}</td>
-                </tr>
-                <tr class="font-bold text-lg border-t-2">
-                    <td colspan="2" class="text-right">Net Income</td>
-                    <td class="text-right font-mono {{if ge $report.NetIncome 0}}text-success{{else}}text-error{{end}}">
-                        {{formatIDR $report.NetIncome}}
-                    </td>
-                </tr>
-            </tfoot>
-        </table>
-    </div>
-</div>
+<div class="asta-table-wrap"><div class="asta-table-scroll">
+    <table class="asta-table">
+        <thead>
+            <tr>
+                <th class="asta-th" scope="col">Account</th>
+                <th class="asta-th asta-th-right" scope="col">Amount</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><th colspan="2" scope="colgroup" class="asta-td bg-paper-2 font-medium text-ink">Revenue</th></tr>
+            {{range $report.Revenue}}
+            <tr class="asta-tr">
+                <td class="asta-td asta-td-wrap text-ink"><span class="mr-2 font-mono text-mute">{{.AccountCode}}</span>{{.AccountName}}</td>
+                <td class="asta-td asta-td-right font-mono tabular-nums">{{formatIDR .Amount}}</td>
+            </tr>
+            {{else}}
+            <tr><td colspan="2" class="asta-td text-center text-mute">No revenue</td></tr>
+            {{end}}
+            <tr>
+                <td class="asta-td asta-td-right font-medium text-ink">Total revenue</td>
+                <td class="asta-td asta-td-right font-mono tabular-nums font-medium text-ink">{{formatIDR $report.TotalRevenue}}</td>
+            </tr>
+        </tbody>
+        <tbody>
+            <tr><th colspan="2" scope="colgroup" class="asta-td bg-paper-2 font-medium text-ink">Expenses</th></tr>
+            {{range $report.Expenses}}
+            <tr class="asta-tr">
+                <td class="asta-td asta-td-wrap text-ink"><span class="mr-2 font-mono text-mute">{{.AccountCode}}</span>{{.AccountName}}</td>
+                <td class="asta-td asta-td-right font-mono tabular-nums">{{formatIDR .Amount}}</td>
+            </tr>
+            {{else}}
+            <tr><td colspan="2" class="asta-td text-center text-mute">No expenses</td></tr>
+            {{end}}
+            <tr>
+                <td class="asta-td asta-td-right font-medium text-ink">Total expenses</td>
+                <td class="asta-td asta-td-right font-mono tabular-nums font-medium text-ink">{{formatIDR $report.TotalExpense}}</td>
+            </tr>
+        </tbody>
+        <tfoot>
+            <tr>
+                <td class="asta-td asta-td-right bg-paper-2 text-[15px] font-medium text-ink">Net income</td>
+                <td class="asta-td asta-td-right bg-paper-2 font-mono tabular-nums text-[15px] font-medium text-ink">{{formatIDR $report.NetIncome}}</td>
+            </tr>
+        </tfoot>
+    </table>
+</div></div>
 {{end}}

@@ -1,19 +1,11 @@
 {{define "pagination"}}
 {{if gt .TotalPages 1}}
-<div class="flex items-center justify-between mt-4">
-    <div class="text-sm opacity-60">Page {{.Page}} of {{.TotalPages}}</div>
-    <div class="join">
-        {{if .HasPrev}}
-        <a class="join-item btn btn-sm" href="{{.PrevURL}}">‹ Prev</a>
-        {{else}}
-        <button class="join-item btn btn-sm" disabled>‹ Prev</button>
-        {{end}}
-        {{if .HasNext}}
-        <a class="join-item btn btn-sm" href="{{.NextURL}}">Next ›</a>
-        {{else}}
-        <button class="join-item btn btn-sm" disabled>Next ›</button>
-        {{end}}
-    </div>
+<div class="mt-4 flex items-center justify-between gap-4">
+    <p class="text-[13px] tabular-nums text-mute">Page {{.Page}} of {{.TotalPages}}</p>
+    <nav class="asta-pagination asta-pagination-sm" aria-label="Pagination">
+        {{if .HasPrev}}<a class="asta-pagination-link" href="{{.PrevURL}}" aria-label="Previous page">{{else}}<span role="link" aria-disabled="true" class="asta-pagination-link" aria-label="Previous page">{{end}}<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5"/></svg>{{if .HasPrev}}</a>{{else}}</span>{{end}}
+        {{if .HasNext}}<a class="asta-pagination-link" href="{{.NextURL}}" aria-label="Next page">{{else}}<span role="link" aria-disabled="true" class="asta-pagination-link" aria-label="Next page">{{end}}<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5"/></svg>{{if .HasNext}}</a>{{else}}</span>{{end}}
+    </nav>
 </div>
 {{end}}
 {{end}}

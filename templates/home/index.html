@@ -7,11 +7,6 @@
 <meta name="description" content="Latasya Trans melayani antar jemput sekolah, perjalanan wisata, dan travel antar daerah. Hubungi kami lewat WhatsApp.">
 {{template "theme-head" .}}
 <style>
-    /* Page base. Global once DaisyUI is gone (PR3); scoped here so ERP pages stay untouched. */
-    html { background: var(--paper); }
-    body.home { font-family: var(--font-sans); background: var(--paper); color: var(--ink); }
-    .home :focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
-    .home ::selection { background: color-mix(in srgb, var(--brand) 22%, transparent); }
     .home { --gutter: clamp(16px, 2.8vw, 40px); }
     .home-wrap { max-width: 1320px; margin: 0 auto; padding: 0 var(--gutter); }
 
@@ -145,7 +140,7 @@
     }
 </style>
 </head>
-<body class="home">
+<body class="home latasya">
 {{$d := .Data}}
 
 <header class="home-header">

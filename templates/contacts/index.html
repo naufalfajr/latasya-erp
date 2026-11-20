@@ -1,123 +1,138 @@
 {{template "base" .}}
 {{define "content"}}
-<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-    <h1 class="text-2xl font-bold">Contacts</h1>
+<div class="page-head">
+    <h1 class="page-title">Contacts</h1>
     {{if .User.HasCapability "contacts.manage"}}
-    <a href="{{$.BasePath}}/contacts/new" class="btn btn-primary btn-sm">+ New Contact</a>
+    <div class="page-actions">
+        <a href="{{$.BasePath}}/contacts/new" class="asta-btn asta-btn-accent asta-btn-sm"><span class="asta-btn-label">New contact</span></a>
+    </div>
     {{end}}
 </div>
 
 {{$data := .Data}}
 
 {{if $data.RouteCapacity}}
-<div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+<div class="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
     {{range $data.RouteCapacity}}
-    <div class="stats bg-base-100 shadow">
-        <div class="stat py-3">
-            <div class="stat-title">{{.RouteName}} route {{if .VehicleCode}}({{.VehicleCode}}){{end}}</div>
-            <div class="stat-value text-lg {{if gt .Used .Capacity}}text-error{{end}}">{{.Used}} / {{.Capacity}}</div>
-            <div class="stat-desc">seats used</div>
-        </div>
+    <div class="asta-stat-card">
+        <p class="asta-stat-card-label">{{.RouteName}} route{{if .VehicleCode}} ({{.VehicleCode}}){{end}}</p>
+        <p class="asta-stat-card-value font-mono text-[22px] tabular-nums">{{.Used}} / {{.Capacity}}</p>
+        <p class="text-[12.5px] text-ink-2">Seats used{{if gt .Used .Capacity}}, over capacity{{end}}</p>
     </div>
     {{end}}
 </div>
 {{end}}
 
-<!-- Filter tabs -->
-<div class="tabs tabs-box mb-4">
-    <a href="{{$.BasePath}}/contacts" class="tab {{if eq $data.Filter ""}}tab-active{{end}}">All</a>
-    <a href="{{$.BasePath}}/contacts?type=customer" class="tab {{if eq $data.Filter "customer"}}tab-active{{end}}">Customers</a>
-    <a href="{{$.BasePath}}/contacts?type=supplier" class="tab {{if eq $data.Filter "supplier"}}tab-active{{end}}">Suppliers</a>
-</div>
+<nav class="asta-segmented asta-segmented-sm mb-4 max-w-full overflow-x-auto" aria-label="Filter by contact type">
+    <a href="{{$.BasePath}}/contacts" class="asta-segmented-item"{{if eq $data.Filter ""}} aria-current="page"{{end}}>All</a>
+    <a href="{{$.BasePath}}/contacts?type=customer" class="asta-segmented-item"{{if eq $data.Filter "customer"}} aria-current="page"{{end}}>Customers</a>
+    <a href="{{$.BasePath}}/contacts?type=supplier" class="asta-segmented-item"{{if eq $data.Filter "supplier"}} aria-current="page"{{end}}>Suppliers</a>
+</nav>
 
-<!-- Contact table (includes filter bar so HTMX updates keep filter state) -->
+{{/* Contact table (includes filter bar so HTMX updates keep filter state) */}}
 {{template "contact-table" .}}
 {{end}}
 {{define "contact-table"}}
 {{$data := .Data}}
+{{$canManage := .User.HasCapability "contacts.manage"}}
 <div id="contact-table">
-    <div class="flex flex-wrap gap-2 mb-4 items-center">
-        <select name="active" class="select select-sm" aria-label="Filter by status"
-            hx-get="{{$.BasePath}}/contacts{{if $data.Filter}}?type={{$data.Filter}}{{end}}"
-            hx-trigger="change"
-            hx-target="#contact-table"
-            hx-swap="outerHTML"
-            hx-include="[name='route'],[name='search']"
-            hx-push-url="true">
-            <option value="">All statuses</option>
-            <option value="1" {{if eq $data.Active "1"}}selected{{end}}>Active only</option>
-            <option value="0" {{if eq $data.Active "0"}}selected{{end}}>Inactive only</option>
-        </select>
-        <select name="route" class="select select-sm" aria-label="Filter by route"
-            hx-get="{{$.BasePath}}/contacts{{if $data.Filter}}?type={{$data.Filter}}{{end}}"
-            hx-trigger="change"
-            hx-target="#contact-table"
-            hx-swap="outerHTML"
-            hx-include="[name='active'],[name='search']"
-            hx-push-url="true">
-            <option value="">All routes</option>
-            {{range $data.Routes}}
-            <option value="{{.ID}}" {{if eq .ID $data.RouteID}}selected{{end}}>{{.Name}}</option>
-            {{end}}
-        </select>
-        <input type="text" name="search" placeholder="Search contacts..."
-            class="input input-sm w-full max-w-xs"
-            hx-get="{{$.BasePath}}/contacts{{if $data.Filter}}?type={{$data.Filter}}{{end}}"
-            hx-trigger="keyup changed delay:300ms"
-            hx-target="#contact-table"
-            hx-swap="outerHTML"
-            hx-include="[name='active'],[name='route']"
-            hx-push-url="false"
-            value="{{$data.Search}}">
-        <a href="{{$.BasePath}}/contacts{{if $data.Filter}}?type={{$data.Filter}}{{end}}" class="btn btn-ghost btn-sm">Reset filters</a>
+    <div class="mb-4 flex flex-wrap items-center gap-2">
+        <div class="asta-select asta-select-sm w-auto">
+            <select name="active" class="asta-select-control" aria-label="Filter by status"
+                hx-get="{{$.BasePath}}/contacts{{if $data.Filter}}?type={{$data.Filter}}{{end}}"
+                hx-trigger="change"
+                hx-target="#contact-table"
+                hx-swap="outerHTML"
+                hx-include="[name='route'],[name='search']"
+                hx-push-url="true">
+                <option value="">All statuses</option>
+                <option value="1" {{if eq $data.Active "1"}}selected{{end}}>Active only</option>
+                <option value="0" {{if eq $data.Active "0"}}selected{{end}}>Inactive only</option>
+            </select>
+            {{template "select-chevron"}}
+        </div>
+        <div class="asta-select asta-select-sm w-auto">
+            <select name="route" class="asta-select-control" aria-label="Filter by route"
+                hx-get="{{$.BasePath}}/contacts{{if $data.Filter}}?type={{$data.Filter}}{{end}}"
+                hx-trigger="change"
+                hx-target="#contact-table"
+                hx-swap="outerHTML"
+                hx-include="[name='active'],[name='search']"
+                hx-push-url="true">
+                <option value="">All routes</option>
+                {{range $data.Routes}}
+                <option value="{{.ID}}" {{if eq .ID $data.RouteID}}selected{{end}}>{{.Name}}</option>
+                {{end}}
+            </select>
+            {{template "select-chevron"}}
+        </div>
+        <label class="asta-input asta-input-sm w-full max-w-xs">
+            <span class="asta-input-icon"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></svg></span>
+            <input type="text" name="search" placeholder="Search contacts…" aria-label="Search contacts"
+                class="asta-input-control"
+                hx-get="{{$.BasePath}}/contacts{{if $data.Filter}}?type={{$data.Filter}}{{end}}"
+                hx-trigger="keyup changed delay:300ms"
+                hx-target="#contact-table"
+                hx-swap="outerHTML"
+                hx-include="[name='active'],[name='route']"
+                hx-push-url="false"
+                value="{{$data.Search}}">
+        </label>
+        <a href="{{$.BasePath}}/contacts{{if $data.Filter}}?type={{$data.Filter}}{{end}}" class="asta-btn asta-btn-ghost asta-btn-sm"><span class="asta-btn-label">Reset filters</span></a>
     </div>
 
-    <div class="overflow-x-auto">
-    <table class="table table-sm">
+    <div class="asta-table-wrap"><div class="asta-table-scroll">
+    <table class="asta-table">
         <thead>
             <tr>
-                <th class="w-8">#</th>
-                <th><a class="link link-hover" href="{{index $data.SortURLs "name"}}">Name{{if eq $data.Sort "name"}} {{if eq $data.Order "desc"}}↓{{else}}↑{{end}}{{end}}</a></th>
-                <th>Maps</th>
-                <th><a class="link link-hover" href="{{index $data.SortURLs "class"}}">Class{{if eq $data.Sort "class"}} {{if eq $data.Order "desc"}}↓{{else}}↑{{end}}{{end}}</a></th>
-                <th><a class="link link-hover" href="{{index $data.SortURLs "route"}}">Route{{if eq $data.Sort "route"}} {{if eq $data.Order "desc"}}↓{{else}}↑{{end}}{{end}}</a></th>
-                <th>Phone</th>
-                <th class="hidden md:table-cell">Address</th>
-                <th class="hidden md:table-cell w-64">Notes</th>
-                <th><a class="link link-hover" href="{{index $data.SortURLs "status"}}">Status{{if eq $data.Sort "status"}} {{if eq $data.Order "desc"}}↓{{else}}↑{{end}}{{end}}</a></th>
-                {{if .User.HasCapability "contacts.manage"}}<th>Actions</th>{{end}}
+                <th class="asta-th w-8 hidden sm:table-cell" scope="col">#</th>
+                <th class="asta-th" scope="col"{{if eq $data.Sort "name"}} aria-sort="{{if eq $data.Order "desc"}}descending{{else}}ascending{{end}}"{{end}}><a class="asta-th-sort" href="{{index $data.SortURLs "name"}}">Name<svg class="asta-th-sort-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 12.5v-9M4.5 7 8 3.5 11.5 7"/></svg></a></th>
+                <th class="asta-th hidden sm:table-cell" scope="col">Maps</th>
+                <th class="asta-th hidden sm:table-cell" scope="col"{{if eq $data.Sort "class"}} aria-sort="{{if eq $data.Order "desc"}}descending{{else}}ascending{{end}}"{{end}}><a class="asta-th-sort" href="{{index $data.SortURLs "class"}}">Class<svg class="asta-th-sort-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 12.5v-9M4.5 7 8 3.5 11.5 7"/></svg></a></th>
+                <th class="asta-th hidden sm:table-cell" scope="col"{{if eq $data.Sort "route"}} aria-sort="{{if eq $data.Order "desc"}}descending{{else}}ascending{{end}}"{{end}}><a class="asta-th-sort" href="{{index $data.SortURLs "route"}}">Route<svg class="asta-th-sort-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 12.5v-9M4.5 7 8 3.5 11.5 7"/></svg></a></th>
+                <th class="asta-th hidden sm:table-cell" scope="col">Phone</th>
+                <th class="asta-th hidden lg:table-cell" scope="col">Address</th>
+                <th class="asta-th hidden sm:table-cell" scope="col"{{if eq $data.Sort "status"}} aria-sort="{{if eq $data.Order "desc"}}descending{{else}}ascending{{end}}"{{end}}><a class="asta-th-sort" href="{{index $data.SortURLs "status"}}">Status<svg class="asta-th-sort-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 12.5v-9M4.5 7 8 3.5 11.5 7"/></svg></a></th>
+                {{if $canManage}}<th class="asta-th hidden sm:table-cell" scope="col"><span class="sr-only">Actions</span></th>{{end}}
             </tr>
         </thead>
         <tbody>
             {{$n := 1}}
             {{range $data.Contacts}}
-            <tr id="contact-{{.ID}}"{{if not .IsActive}} class="opacity-60"{{end}}>
-                <td class="text-sm opacity-60">{{$n}}</td>
-                <td class="font-semibold">{{.Name}}</td>
-                <td class="text-sm">
+            <tr class="asta-tr" id="contact-{{.ID}}">
+                <td class="asta-td text-mute tabular-nums hidden sm:table-cell">{{$n}}</td>
+                <td class="asta-td asta-td-wrap">
+                    <span class="font-medium {{if .IsActive}}text-ink{{else}}text-mute{{end}}">{{if $canManage}}<a class="erp-link" href="{{$.BasePath}}/contacts/{{.ID}}/edit">{{.Name}}</a>{{else}}{{.Name}}{{end}}</span>
+                    <span class="mt-0.5 block text-[12.5px] text-ink-2 sm:hidden">{{$sep := ""}}{{if .RouteName}}{{.RouteName}}{{$sep = " · "}}{{end}}{{if .Class}}{{$sep}}Class {{.Class}}{{$sep = " · "}}{{end}}{{if .Phone}}{{$sep}}<span class="tabular-nums">{{.Phone}}</span>{{$sep = " · "}}{{end}}{{if not .IsActive}}{{$sep}}Inactive{{end}}</span>
+                    {{if .MapsLink}}<a href="{{.MapsLink}}" target="_blank" rel="noopener noreferrer" class="erp-link mt-0.5 inline-block text-[12.5px] sm:hidden">Open map ↗</a>{{end}}
+                    {{if $canManage}}<button class="asta-btn asta-btn-outline erp-danger asta-btn-xs mt-1.5 sm:hidden"
+                        hx-delete="{{$.BasePath}}/contacts/{{.ID}}"
+                        hx-target="#contact-{{.ID}}"
+                        hx-swap="outerHTML"
+                        hx-confirm="Delete contact {{.Name}}?"><span class="asta-btn-label">Delete</span></button>{{end}}
+                    {{if .Notes}}<div class="max-w-[150px] truncate" title="{{.Notes}}"><span class="text-[12.5px] text-mute">{{.Notes}}</span></div>{{end}}
+                </td>
+                <td class="asta-td hidden sm:table-cell">
                     {{if .MapsLink}}<a href="{{.MapsLink}}" target="_blank" rel="noopener noreferrer"
-                        class="link link-primary whitespace-nowrap" title="{{.MapsLink}}">Open map ↗</a>{{else}}<span class="opacity-40">—</span>{{end}}
+                        class="erp-link whitespace-nowrap" title="{{.MapsLink}}">Open map ↗</a>{{else}}<span class="text-mute">—</span>{{end}}
                 </td>
-                <td class="text-sm">{{.Class}}</td>
-                <td class="text-sm">{{.RouteName}}</td>
-                <td class="text-sm">{{.Phone}}</td>
-                <td class="hidden md:table-cell text-sm opacity-60">{{.Address}}</td>
-                <td class="hidden md:table-cell w-64 text-sm opacity-60">
-                    <div class="w-64 whitespace-nowrap" style="overflow: hidden; text-overflow: ellipsis;" title="{{.Notes}}">{{.Notes}}</div>
+                <td class="asta-td hidden sm:table-cell">{{.Class}}</td>
+                <td class="asta-td hidden sm:table-cell">{{.RouteName}}</td>
+                <td class="asta-td tabular-nums hidden sm:table-cell">{{.Phone}}</td>
+                <td class="asta-td hidden lg:table-cell"><span class="block max-w-[150px] truncate" title="{{.Address}}">{{.Address}}</span></td>
+                <td class="asta-td hidden sm:table-cell">
+                    <span class="asta-switch-track asta-switch-sm"><input type="checkbox" role="switch" class="asta-switch-input" {{if .IsActive}}checked{{end}} disabled
+                        aria-label="{{.Name}} status: {{if .IsActive}}active{{else}}inactive{{end}}"><span class="asta-switch-thumb"></span></span>
                 </td>
-                <td>
-                    <input type="checkbox" class="toggle toggle-sm toggle-success" {{if .IsActive}}checked{{end}} disabled
-                        aria-label="{{.Name}} status: {{if .IsActive}}active{{else}}inactive{{end}}">
-                </td>
-                {{if $.User.HasCapability "contacts.manage"}}
-                <td>
+                {{if $canManage}}
+                <td class="asta-td hidden sm:table-cell">
                     <div class="flex gap-1">
-                        <a href="{{$.BasePath}}/contacts/{{.ID}}/edit" class="btn btn-ghost btn-xs">Edit</a>
-                        <button class="btn btn-ghost btn-xs text-error"
+                        <a href="{{$.BasePath}}/contacts/{{.ID}}/edit" class="asta-btn asta-btn-outline asta-btn-xs"><span class="asta-btn-label">Edit</span></a>
+                        <button class="asta-btn asta-btn-outline erp-danger asta-btn-xs"
                             hx-delete="{{$.BasePath}}/contacts/{{.ID}}"
                             hx-target="#contact-{{.ID}}"
                             hx-swap="outerHTML"
-                            hx-confirm="Delete contact {{.Name}}?">Delete</button>
+                            hx-confirm="Delete contact {{.Name}}?"><span class="asta-btn-label">Delete</span></button>
                     </div>
                 </td>
                 {{end}}
@@ -125,11 +140,11 @@
             {{$n = add $n 1}}
             {{else}}
             <tr>
-                <td colspan="{{if $.User.HasCapability "contacts.manage"}}10{{else}}9{{end}}" class="text-center py-8 opacity-60">No contacts found. Add your first contact.</td>
+                <td colspan="{{if $canManage}}9{{else}}8{{end}}" class="asta-td py-10 text-center text-mute">No contacts found. Add your first contact.</td>
             </tr>
             {{end}}
         </tbody>
     </table>
-    </div>
+    </div></div>
 </div>
 {{end}}

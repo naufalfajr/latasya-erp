@@ -182,7 +182,7 @@ func TestCreateBill_LineValidationError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(body), "must be positive") || !strings.Contains(string(body), "input-error") {
+	if !strings.Contains(string(body), "must be positive") || !strings.Contains(string(body), `aria-invalid="true"`) {
 		t.Fatalf("missing row validation feedback: %s", body)
 	}
 }

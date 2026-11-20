@@ -4,12 +4,25 @@
     const NS = "http://www.w3.org/2000/svg";
     const money = new Intl.NumberFormat("id-ID", {style: "currency", currency: "IDR", maximumFractionDigits: 0});
     const compactMoney = new Intl.NumberFormat("id-ID", {style: "currency", currency: "IDR", notation: "compact", maximumFractionDigits: 1, minimumFractionDigits: 0});
-    const surface = getComputedStyle(document.documentElement).getPropertyValue("--color-base-100").trim() || "#fcfcfb";
-    const colors = {revenue: "#0ca30c", expense: "#d03b3b", accent: "#2a78d6"};
+    // Theme tokens, not hex: the charts follow light/dark without a redraw.
+    // One accent (DESIGN.md "Mono Chart"): revenue in brand navy, expenses in
+    // textured grey, the net/closing line in ink; losses read by sign, not red.
+    const surface = "var(--paper)";
+    const colors = {
+        revenue: "var(--brand)",
+        expense: "color-mix(in srgb, var(--mute) 55%, var(--paper))",
+        expenseTexture: "var(--mute)",
+        accent: "var(--ink)",
+    };
 
+    // fill/stroke holding var() go through style: SVG presentation
+    // attributes do not resolve custom properties in every browser.
     function svgNode(name, attrs) {
         const node = document.createElementNS(NS, name);
-        Object.entries(attrs || {}).forEach(([key, value]) => node.setAttribute(key, value));
+        Object.entries(attrs || {}).forEach(([key, value]) => {
+            if ((key === "fill" || key === "stroke") && /var\(/.test(value)) node.style[key] = value;
+            else node.setAttribute(key, value);
+        });
         return node;
     }
 
@@ -23,16 +36,6 @@
         return node;
     }
 
-    // Darkens a #rrggbb color for a tone-on-tone texture stroke — the
-    // colorblind-safe channel that supplements the revenue/expense hue (red
-    // vs green alone fails deuteranopia separation).
-    function darken(hex, amount) {
-        const n = parseInt(hex.slice(1), 16);
-        const clamp = c => Math.max(0, c - amount);
-        const r = clamp(n >> 16), g = clamp((n >> 8) & 0xff), b = clamp(n & 0xff);
-        return `rgb(${r},${g},${b})`;
-    }
-
     function niceTicks(min, max, count) {
         if (min === max) { min -= 1; max += 1; }
         const rawStep = (max - min) / count;
@@ -44,8 +47,19 @@
         return ticks;
     }
 
+    // Phones fit the plot to the card so the y-axis scale stays in view;
+    // wider screens keep a 560px floor and scroll if a card is narrower.
+    // An unlaid-out container (clientWidth 0) counts as 560 wide, never 0.
+    function containerWidth(container) {
+        return container.clientWidth || 560;
+    }
+
+    function isNarrow(container) {
+        return containerWidth(container) < 640;
+    }
+
     function dimensions(container, count, showXLabels) {
-        const width = Math.max(560, count * 84, container.clientWidth || 560);
+        const width = isNarrow(container) ? containerWidth(container) : Math.max(560, count * 84, containerWidth(container));
         return {width, left: 60, right: 16, top: 12, bottom: showXLabels ? 40 : 8};
     }
 
@@ -80,7 +94,7 @@
                 x: d.left - 8, y: ty, "text-anchor": "end", "dominant-baseline": "middle",
                 "font-size": 10, fill: "currentColor", opacity: 0.55,
             });
-            label.textContent = compactMoney.format(tick);
+            label.textContent = compactMoney.format(tick + 0); // + 0 turns -0 into 0, no "-Rp 0"
             svg.appendChild(label);
         });
         svg.appendChild(svgNode("line", {
@@ -94,11 +108,14 @@
                     fill: "currentColor", opacity: row.is_partial ? 1 : 0.7,
                     "font-weight": row.is_partial ? 600 : 400,
                 });
-                label.textContent = row.label;
+                // "Jun 2026" -> "Jun" on phones; the tooltip and table keep the year.
+                label.textContent = isNarrow(container) ? row.label.split(" ")[0] : row.label;
                 svg.appendChild(label);
             });
         }
         container.appendChild(svg);
+        // Narrow screens scroll the plot; open on the latest period.
+        container.scrollLeft = container.scrollWidth;
         return {svg, d, x, y, zero, innerW, innerH, slotWidth};
     }
 
@@ -107,7 +124,7 @@
     // draw() can re-run on container resize).
     function sharedTooltip(container) {
         if (container._chartTip) container._chartTip.remove();
-        const tip = el("div", {class: "fixed z-50 hidden rounded-box bg-neutral text-neutral-content px-3 py-2 text-xs shadow-lg pointer-events-none min-w-40"});
+        const tip = el("div", {class: "chart-tip hidden"});
         document.body.appendChild(tip);
         container._chartTip = tip;
         return tip;
@@ -133,7 +150,7 @@
                 guide.setAttribute("x2", f.x(index));
                 guide.setAttribute("stroke-opacity", 0.25);
                 tip.textContent = "";
-                const title = el("div", {class: "font-semibold mb-1"});
+                const title = el("div", {class: "mb-1 font-medium text-ink"});
                 title.textContent = row.label + (row.is_partial ? " (in progress)" : "");
                 tip.appendChild(title);
                 buildTooltipRows(row).forEach(r => tip.appendChild(r));
@@ -164,15 +181,15 @@
     function tooltipRow(kind, color, label, value) {
         const swatch = el("span", {class: kind === "line" ? "inline-block w-3 h-0.5 align-middle" : "inline-block w-2.5 h-2.5 align-middle rounded-sm"});
         swatch.style.background = color;
-        const labelSpan = el("span", {class: "flex items-center gap-1.5 opacity-80"}, [swatch]);
+        const labelSpan = el("span", {class: "flex items-center gap-1.5 text-ink-2"}, [swatch]);
         labelSpan.appendChild(document.createTextNode(label));
-        const valueEl = el("strong", {class: "font-mono font-semibold"});
+        const valueEl = el("strong", {class: "font-mono font-medium tabular-nums text-ink"});
         valueEl.textContent = money.format(value);
         return el("div", {class: "flex items-center justify-between gap-3 py-0.5"}, [labelSpan, valueEl]);
     }
 
     function legend(items) {
-        const row = el("div", {class: "flex flex-wrap items-center gap-x-4 gap-y-1.5 mb-3 text-xs opacity-80"});
+        const row = el("div", {class: "mb-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[12px] text-ink-2"});
         items.forEach(item => {
             const swatch = el("span", {class: item.kind === "line" ? "inline-block w-3.5 h-0.5 rounded-full" : "inline-block w-2.5 h-2.5 rounded-sm"});
             swatch.style.background = item.color;
@@ -233,7 +250,7 @@
             const defs = svgNode("defs");
             const pattern = svgNode("pattern", {id: "expense-texture", width: 6, height: 6, patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)"});
             pattern.appendChild(svgNode("rect", {width: 6, height: 6, fill: colors.expense}));
-            pattern.appendChild(svgNode("line", {x1: 0, y1: 0, x2: 0, y2: 6, stroke: darken(colors.expense, 45), "stroke-width": 2.5}));
+            pattern.appendChild(svgNode("line", {x1: 0, y1: 0, x2: 0, y2: 6, stroke: colors.expenseTexture, "stroke-width": 1.5}));
             defs.appendChild(pattern);
             f.svg.appendChild(defs);
 
@@ -281,9 +298,9 @@
             const top = frame(topEl, 180, trends, closingValues, false);
             const points = trends.map((row, i) => `${top.x(i)},${top.y(row.closing_cash)}`).join(" ");
             top.svg.appendChild(svgNode("polyline", {points, fill: "none", stroke: colors.accent, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round"}));
-            trends.forEach((row, i) => marker(top.svg, top.x(i), top.y, row.closing_cash, row.closing_cash < 0 ? colors.expense : colors.accent));
+            trends.forEach((row, i) => marker(top.svg, top.x(i), top.y, row.closing_cash, colors.accent));
             attachHover(top.svg, top, trends, row => [
-                tooltipRow("line", row.closing_cash < 0 ? colors.expense : colors.accent, "Closing cash", row.closing_cash),
+                tooltipRow("line", colors.accent, "Closing cash", row.closing_cash),
             ], row => reportURL(basePath, "cash-flow", row), "Cash Flow report", tip);
 
             const lower = frame(lowerEl, 200, trends, movementValues, true);

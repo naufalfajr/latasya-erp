@@ -1,69 +1,71 @@
 {{template "base" .}}
 {{define "content"}}
-<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-    <h1 class="text-2xl font-bold">Roles</h1>
-    <a href="{{$.BasePath}}/roles/new" class="btn btn-primary btn-sm">+ New Role</a>
+<div class="page-head">
+    <h1 class="page-title">Roles</h1>
+    <div class="page-actions">
+        <a href="{{$.BasePath}}/roles/new" class="asta-btn asta-btn-accent asta-btn-sm"><span class="asta-btn-label">New role</span></a>
+    </div>
 </div>
 
 {{$roles := .Data}}
 
-<div class="overflow-x-auto">
-    <table class="table table-sm">
+<div class="asta-table-wrap"><div class="asta-table-scroll">
+    <table class="asta-table">
         <thead>
             <tr>
-                <th>Name</th>
-                <th>Description</th>
-                <th>Capabilities</th>
-                <th>Type</th>
-                <th>Actions</th>
+                <th class="asta-th" scope="col">Name</th>
+                <th class="asta-th" scope="col">Description</th>
+                <th class="asta-th" scope="col">Capabilities</th>
+                <th class="asta-th" scope="col">Type</th>
+                <th class="asta-th" scope="col"><span class="sr-only">Actions</span></th>
             </tr>
         </thead>
         <tbody>
             {{range $roles}}
-            <tr id="role-{{.Name}}">
-                <td class="font-semibold">
-                    <span class="badge badge-sm {{if eq .Name "admin"}}badge-primary{{else if .IsSystem}}badge-secondary{{else}}badge-ghost{{end}}">{{.Name}}</span>
+            <tr class="asta-tr" id="role-{{.Name}}">
+                <td class="asta-td">
+                    <span class="asta-badge asta-badge-sm font-mono{{if eq .Name "admin"}} asta-badge-accent{{end}}">{{.Name}}</span>
                 </td>
-                <td class="text-sm">{{.Description}}</td>
-                <td>
+                <td class="asta-td asta-td-wrap">{{.Description}}</td>
+                <td class="asta-td asta-td-wrap">
                     <div class="flex flex-wrap gap-1">
                         {{if eq .Name "admin"}}
-                        <span class="badge badge-xs badge-primary">all</span>
+                        <span class="asta-badge asta-badge-sm asta-badge-accent">all</span>
                         {{else}}
                         {{range .Capabilities}}
-                        <span class="badge badge-xs badge-ghost">{{.}}</span>
+                        <span class="asta-badge asta-badge-sm font-mono">{{.}}</span>
                         {{else}}
-                        <span class="text-xs opacity-60">none</span>
+                        <span class="text-[12px] text-mute">none</span>
                         {{end}}
                         {{end}}
                     </div>
                 </td>
-                <td>
+                <td class="asta-td">
                     {{if .IsSystem}}
-                    <span class="badge badge-xs">system</span>
+                    <span class="asta-badge asta-badge-sm">System</span>
                     {{else}}
-                    <span class="badge badge-xs badge-outline">custom</span>
+                    <span class="asta-badge asta-badge-sm asta-badge-outline">Custom</span>
                     {{end}}
                 </td>
-                <td>
+                <td class="asta-td">
                     <div class="flex gap-1">
                         {{if ne .Name "admin"}}
-                        <a href="{{$.BasePath}}/roles/{{.Name}}/edit" class="btn btn-ghost btn-xs">Edit</a>
+                        <a href="{{$.BasePath}}/roles/{{.Name}}/edit" class="asta-btn asta-btn-outline asta-btn-xs"><span class="asta-btn-label">Edit</span></a>
                         {{end}}
                         {{if not .IsSystem}}
-                        <button class="btn btn-ghost btn-xs text-error"
+                        <button class="asta-btn asta-btn-outline erp-danger asta-btn-xs"
                             hx-delete="{{$.BasePath}}/roles/{{.Name}}"
                             hx-target="#role-{{.Name}}"
                             hx-swap="outerHTML"
-                            hx-confirm="Delete role {{.Name}}?">Delete</button>
+                            hx-confirm="Delete role {{.Name}}?"><span class="asta-btn-label">Delete</span></button>
                         {{end}}
                     </div>
                 </td>
             </tr>
             {{else}}
-            <tr><td colspan="5" class="text-center py-8 opacity-60">No roles found</td></tr>
+            <tr><td colspan="5" class="asta-td py-10 text-center text-mute">No roles found</td></tr>
             {{end}}
         </tbody>
     </table>
-</div>
+</div></div>
 {{end}}

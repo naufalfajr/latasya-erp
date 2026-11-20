@@ -3,43 +3,35 @@
 {{$data := .Data}}
 
 <div class="max-w-2xl">
-    <h1 class="text-2xl font-bold mb-6">
-        {{if $data.IsEdit}}Edit Account{{else}}New Account{{end}}
-    </h1>
+    <div class="page-head">
+        <h1 class="page-title">{{if $data.IsEdit}}Edit account{{else}}New account{{end}}</h1>
+    </div>
 
     <form method="POST" action="{{$.BasePath}}{{if $data.IsEdit}}/accounts/{{$data.Account.ID}}{{else}}/accounts{{end}}"
-        class="card bg-base-100 shadow">
+        class="asta-card">
         {{template "csrf" $}}
-        <div class="card-body">
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <!-- Code -->
-                <div class="flex flex-col gap-1">
-                    <label class="label" for="code">Account Code *</label>
-                    <input type="text" id="code" name="code" placeholder="e.g. 1-1001"
-                        class="input {{if index $data.Errors "code"}}input-error{{end}}"
-                        value="{{$data.Account.Code}}" required>
-                    {{if index $data.Errors "code"}}
-                    <span class="text-xs text-error">{{index $data.Errors "code"}}</span>
-                    {{end}}
-                </div>
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="code">Account code<span class="asta-label-required" aria-hidden="true">*</span></label></div>
+                <label class="asta-input"><input type="text" id="code" name="code" placeholder="e.g. 1-1001"
+                    class="asta-input-control font-mono"
+                    value="{{$data.Account.Code}}" required{{if index $data.Errors "code"}} aria-invalid="true"{{end}}></label>
+                {{if index $data.Errors "code"}}<p class="asta-error" role="alert">{{index $data.Errors "code"}}</p>{{end}}
+            </div>
 
-                <!-- Name -->
-                <div class="flex flex-col gap-1">
-                    <label class="label" for="name">Account Name *</label>
-                    <input type="text" id="name" name="name" placeholder="e.g. Cash on Hand"
-                        class="input {{if index $data.Errors "name"}}input-error{{end}}"
-                        value="{{$data.Account.Name}}" required>
-                    {{if index $data.Errors "name"}}
-                    <span class="text-xs text-error">{{index $data.Errors "name"}}</span>
-                    {{end}}
-                </div>
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="name">Account name<span class="asta-label-required" aria-hidden="true">*</span></label></div>
+                <label class="asta-input"><input type="text" id="name" name="name" placeholder="e.g. Cash on hand"
+                    class="asta-input-control"
+                    value="{{$data.Account.Name}}" required{{if index $data.Errors "name"}} aria-invalid="true"{{end}}></label>
+                {{if index $data.Errors "name"}}<p class="asta-error" role="alert">{{index $data.Errors "name"}}</p>{{end}}
+            </div>
 
-                <!-- Account Type -->
-                <div class="flex flex-col gap-1">
-                    <label class="label" for="account_type">Account Type *</label>
-                    <select id="account_type" name="account_type"
-                        class="select {{if index $data.Errors "account_type"}}select-error{{end}}" required>
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="account_type">Account type<span class="asta-label-required" aria-hidden="true">*</span></label></div>
+                <div class="asta-select">
+                    <select id="account_type" name="account_type" class="asta-select-control" required{{if index $data.Errors "account_type"}} aria-invalid="true"{{end}}>
                         <option value="" disabled {{if eq $data.Account.AccountType ""}}selected{{end}}>Select type</option>
                         <option value="asset" {{if eq $data.Account.AccountType "asset"}}selected{{end}}>Asset</option>
                         <option value="liability" {{if eq $data.Account.AccountType "liability"}}selected{{end}}>Liability</option>
@@ -47,62 +39,52 @@
                         <option value="revenue" {{if eq $data.Account.AccountType "revenue"}}selected{{end}}>Revenue</option>
                         <option value="expense" {{if eq $data.Account.AccountType "expense"}}selected{{end}}>Expense</option>
                     </select>
-                    {{if index $data.Errors "account_type"}}
-                    <span class="text-xs text-error">{{index $data.Errors "account_type"}}</span>
-                    {{end}}
+                    {{template "select-chevron"}}
                 </div>
+                {{if index $data.Errors "account_type"}}<p class="asta-error" role="alert">{{index $data.Errors "account_type"}}</p>{{end}}
+            </div>
 
-                <!-- Normal Balance -->
-                <div class="flex flex-col gap-1">
-                    <label class="label" for="normal_balance">Normal Balance *</label>
-                    <select id="normal_balance" name="normal_balance"
-                        class="select {{if index $data.Errors "normal_balance"}}select-error{{end}}" required>
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="normal_balance">Normal balance<span class="asta-label-required" aria-hidden="true">*</span></label></div>
+                <div class="asta-select">
+                    <select id="normal_balance" name="normal_balance" class="asta-select-control" required{{if index $data.Errors "normal_balance"}} aria-invalid="true"{{end}}>
                         <option value="" disabled {{if eq $data.Account.NormalBalance ""}}selected{{end}}>Select balance</option>
                         <option value="debit" {{if eq $data.Account.NormalBalance "debit"}}selected{{end}}>Debit</option>
                         <option value="credit" {{if eq $data.Account.NormalBalance "credit"}}selected{{end}}>Credit</option>
                     </select>
-                    {{if index $data.Errors "normal_balance"}}
-                    <span class="text-xs text-error">{{index $data.Errors "normal_balance"}}</span>
-                    {{end}}
+                    {{template "select-chevron"}}
                 </div>
+                {{if index $data.Errors "normal_balance"}}<p class="asta-error" role="alert">{{index $data.Errors "normal_balance"}}</p>{{end}}
+            </div>
+        </div>
+
+        <div class="mt-4 flex flex-col gap-4">
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="description">Description</label></div>
+                <div class="asta-textarea"><textarea id="description" name="description" placeholder="Optional description"
+                    class="asta-textarea-control" rows="2">{{$data.Account.Description}}</textarea></div>
             </div>
 
-            <!-- Description -->
-            <div class="flex flex-col gap-1 mt-2">
-                <label class="label" for="description">Description</label>
-                <textarea id="description" name="description" placeholder="Optional description"
-                    class="textarea" rows="2">{{$data.Account.Description}}</textarea>
-            </div>
-
-            <!-- Cash / Bank -->
-            <div class="flex flex-col gap-1 mt-2">
-                <label class="label cursor-pointer justify-start gap-2">
-                    <input type="checkbox" name="is_cash" class="checkbox checkbox-sm"
-                        {{if $data.Account.IsCash}}checked{{end}}>
-                    <span>Cash / Bank account</span>
+            <div class="asta-field">
+                <label class="asta-checkbox">
+                    <span class="asta-checkbox-box"><input type="checkbox" name="is_cash" class="asta-checkbox-input" aria-describedby="is-cash-hint"
+                        {{if $data.Account.IsCash}}checked{{end}}{{if index $data.Errors "is_cash"}} aria-invalid="true"{{end}}>{{template "check-icon"}}</span>
+                    <span><span class="asta-checkbox-label">Cash / bank account</span></span>
                 </label>
-                <span class="text-xs opacity-70">Only debit-normal asset accounts can be classified as cash.</span>
-                {{if index $data.Errors "is_cash"}}
-                <span class="text-xs text-error">{{index $data.Errors "is_cash"}}</span>
-                {{end}}
+                <p id="is-cash-hint" class="asta-hint">Only debit-normal asset accounts can be classified as cash.</p>
+                {{if index $data.Errors "is_cash"}}<p class="asta-error" role="alert">{{index $data.Errors "is_cash"}}</p>{{end}}
             </div>
 
-            <!-- Active -->
-            <div class="flex flex-col gap-1 mt-2">
-                <label class="label cursor-pointer justify-start gap-2">
-                    <input type="checkbox" name="is_active" class="checkbox checkbox-sm"
-                        {{if $data.Account.IsActive}}checked{{end}}>
-                    <span>Active</span>
-                </label>
-            </div>
+            <label class="asta-checkbox">
+                <span class="asta-checkbox-box"><input type="checkbox" name="is_active" class="asta-checkbox-input"
+                    {{if $data.Account.IsActive}}checked{{end}}>{{template "check-icon"}}</span>
+                <span><span class="asta-checkbox-label">Active</span></span>
+            </label>
+        </div>
 
-            <!-- Actions -->
-            <div class="card-actions justify-end mt-4">
-                <a href="{{$.BasePath}}/accounts" class="btn btn-ghost">Cancel</a>
-                <button type="submit" class="btn btn-primary">
-                    {{if $data.IsEdit}}Update{{else}}Create{{end}} Account
-                </button>
-            </div>
+        <div class="asta-card-footer">
+            <a href="{{$.BasePath}}/accounts" class="asta-btn asta-btn-ghost"><span class="asta-btn-label">Cancel</span></a>
+            <button type="submit" class="asta-btn asta-btn-accent"><span class="asta-btn-label">{{if $data.IsEdit}}Update account{{else}}Create account{{end}}</span></button>
         </div>
     </form>
 </div>

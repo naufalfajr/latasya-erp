@@ -1,146 +1,148 @@
 {{template "base" .}}
 {{define "content"}}
-<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-    <h1 class="text-2xl font-bold">Journal Entries</h1>
+<div class="page-head">
+    <h1 class="page-title">Journal entries</h1>
     {{if .User.HasCapability "journals.manage"}}
-    <a href="{{$.BasePath}}/journals/new" class="btn btn-primary btn-sm">+ New Journal Entry</a>
+    <div class="page-actions">
+        <a href="{{$.BasePath}}/journals/new" class="asta-btn asta-btn-accent asta-btn-sm"><span class="asta-btn-label">New journal entry</span></a>
+    </div>
     {{end}}
 </div>
 
 {{$data := .Data}}
 
-<!-- Filters -->
-<div class="flex flex-wrap gap-2 mb-4">
-    <input type="date" name="from" value="{{$data.Filter.DateFrom}}" placeholder="From"
-        class="input input-sm"
-        hx-get="{{$.BasePath}}/journals"
-        hx-trigger="change"
-        hx-target="#journal-table"
-		hx-swap="outerHTML"
-        hx-include="[name='to'],[name='search'],[name='account']" hx-push-url="true">
-    <input type="date" name="to" value="{{$data.Filter.DateTo}}" placeholder="To"
-        class="input input-sm"
-        hx-get="{{$.BasePath}}/journals"
-        hx-trigger="change"
-        hx-target="#journal-table"
-		hx-swap="outerHTML"
-        hx-include="[name='from'],[name='search'],[name='account']" hx-push-url="true">
-    <input type="text" name="search" value="{{$data.Filter.Search}}" placeholder="Search..."
-        class="input input-sm w-full max-w-xs"
-        hx-get="{{$.BasePath}}/journals"
-        hx-trigger="keyup changed delay:300ms"
-        hx-target="#journal-table"
-		hx-swap="outerHTML"
-        hx-include="[name='from'],[name='to'],[name='account']" hx-push-url="true">
-    <select name="account" class="select select-sm"
+<div class="mb-4 grid grid-cols-2 items-end gap-3 md:grid-cols-[repeat(2,minmax(140px,170px))_minmax(160px,1fr)_minmax(200px,280px)_auto]">
+    <div class="asta-field"><div class="asta-field-head"><span class="asta-label" aria-hidden="true">From</span></div><label class="asta-input asta-input-sm"><input type="date" name="from" value="{{$data.Filter.DateFrom}}" placeholder="From" aria-label="From date"
+        class="asta-input-control"
         hx-get="{{$.BasePath}}/journals"
         hx-trigger="change"
         hx-target="#journal-table"
         hx-swap="outerHTML"
-        hx-include="[name='from'],[name='to'],[name='search']" hx-push-url="true">
-        <option value="">All accounts</option>
-        {{range $data.AccountGroups}}
-        <optgroup label="{{.Label}}">
-            {{range .Accounts}}
-            <option value="{{.ID}}" {{if eq (printf "%d" .ID) $data.AccountValue}}selected{{end}}>
-                {{.Code}} · {{.Name}}{{if not .IsActive}} (Inactive){{end}}
-            </option>
+        hx-include="[name='to'],[name='search'],[name='account']" hx-push-url="true"></label></div>
+    <div class="asta-field"><div class="asta-field-head"><span class="asta-label" aria-hidden="true">To</span></div><label class="asta-input asta-input-sm"><input type="date" name="to" value="{{$data.Filter.DateTo}}" placeholder="To" aria-label="To date"
+        class="asta-input-control"
+        hx-get="{{$.BasePath}}/journals"
+        hx-trigger="change"
+        hx-target="#journal-table"
+        hx-swap="outerHTML"
+        hx-include="[name='from'],[name='search'],[name='account']" hx-push-url="true"></label></div>
+    <div class="asta-field col-span-2 md:col-span-1"><div class="asta-field-head"><span class="asta-label" aria-hidden="true">Search</span></div><label class="asta-input asta-input-sm"><input type="text" name="search" value="{{$data.Filter.Search}}" placeholder="Search…" aria-label="Search journal entries"
+        class="asta-input-control"
+        hx-get="{{$.BasePath}}/journals"
+        hx-trigger="keyup changed delay:300ms"
+        hx-target="#journal-table"
+        hx-swap="outerHTML"
+        hx-include="[name='from'],[name='to'],[name='account']" hx-push-url="true"></label></div>
+    <div class="asta-field col-span-2 md:col-span-1"><div class="asta-field-head"><span class="asta-label" aria-hidden="true">Account</span></div><div class="asta-select asta-select-sm">
+        <select name="account" class="asta-select-control" aria-label="Filter by account"
+            hx-get="{{$.BasePath}}/journals"
+            hx-trigger="change"
+            hx-target="#journal-table"
+            hx-swap="outerHTML"
+            hx-include="[name='from'],[name='to'],[name='search']" hx-push-url="true">
+            <option value="">All accounts</option>
+            {{range $data.AccountGroups}}
+            <optgroup label="{{.Label}}">
+                {{range .Accounts}}
+                <option value="{{.ID}}" {{if eq (printf "%d" .ID) $data.AccountValue}}selected{{end}}>
+                    {{.Code}} · {{.Name}}{{if not .IsActive}} (Inactive){{end}}
+                </option>
+                {{end}}
+            </optgroup>
             {{end}}
-        </optgroup>
-        {{end}}
-    </select>
-    <a href="{{$.BasePath}}/journals" class="btn btn-ghost btn-sm">Reset filters</a>
+        </select>
+        {{template "select-chevron"}}
+    </div></div>
+    <a href="{{$.BasePath}}/journals" class="asta-btn asta-btn-ghost asta-btn-sm"><span class="asta-btn-label">Reset filters</span></a>
 </div>
 
-<!-- Journal entries table -->
 {{template "journal-table" .}}
 {{end}}
 {{define "journal-table"}}
 {{$data := .Data}}
 {{$n := add (mul (sub $data.Pagination.Page 1) $data.Pagination.PageSize) 1}}
-<div id="journal-table" class="overflow-x-auto">
+<div id="journal-table">
     {{if $data.AccountError}}
-    <div class="alert alert-warning mb-4" role="alert">
-        <span>{{$data.AccountError}}</span>
-        <a href="{{$.BasePath}}/journals" class="link">Reset filters</a>
-    </div>
+    <div class="asta-alert asta-alert-warning mb-4" role="alert">{{template "alert-icon"}}<div class="asta-alert-body"><p class="asta-alert-text">{{$data.AccountError}} <a href="{{$.BasePath}}/journals" class="erp-link">Reset filters</a></p></div></div>
     {{end}}
-    <table class="table table-sm">
-        <thead>
-            <tr>
-                <th class="w-8">#</th>
-                <th>Date</th>
-                <th>Reference</th>
-                <th>Description</th>
-                <th>Account</th>
-                <th class="text-right">Debit</th>
-                <th class="text-right">Credit</th>
-                <th class="hidden sm:table-cell">Source</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            {{range $data.Entries}}
-            <tr id="journal-{{.ID}}" class="hover">
-                <td class="text-sm opacity-60">{{$n}}</td>
-                <td class="text-sm">{{formatDate .EntryDate}}</td>
-                <td><span class="font-mono text-sm">{{.Reference}}</span></td>
-                <td>{{.Description}}</td>
-                <td>
-                    {{if .ListAccountCode}}
-                    <span class="font-mono text-sm">{{.ListAccountCode}}</span>
-                    <span class="text-sm">· {{.ListAccountName}}</span>
-                    {{if gt .JournalLineCount 1}}
-                    <span class="text-xs opacity-60">+{{sub .JournalLineCount 1}} more</span>
-                    {{end}}
-                    {{else}}
-                    <span class="opacity-60">—</span>
-                    {{end}}
-                </td>
-                <td class="text-right font-mono text-sm">{{formatIDR .TotalDebit}}</td>
-                <td class="text-right font-mono text-sm">{{formatIDR .TotalCredit}}</td>
-                <td class="hidden sm:table-cell">
-                    {{if .SourceType}}
-                    <span class="badge badge-ghost badge-xs">{{.SourceType}}</span>
-                    {{else}}
-                    <span class="badge badge-ghost badge-xs">manual</span>
-                    {{end}}
-                </td>
-                <td>
-                    <a href="{{$.BasePath}}/journals/{{.ID}}?return_to={{urlquery $data.ReturnTo}}" class="btn btn-ghost btn-xs">View</a>
-                </td>
-            </tr>
-            {{$n = add $n 1}}
-            {{else}}
-            <tr>
-                <td colspan="9" class="text-center py-8 opacity-60">No journal entries found</td>
-            </tr>
-            {{end}}
-        </tbody>
-    </table>
+    <div class="asta-table-wrap"><div class="asta-table-scroll">
+        <table class="asta-table">
+            <thead>
+                <tr>
+                    <th class="asta-th w-8 hidden sm:table-cell" scope="col">#</th>
+                    <th class="asta-th hidden sm:table-cell" scope="col">Date</th>
+                    <th class="asta-th hidden sm:table-cell" scope="col">Reference</th>
+                    <th class="asta-th" scope="col">Description</th>
+                    <th class="asta-th hidden sm:table-cell" scope="col">Account</th>
+                    <th class="asta-th asta-th-right" scope="col"><span class="sm:hidden">Amount</span><span class="hidden sm:inline">Debit</span></th>
+                    <th class="asta-th asta-th-right hidden sm:table-cell" scope="col">Credit</th>
+                    <th class="asta-th hidden sm:table-cell" scope="col">Source</th>
+                    <th class="asta-th hidden sm:table-cell" scope="col"><span class="sr-only">Actions</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range $data.Entries}}
+                <tr id="journal-{{.ID}}" class="asta-tr">
+                    <td class="asta-td text-mute tabular-nums hidden sm:table-cell">{{$n}}</td>
+                    <td class="asta-td tabular-nums hidden sm:table-cell">{{formatDate .EntryDate}}</td>
+                    <td class="asta-td font-mono hidden sm:table-cell">{{.Reference}}</td>
+                    <td class="asta-td asta-td-wrap min-w-[160px] text-ink">{{.Description}}<span class="mt-0.5 block text-[12.5px] tabular-nums text-ink-2 sm:hidden"><a class="erp-link font-mono" href="{{$.BasePath}}/journals/{{.ID}}?return_to={{urlquery $data.ReturnTo}}">{{.Reference}}</a> · {{formatDate .EntryDate}}</span><span class="mt-1 block sm:hidden"><span class="asta-badge asta-badge-sm">{{if .SourceType}}{{humanize .SourceType}}{{else}}Manual{{end}}</span></span></td>
+                    <td class="asta-td asta-td-wrap min-w-[180px] max-w-[260px] hidden sm:table-cell">
+                        {{if .ListAccountCode}}
+                        <span class="font-mono">{{.ListAccountCode}}</span>
+                        <span>· {{.ListAccountName}}</span>
+                        {{if gt .JournalLineCount 1}}
+                        <span class="text-[12px] text-ink-2">+{{sub .JournalLineCount 1}} more</span>
+                        {{end}}
+                        {{else}}
+                        <span class="text-mute">—</span>
+                        {{end}}
+                    </td>
+                    <td class="asta-td asta-td-right font-mono tabular-nums">{{formatIDR .TotalDebit}}</td>
+                    <td class="asta-td asta-td-right font-mono tabular-nums hidden sm:table-cell">{{formatIDR .TotalCredit}}</td>
+                    <td class="asta-td hidden sm:table-cell">
+                        {{if .SourceType}}
+                        <span class="asta-badge asta-badge-sm">{{humanize .SourceType}}</span>
+                        {{else}}
+                        <span class="asta-badge asta-badge-sm">Manual</span>
+                        {{end}}
+                    </td>
+                    <td class="asta-td hidden sm:table-cell">
+                        <a href="{{$.BasePath}}/journals/{{.ID}}?return_to={{urlquery $data.ReturnTo}}" class="asta-btn asta-btn-outline asta-btn-xs"><span class="asta-btn-label">View</span></a>
+                    </td>
+                </tr>
+                {{$n = add $n 1}}
+                {{else}}
+                <tr>
+                    <td colspan="9" class="asta-td py-10 text-center text-mute">No journal entries found</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div></div>
 
     {{$pg := $data.Pagination}}
     {{if gt $pg.TotalPages 1}}
-    <div class="flex items-center justify-between mt-4">
-        <div class="text-sm opacity-60">Page {{$pg.Page}} of {{$pg.TotalPages}}</div>
-        <div class="join">
+    <div class="mt-4 flex items-center justify-between gap-4">
+        <p class="text-[13px] tabular-nums text-mute">Page {{$pg.Page}} of {{$pg.TotalPages}}</p>
+        <nav class="asta-pagination asta-pagination-sm" aria-label="Pagination">
             {{if $pg.HasPrev}}
-            <button class="join-item btn btn-sm"
-				hx-get="{{$.BasePath}}/journals" hx-target="#journal-table" hx-swap="outerHTML"
+            <button type="button" class="asta-pagination-link" aria-label="Previous page"
+                hx-get="{{$.BasePath}}/journals" hx-target="#journal-table" hx-swap="outerHTML"
                 hx-include="[name='from'],[name='to'],[name='search'],[name='account']"
-                hx-vals='{"page": "{{$pg.PrevPage}}"}' hx-push-url="true">‹ Prev</button>
+                hx-vals='{"page": "{{$pg.PrevPage}}"}' hx-push-url="true"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5"/></svg></button>
             {{else}}
-            <button class="join-item btn btn-sm" disabled>‹ Prev</button>
+            <span role="link" aria-disabled="true" class="asta-pagination-link" aria-label="Previous page"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5"/></svg></span>
             {{end}}
             {{if $pg.HasNext}}
-            <button class="join-item btn btn-sm"
-				hx-get="{{$.BasePath}}/journals" hx-target="#journal-table" hx-swap="outerHTML"
+            <button type="button" class="asta-pagination-link" aria-label="Next page"
+                hx-get="{{$.BasePath}}/journals" hx-target="#journal-table" hx-swap="outerHTML"
                 hx-include="[name='from'],[name='to'],[name='search'],[name='account']"
-                hx-vals='{"page": "{{$pg.NextPage}}"}' hx-push-url="true">Next ›</button>
+                hx-vals='{"page": "{{$pg.NextPage}}"}' hx-push-url="true"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5"/></svg></button>
             {{else}}
-            <button class="join-item btn btn-sm" disabled>Next ›</button>
+            <span role="link" aria-disabled="true" class="asta-pagination-link" aria-label="Next page"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5"/></svg></span>
             {{end}}
-        </div>
+        </nav>
     </div>
     {{end}}
 </div>

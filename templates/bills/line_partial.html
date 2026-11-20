@@ -1,17 +1,30 @@
 {{define "bill-line"}}
-<tr>
-    <td><input type="text" name="line_description" placeholder="Description" class="input input-sm w-full"></td>
-    <td>
-        <select name="line_account_id" class="select select-sm w-full">
-            <option value="">Account</option>
-            {{range .Accounts}}
-            <option value="{{.ID}}">{{.Code}} - {{.Name}}</option>
-            {{end}}
-        </select>
+<tr class="asta-tr">
+    <td class="asta-td">
+        <label class="asta-input asta-input-sm"><input type="text" name="line_description" placeholder="Description" aria-label="Description" class="asta-input-control"></label>
     </td>
-    <td><input type="number" name="line_quantity" class="input input-sm w-full" value="1" step="0.01" min="0"></td>
-    <td><input type="number" name="line_unit_price" placeholder="0" class="input input-sm w-full font-mono" min="0"></td>
-    <td class="font-mono text-sm">0</td>
-    <td><button type="button" class="btn btn-ghost btn-xs text-error" onclick="removeBillLine(this)">X</button></td>
+    <td class="asta-td">
+        <div class="asta-select asta-select-sm min-w-[220px]">
+            <select name="line_account_id" class="asta-select-control" aria-label="Expense account">
+                <option value="">Account</option>
+                {{range .Accounts}}
+                <option value="{{.ID}}">{{.Code}} - {{.Name}}</option>
+                {{end}}
+            </select>
+            <svg class="asta-select-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
+        </div>
+    </td>
+    <td class="asta-td">
+        <label class="asta-input asta-input-sm"><input type="number" name="line_quantity" aria-label="Quantity" class="asta-input-control tabular-nums" value="1" step="0.01" min="0"></label>
+    </td>
+    <td class="asta-td">
+        <label class="asta-input asta-input-sm"><input type="number" name="line_unit_price" placeholder="0" aria-label="Unit price" class="asta-input-control font-mono tabular-nums" min="0"></label>
+    </td>
+    <td class="asta-td asta-td-right font-mono tabular-nums">0</td>
+    <td class="asta-td">
+        <button type="button" class="asta-btn asta-btn-ghost asta-btn-icon asta-btn-xs" onclick="removeBillLine(this)" aria-label="Remove line">
+            <svg viewBox="0 0 14 14" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M3 3l8 8M11 3 3 11"/></svg>
+        </button>
+    </td>
 </tr>
 {{end}}

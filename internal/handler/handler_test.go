@@ -457,16 +457,16 @@ func TestListContacts_TableColumnsAndRouteSort(t *testing.T) {
 	html := string(body)
 
 	for _, want := range []string{
-		"<th>Maps</th>",
+		`scope="col">Maps</th>`,
 		`href="https://maps.example/pickup"`,
 		`href="/contacts?order=desc&amp;sort=route"`,
-		`class="w-64 whitespace-nowrap" style="overflow: hidden; text-overflow: ellipsis;"`,
+		`<div class="max-w-[150px] truncate" title=`, // notes truncate, full text on hover
 	} {
 		if !strings.Contains(html, want) {
 			t.Errorf("contacts page missing %q", want)
 		}
 	}
-	if strings.Contains(html, "<th>Type</th>") {
+	if strings.Contains(html, ">Type</th>") {
 		t.Error("contacts page still shows the Type column")
 	}
 }
@@ -1374,7 +1374,7 @@ func TestDashboard_WithData(t *testing.T) {
 	}
 	body := readBody(t, resp)
 	for _, want := range []string{
-		"Profitability Trend", "Cash Position", "financial-charts.js",
+		"Profitability trend", "Cash position", "financial-charts.js",
 		"View exact values", "/reports/profit-loss?from=", "/reports/cash-flow?from=",
 		"?granularity=monthly", "?granularity=quarterly",
 	} {

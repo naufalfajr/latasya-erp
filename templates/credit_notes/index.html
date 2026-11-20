@@ -1,74 +1,66 @@
 {{template "base" .}}
 {{define "content"}}
-<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+<div class="page-head">
     <div>
-        <h1 class="text-2xl font-bold">Credit Notes</h1>
-        <p class="text-sm opacity-60">Reversing entries that offset previously sent invoices</p>
+        <h1 class="page-title">Credit notes</h1>
+        <p class="page-sub">Reversing entries that offset previously sent invoices</p>
     </div>
     {{if .User.HasCapability "invoices.manage"}}
-    <a href="{{$.BasePath}}/credit-notes/new" class="btn btn-primary btn-sm">+ New Credit Note</a>
+    <div class="page-actions">
+        <a href="{{$.BasePath}}/credit-notes/new" class="asta-btn asta-btn-accent asta-btn-sm"><span class="asta-btn-label">New credit note</span></a>
+    </div>
     {{end}}
 </div>
 
 {{$data := .Data}}
-
-<div class="tabs tabs-boxed mb-4 flex-wrap">
-    <a href="{{$.BasePath}}/credit-notes" class="tab {{if eq (index $data "Filter") ""}}tab-active{{end}}">All</a>
-    <a href="{{$.BasePath}}/credit-notes?status=draft" class="tab {{if eq (index $data "Filter") "draft"}}tab-active{{end}}">Draft</a>
-    <a href="{{$.BasePath}}/credit-notes?status=issued" class="tab {{if eq (index $data "Filter") "issued"}}tab-active{{end}}">Issued</a>
-    <a href="{{$.BasePath}}/credit-notes?status=void" class="tab {{if eq (index $data "Filter") "void"}}tab-active{{end}}">Void</a>
-</div>
-{{$data := .Data}}
+{{$filter := index $data "Filter"}}
 {{$pg := index $data "Pagination"}}
 {{$n := add (mul (sub $pg.Page 1) $pg.PageSize) 1}}
 
-<div class="overflow-x-auto">
-    <table class="table table-sm">
+<nav class="asta-segmented asta-segmented-sm mb-4 max-w-full overflow-x-auto" aria-label="Filter by status">
+    <a href="{{$.BasePath}}/credit-notes" class="asta-segmented-item"{{if eq $filter ""}} aria-current="page"{{end}}>All</a>
+    <a href="{{$.BasePath}}/credit-notes?status=draft" class="asta-segmented-item"{{if eq $filter "draft"}} aria-current="page"{{end}}>Draft</a>
+    <a href="{{$.BasePath}}/credit-notes?status=issued" class="asta-segmented-item"{{if eq $filter "issued"}} aria-current="page"{{end}}>Issued</a>
+    <a href="{{$.BasePath}}/credit-notes?status=void" class="asta-segmented-item"{{if eq $filter "void"}} aria-current="page"{{end}}>Void</a>
+</nav>
+
+<div class="asta-table-wrap"><div class="asta-table-scroll">
+    <table class="asta-table">
         <thead>
             <tr>
-                <th class="w-8">#</th>
-                <th>Number</th>
-                <th>Customer</th>
-                <th>Date</th>
-                <th>Reason</th>
-                <th>Invoice</th>
-                <th>Status</th>
-                <th class="text-right">Total</th>
-                <th>Actions</th>
+                <th class="asta-th w-8 hidden sm:table-cell" scope="col">#</th>
+                <th class="asta-th" scope="col">Number</th>
+                <th class="asta-th hidden sm:table-cell" scope="col">Customer</th>
+                <th class="asta-th hidden sm:table-cell" scope="col">Date</th>
+                <th class="asta-th hidden sm:table-cell" scope="col">Reason</th>
+                <th class="asta-th hidden sm:table-cell" scope="col">Invoice</th>
+                <th class="asta-th hidden sm:table-cell" scope="col">Status</th>
+                <th class="asta-th asta-th-right" scope="col">Total</th>
+                <th class="asta-th hidden sm:table-cell" scope="col"><span class="sr-only">Actions</span></th>
             </tr>
         </thead>
         <tbody>
             {{range (index $data "CreditNotes")}}
-            <tr id="cn-{{.ID}}">
-                <td class="text-sm opacity-60">{{$n}}</td>
-                <td class="font-mono text-sm">{{.CNNumber}}</td>
-                <td>{{.ContactName}}</td>
-                <td class="text-sm">{{formatDate .CNDate}}</td>
-                <td class="text-sm capitalize">{{.Reason}}</td>
-                <td class="font-mono text-xs">
-                    {{if .InvoiceID}}<a href="{{$.BasePath}}/invoices/{{.InvoiceID}}" class="link link-hover">{{.InvoiceNumber}}</a>{{else}}—{{end}}
-                </td>
-                <td>
-                    <span class="badge badge-sm
-                        {{if eq .Status "draft"}}badge-ghost
-                        {{else if eq .Status "issued"}}badge-info
-                        {{else if eq .Status "void"}}badge-error
-                        {{end}}">{{.Status}}</span>
-                </td>
-                <td class="text-right font-mono text-sm">{{formatIDR .Total}}</td>
-                <td>
-                    <a href="{{$.BasePath}}/credit-notes/{{.ID}}" class="btn btn-ghost btn-xs">View</a>
-                </td>
+            <tr class="asta-tr" id="cn-{{.ID}}">
+                <td class="asta-td text-mute tabular-nums hidden sm:table-cell">{{$n}}</td>
+                <td class="asta-td font-mono"><a class="erp-link" href="{{$.BasePath}}/credit-notes/{{.ID}}">{{.CNNumber}}</a><span class="mt-0.5 block max-w-[170px] truncate font-sans text-[12.5px] text-ink-2 sm:hidden"><span class="tabular-nums">{{formatDate .CNDate}}</span> · {{.ContactName}}</span><span class="mt-1 block sm:hidden">{{template "status-badge" .Status}}</span></td>
+                <td class="asta-td text-ink hidden sm:table-cell">{{.ContactName}}</td>
+                <td class="asta-td tabular-nums hidden sm:table-cell">{{formatDate .CNDate}}</td>
+                <td class="asta-td capitalize hidden sm:table-cell">{{.Reason}}</td>
+                <td class="asta-td font-mono hidden sm:table-cell">{{if .InvoiceID}}<a href="{{$.BasePath}}/invoices/{{.InvoiceID}}" class="erp-link">{{.InvoiceNumber}}</a>{{else}}<span class="text-mute">—</span>{{end}}</td>
+                <td class="asta-td hidden sm:table-cell">{{template "status-badge" .Status}}</td>
+                <td class="asta-td asta-td-right font-mono tabular-nums">{{formatIDR .Total}}</td>
+                <td class="asta-td hidden sm:table-cell"><a href="{{$.BasePath}}/credit-notes/{{.ID}}" class="asta-btn asta-btn-outline asta-btn-xs"><span class="asta-btn-label">View</span></a></td>
             </tr>
             {{$n = add $n 1}}
             {{else}}
             <tr>
-                <td colspan="9" class="text-center py-8 opacity-60">No credit notes yet</td>
+                <td colspan="9" class="asta-td py-10 text-center text-mute">No credit notes yet</td>
             </tr>
             {{end}}
         </tbody>
     </table>
-</div>
+</div></div>
 
 {{template "pagination" (index $data "Pagination")}}
 {{end}}

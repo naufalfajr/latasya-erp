@@ -2,94 +2,111 @@
 {{define "content"}}
 {{$data := .Data}}
 {{$c := $data.Company}}
-<div class="mb-6">
-    <h1 class="text-2xl font-bold">Company Profile</h1>
-    <p class="text-sm opacity-60">These details appear on every invoice (print view and PDF).</p>
+<div class="max-w-2xl">
+    <div class="page-head">
+        <div>
+            <h1 class="page-title">Company profile</h1>
+            <p class="page-sub">These details appear on every invoice (print view and PDF).</p>
+        </div>
+    </div>
+
+    {{if $data.Errors.general}}
+    <div class="asta-alert asta-alert-danger mb-4" role="alert">{{template "alert-icon"}}<div class="asta-alert-body"><p class="asta-alert-text">{{$data.Errors.general}}</p></div></div>
+    {{end}}
+
+    <form method="POST" action="{{$.BasePath}}/settings/company" class="asta-card">
+        {{template "csrf" $}}
+
+        <h2 class="section-title mb-3">Identity</h2>
+        <div class="mb-6 grid grid-cols-1 gap-4">
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="name">Company name<span class="asta-label-required" aria-hidden="true">*</span></label></div>
+                <label class="asta-input"><input id="name" name="name" type="text" value="{{$c.Name}}" class="asta-input-control" required{{if $data.Errors.name}} aria-invalid="true"{{end}}></label>
+                {{if $data.Errors.name}}<p class="asta-error" role="alert">{{$data.Errors.name}}</p>{{end}}
+            </div>
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="tagline">Tagline</label></div>
+                <label class="asta-input"><input id="tagline" name="tagline" type="text" value="{{$c.Tagline}}" class="asta-input-control" placeholder="School Bus & Travel Service"></label>
+            </div>
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="address">Address</label></div>
+                <div class="asta-textarea"><textarea id="address" name="address" class="asta-textarea-control" rows="2">{{$c.Address}}</textarea></div>
+            </div>
+        </div>
+
+        <h2 class="section-title mb-3">Contact</h2>
+        <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="phone">Phone</label></div>
+                <label class="asta-input"><input id="phone" name="phone" type="text" value="{{$c.Phone}}" class="asta-input-control"></label>
+            </div>
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="email">Email</label></div>
+                <label class="asta-input"><input id="email" name="email" type="text" value="{{$c.Email}}" class="asta-input-control"></label>
+            </div>
+        </div>
+
+        <h2 class="section-title mb-3">Tax</h2>
+        <div class="mb-6 grid grid-cols-1 gap-4">
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="npwp">NPWP</label></div>
+                <label class="asta-input"><input id="npwp" name="npwp" type="text" value="{{$c.NPWP}}" class="asta-input-control font-mono" placeholder="00.000.000.0-000.000"></label>
+            </div>
+        </div>
+
+        <h2 class="section-title mb-3">Bank and payment</h2>
+        <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="bank_name">Bank</label></div>
+                <label class="asta-input"><input id="bank_name" name="bank_name" type="text" value="{{$c.BankName}}" class="asta-input-control" placeholder="BCA"></label>
+            </div>
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="bank_account_number">Account number</label></div>
+                <label class="asta-input"><input id="bank_account_number" name="bank_account_number" type="text" value="{{$c.BankAccountNumber}}" class="asta-input-control font-mono"></label>
+            </div>
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="bank_account_holder">Account holder</label></div>
+                <label class="asta-input"><input id="bank_account_holder" name="bank_account_holder" type="text" value="{{$c.BankAccountHolder}}" class="asta-input-control"></label>
+            </div>
+        </div>
+
+        <h2 class="section-title mb-3">Invoice footer</h2>
+        <div class="mb-6 grid grid-cols-1 gap-4">
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="invoice_footer">Footer note</label></div>
+                <div class="asta-textarea"><textarea id="invoice_footer" name="invoice_footer" class="asta-textarea-control" rows="2" placeholder="Terima kasih atas kepercayaan Anda." aria-describedby="invoice_footer_hint">{{$c.InvoiceFooter}}</textarea></div>
+                <p class="asta-hint" id="invoice_footer_hint">Shown at the bottom of every invoice (e.g. payment terms or a thank-you note).</p>
+            </div>
+        </div>
+
+        <h2 class="section-title mb-3">Recurring invoice defaults</h2>
+        <div class="grid grid-cols-1 gap-4">
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="default_revenue_account_id">Default revenue account</label></div>
+                <div class="asta-select">
+                    <select id="default_revenue_account_id" name="default_revenue_account_id" class="asta-select-control" aria-describedby="default_revenue_account_hint">
+                        <option value="">— none —</option>
+                        {{range $data.RevenueAccounts}}
+                        <option value="{{.ID}}" {{if eq .ID $c.DefaultRevenueAccountID}}selected{{end}}>{{.Code}} - {{.Name}}</option>
+                        {{end}}
+                    </select>
+                    {{template "select-chevron"}}
+                </div>
+                <p class="asta-hint" id="default_revenue_account_hint">Used as the line-item account when generating recurring invoices. Generation stops if this is unset.</p>
+            </div>
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="recurring_description_template">Recurring description template</label></div>
+                <label class="asta-input"><input id="recurring_description_template" name="recurring_description_template" type="text"
+                    value="{{$c.RecurringDescriptionTemplate}}"
+                    class="asta-input-control"
+                    placeholder="Antar jemput {month} {year}" aria-describedby="recurring_description_hint"></label>
+                <p class="asta-hint" id="recurring_description_hint">Use <code class="font-mono">{month}</code> and <code class="font-mono">{year}</code> as placeholders (e.g. "Antar jemput Juni 2026").</p>
+            </div>
+        </div>
+
+        <div class="asta-card-footer">
+            <button type="submit" class="asta-btn asta-btn-accent"><span class="asta-btn-label">Save</span></button>
+        </div>
+    </form>
 </div>
-
-{{if $data.Errors.general}}
-<div class="alert alert-error mb-4">{{$data.Errors.general}}</div>
-{{end}}
-
-<form method="POST" action="{{$.BasePath}}/settings/company" class="max-w-2xl">
-    {{template "csrf" $}}
-
-    <div class="divider">Identity</div>
-    <div class="form-control mb-3">
-        <label class="label" for="name"><span class="label-text">Company name <span class="text-error">*</span></span></label>
-        <input id="name" name="name" type="text" value="{{$c.Name}}" class="input input-bordered {{if $data.Errors.name}}input-error{{end}}" required>
-        {{if $data.Errors.name}}<span class="text-error text-sm mt-1">{{$data.Errors.name}}</span>{{end}}
-    </div>
-    <div class="form-control mb-3">
-        <label class="label" for="tagline"><span class="label-text">Tagline</span></label>
-        <input id="tagline" name="tagline" type="text" value="{{$c.Tagline}}" class="input input-bordered" placeholder="School Bus & Travel Service">
-    </div>
-    <div class="form-control mb-3">
-        <label class="label" for="address"><span class="label-text">Address</span></label>
-        <textarea id="address" name="address" class="textarea textarea-bordered" rows="2">{{$c.Address}}</textarea>
-    </div>
-
-    <div class="divider">Contact</div>
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div class="form-control">
-            <label class="label" for="phone"><span class="label-text">Phone</span></label>
-            <input id="phone" name="phone" type="text" value="{{$c.Phone}}" class="input input-bordered">
-        </div>
-        <div class="form-control">
-            <label class="label" for="email"><span class="label-text">Email</span></label>
-            <input id="email" name="email" type="text" value="{{$c.Email}}" class="input input-bordered">
-        </div>
-    </div>
-
-    <div class="divider">Tax</div>
-    <div class="form-control mb-3">
-        <label class="label" for="npwp"><span class="label-text">NPWP</span></label>
-        <input id="npwp" name="npwp" type="text" value="{{$c.NPWP}}" class="input input-bordered" placeholder="00.000.000.0-000.000">
-    </div>
-
-    <div class="divider">Bank / Payment</div>
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div class="form-control">
-            <label class="label" for="bank_name"><span class="label-text">Bank</span></label>
-            <input id="bank_name" name="bank_name" type="text" value="{{$c.BankName}}" class="input input-bordered" placeholder="BCA">
-        </div>
-        <div class="form-control">
-            <label class="label" for="bank_account_number"><span class="label-text">Account number</span></label>
-            <input id="bank_account_number" name="bank_account_number" type="text" value="{{$c.BankAccountNumber}}" class="input input-bordered">
-        </div>
-        <div class="form-control">
-            <label class="label" for="bank_account_holder"><span class="label-text">Account holder</span></label>
-            <input id="bank_account_holder" name="bank_account_holder" type="text" value="{{$c.BankAccountHolder}}" class="input input-bordered">
-        </div>
-    </div>
-
-    <div class="divider">Invoice Footer</div>
-    <div class="form-control mb-4">
-        <label class="label" for="invoice_footer"><span class="label-text">Footer note</span></label>
-        <textarea id="invoice_footer" name="invoice_footer" class="textarea textarea-bordered" rows="2" placeholder="Terima kasih atas kepercayaan Anda.">{{$c.InvoiceFooter}}</textarea>
-        <span class="text-xs opacity-60 mt-1">Shown at the bottom of every invoice (e.g. payment terms or a thank-you note).</span>
-    </div>
-
-    <div class="divider">Recurring Invoice Defaults</div>
-    <div class="form-control mb-3">
-        <label class="label" for="default_revenue_account_id"><span class="label-text">Default Revenue Account</span></label>
-        <select id="default_revenue_account_id" name="default_revenue_account_id" class="select select-bordered">
-            <option value="">— none —</option>
-            {{range $data.RevenueAccounts}}
-            <option value="{{.ID}}" {{if eq .ID $c.DefaultRevenueAccountID}}selected{{end}}>{{.Code}} - {{.Name}}</option>
-            {{end}}
-        </select>
-        <span class="text-xs opacity-60 mt-1">Used as the line-item account when generating recurring invoices. Generation stops if this is unset.</span>
-    </div>
-    <div class="form-control mb-4">
-        <label class="label" for="recurring_description_template"><span class="label-text">Recurring Description Template</span></label>
-        <input id="recurring_description_template" name="recurring_description_template" type="text"
-            value="{{$c.RecurringDescriptionTemplate}}"
-            class="input input-bordered"
-            placeholder="Antar jemput {month} {year}">
-        <span class="text-xs opacity-60 mt-1">Use <code>{month}</code> and <code>{year}</code> as placeholders (e.g. "Antar jemput Juni 2026").</span>
-    </div>
-
-    <button type="submit" class="btn btn-primary">Save</button>
-</form>
 {{end}}

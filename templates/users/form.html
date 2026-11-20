@@ -3,96 +3,82 @@
 {{$data := .Data}}
 
 <div class="max-w-lg">
-    <h1 class="text-2xl font-bold mb-6">
-        {{if $data.IsEdit}}Edit User{{else}}New User{{end}}
-    </h1>
+    <div class="page-head">
+        <h1 class="page-title">{{if $data.IsEdit}}Edit user{{else}}New user{{end}}</h1>
+    </div>
 
     <form method="POST" action="{{$.BasePath}}{{if $data.IsEdit}}/users/{{$data.User.ID}}{{else}}/users{{end}}"
-        class="card bg-base-100 shadow">
+        class="asta-card">
         {{template "csrf" $}}
-        <div class="card-body">
+        <div class="grid grid-cols-1 gap-5">
 
             {{if not $data.IsEdit}}
-            <!-- Username (only on create) -->
-            <div class="flex flex-col gap-1">
-                <label class="label">Username *</label>
-                <input type="text" name="username" placeholder="Username"
-                    class="input {{if index $data.Errors "username"}}input-error{{end}}"
-                    value="{{$data.User.Username}}" required>
-                {{if index $data.Errors "username"}}
-                <span class="text-xs text-error">{{index $data.Errors "username"}}</span>
-                {{end}}
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="username">Username<span class="asta-label-required" aria-hidden="true">*</span></label></div>
+                <label class="asta-input"><input type="text" id="username" name="username" placeholder="Username"
+                    class="asta-input-control"
+                    value="{{$data.User.Username}}" required{{if index $data.Errors "username"}} aria-invalid="true"{{end}}></label>
+                {{if index $data.Errors "username"}}<p class="asta-error" role="alert">{{index $data.Errors "username"}}</p>{{end}}
             </div>
             {{else}}
-            <div class="flex flex-col gap-1">
-                <label class="label">Username</label>
-                <input type="text" class="input bg-base-200" value="{{$data.User.Username}}" disabled>
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="username">Username</label></div>
+                <label class="asta-input"><input type="text" id="username" class="asta-input-control" value="{{$data.User.Username}}" disabled></label>
             </div>
             {{end}}
 
-            <!-- Full Name -->
-            <div class="flex flex-col gap-1">
-                <label class="label">Full Name *</label>
-                <input type="text" name="full_name" placeholder="Full name"
-                    class="input {{if index $data.Errors "full_name"}}input-error{{end}}"
-                    value="{{$data.User.FullName}}" required>
-                {{if index $data.Errors "full_name"}}
-                <span class="text-xs text-error">{{index $data.Errors "full_name"}}</span>
-                {{end}}
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="full_name">Full name<span class="asta-label-required" aria-hidden="true">*</span></label></div>
+                <label class="asta-input"><input type="text" id="full_name" name="full_name" placeholder="Full name"
+                    class="asta-input-control"
+                    value="{{$data.User.FullName}}" required{{if index $data.Errors "full_name"}} aria-invalid="true"{{end}}></label>
+                {{if index $data.Errors "full_name"}}<p class="asta-error" role="alert">{{index $data.Errors "full_name"}}</p>{{end}}
             </div>
 
-            <!-- Password -->
-            <div class="flex flex-col gap-1">
-                <label class="label" for="user_password">Password {{if not $data.IsEdit}}*{{else}}(leave blank to keep current){{end}}</label>
-                <div class="relative">
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="user_password">Password{{if not $data.IsEdit}}<span class="asta-label-required" aria-hidden="true">*</span>{{else}} (leave blank to keep current){{end}}</label></div>
+                <div class="asta-input pr-1">
                     <input type="password" id="user_password" name="password"
                         placeholder="{{if $data.IsEdit}}New password{{else}}Password{{end}}"
-                        class="input w-full pr-12 {{if index $data.Errors "password"}}input-error{{end}}"
-                        {{if not $data.IsEdit}}required{{end}} minlength="4">
+                        class="asta-input-control"
+                        {{if not $data.IsEdit}}required{{end}} minlength="4"{{if index $data.Errors "password"}} aria-invalid="true"{{end}}>
                     <button type="button"
-                        class="btn btn-ghost btn-sm btn-square absolute top-1/2 right-1 -translate-y-1/2"
+                        class="asta-btn asta-btn-ghost asta-btn-icon asta-btn-xs"
                         data-pw-toggle="user_password" aria-label="Show password">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
                             <circle cx="12" cy="12" r="3"/>
                         </svg>
                     </button>
                 </div>
-                {{if index $data.Errors "password"}}
-                <span class="text-xs text-error">{{index $data.Errors "password"}}</span>
-                {{end}}
+                {{if index $data.Errors "password"}}<p class="asta-error" role="alert">{{index $data.Errors "password"}}</p>{{end}}
             </div>
 
-            <!-- Role -->
-            <div class="flex flex-col gap-1">
-                <label class="label">Role *</label>
-                <select name="role" class="select {{if index $data.Errors "role"}}select-error{{end}}" required>
-                    {{range $data.Roles}}
-                    <option value="{{.Name}}" {{if eq $data.User.Role .Name}}selected{{end}}>
-                        {{.Name}}{{if .Description}} — {{.Description}}{{end}}
-                    </option>
-                    {{end}}
-                </select>
-                {{if index $data.Errors "role"}}
-                <span class="text-xs text-error">{{index $data.Errors "role"}}</span>
-                {{end}}
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="role">Role<span class="asta-label-required" aria-hidden="true">*</span></label></div>
+                <div class="asta-select">
+                    <select id="role" name="role" class="asta-select-control" required{{if index $data.Errors "role"}} aria-invalid="true"{{end}}>
+                        {{range $data.Roles}}
+                        <option value="{{.Name}}" {{if eq $data.User.Role .Name}}selected{{end}}>
+                            {{.Name}}{{if .Description}} — {{.Description}}{{end}}
+                        </option>
+                        {{end}}
+                    </select>
+                    {{template "select-chevron"}}
+                </div>
+                {{if index $data.Errors "role"}}<p class="asta-error" role="alert">{{index $data.Errors "role"}}</p>{{end}}
             </div>
 
-            <!-- Active -->
-            <div class="flex flex-col gap-1">
-                <label class="label cursor-pointer justify-start gap-2">
-                    <input type="checkbox" name="is_active" class="checkbox checkbox-sm"
-                        {{if $data.User.IsActive}}checked{{end}}>
-                    <span>Active</span>
-                </label>
-            </div>
+            <label class="asta-checkbox">
+                <span class="asta-checkbox-box"><input type="checkbox" name="is_active" class="asta-checkbox-input"
+                    {{if $data.User.IsActive}}checked{{end}}>{{template "check-icon"}}</span>
+                <span><span class="asta-checkbox-label">Active</span></span>
+            </label>
+        </div>
 
-            <div class="card-actions justify-end mt-4">
-                <a href="{{$.BasePath}}/users" class="btn btn-ghost">Cancel</a>
-                <button type="submit" class="btn btn-primary">
-                    {{if $data.IsEdit}}Update{{else}}Create{{end}} User
-                </button>
-            </div>
+        <div class="asta-card-footer">
+            <a href="{{$.BasePath}}/users" class="asta-btn asta-btn-ghost"><span class="asta-btn-label">Cancel</span></a>
+            <button type="submit" class="asta-btn asta-btn-accent"><span class="asta-btn-label">{{if $data.IsEdit}}Update user{{else}}Create user{{end}}</span></button>
         </div>
     </form>
 </div>

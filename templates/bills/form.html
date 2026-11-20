@@ -2,95 +2,93 @@
 {{define "content"}}
 {{$data := .Data}}
 
-<div class="max-w-4xl">
-    <h1 class="text-2xl font-bold mb-6">
-        {{if $data.IsEdit}}Edit Bill{{else}}New Bill{{end}}
-    </h1>
+<div class="max-w-5xl">
+    <div class="page-head">
+        <h1 class="page-title">{{if $data.IsEdit}}Edit bill{{else}}New bill{{end}}</h1>
+    </div>
 
     {{if index $data.Errors "general"}}
-    <div class="alert alert-error mb-4"><span>{{index $data.Errors "general"}}</span></div>
+    <div class="asta-alert asta-alert-danger mb-4" role="alert">{{template "alert-icon"}}<div class="asta-alert-body"><p class="asta-alert-text">{{index $data.Errors "general"}}</p></div></div>
     {{end}}
 
-    <form method="POST" action="{{$.BasePath}}{{if $data.IsEdit}}/bills/{{$data.Bill.ID}}{{else}}/bills{{end}}"
-        class="card bg-base-100 shadow">
+    <form method="POST" action="{{$.BasePath}}{{if $data.IsEdit}}/bills/{{$data.Bill.ID}}{{else}}/bills{{end}}" class="asta-card">
         {{template "csrf" $}}
-        <div class="card-body">
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-                <div class="flex flex-col gap-1">
-                    <label class="label">Supplier *</label>
-                    <select name="contact_id" class="select {{if index $data.Errors "contact_id"}}select-error{{end}}" required>
+        <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="contact_id">Supplier<span class="asta-label-required" aria-hidden="true">*</span></label></div>
+                <div class="asta-select">
+                    <select id="contact_id" name="contact_id" class="asta-select-control" required{{if index $data.Errors "contact_id"}} aria-invalid="true"{{end}}>
                         <option value="">Select supplier</option>
                         {{$selContact := $data.Bill.ContactID}}
                         {{range $data.Contacts}}
                         <option value="{{.ID}}" {{if eq .ID $selContact}}selected{{end}}>{{.Name}}</option>
                         {{end}}
                     </select>
+                    {{template "select-chevron"}}
                 </div>
-                <div class="flex flex-col gap-1">
-                    <label class="label">Bill Date *</label>
-                    <input type="date" name="bill_date" class="input {{if index $data.Errors "bill_date"}}input-error{{end}}"
-                        value="{{$data.Bill.BillDate}}" required>
-                </div>
-                <div class="flex flex-col gap-1">
-                    <label class="label">Due Date *</label>
-                    <input type="date" name="due_date" class="input {{if index $data.Errors "due_date"}}input-error{{end}}"
-                        value="{{$data.Bill.DueDate}}" required>
-                </div>
+                {{if index $data.Errors "contact_id"}}<p class="asta-error" role="alert">{{index $data.Errors "contact_id"}}</p>{{end}}
             </div>
 
-            <div class="mb-4">
-                <div class="flex justify-between items-center mb-2">
-                    <label class="font-semibold">Line Items *</label>
-                    {{if index $data.Errors "lines"}}
-                    <span class="text-error text-sm">{{index $data.Errors "lines"}}</span>
-                    {{end}}
-                </div>
-                <div class="overflow-x-auto">
-                    <table class="table table-sm">
-                        <thead>
-                            <tr>
-                                <th class="w-1/3">Description</th>
-                                <th>Expense Account</th>
-                                <th class="w-20">Qty</th>
-                                <th class="w-32">Unit Price</th>
-                                <th class="w-32">Amount</th>
-                                <th class="w-10"></th>
-                            </tr>
-                        </thead>
-                        <tbody id="bill-lines-body">
-                            {{range $i, $line := $data.Lines}}
-                            {{template "bill-line-row" (dict "Index" $i "Line" $line "Accounts" $data.ExpenseAccounts "Errors" $data.Errors)}}
-                            {{end}}
-                        </tbody>
-                    </table>
-                </div>
-                <button type="button" class="btn btn-ghost btn-sm mt-2"
-                    hx-get="{{$.BasePath}}/htmx/bill-line"
-                    hx-target="#bill-lines-body"
-                    hx-swap="beforeend">
-                    + Add Line
-                </button>
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="bill_date">Bill date<span class="asta-label-required" aria-hidden="true">*</span></label></div>
+                <label class="asta-input"><input type="date" id="bill_date" name="bill_date" class="asta-input-control" value="{{$data.Bill.BillDate}}" required{{if index $data.Errors "bill_date"}} aria-invalid="true"{{end}}></label>
+                {{if index $data.Errors "bill_date"}}<p class="asta-error" role="alert">{{index $data.Errors "bill_date"}}</p>{{end}}
             </div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-                <div class="flex flex-col gap-1">
-                    <label class="label">Tax Amount (Rp)</label>
-                    <input type="number" name="tax_amount" class="input font-mono"
-                        value="{{if gt $data.Bill.TaxAmount 0}}{{$data.Bill.TaxAmount}}{{end}}" min="0">
-                </div>
-                <div class="flex flex-col gap-1">
-                    <label class="label">Notes</label>
-                    <input type="text" name="notes" class="input" value="{{$data.Bill.Notes}}">
-                </div>
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="due_date">Due date<span class="asta-label-required" aria-hidden="true">*</span></label></div>
+                <label class="asta-input"><input type="date" id="due_date" name="due_date" class="asta-input-control" value="{{$data.Bill.DueDate}}" required{{if index $data.Errors "due_date"}} aria-invalid="true"{{end}}></label>
+                {{if index $data.Errors "due_date"}}<p class="asta-error" role="alert">{{index $data.Errors "due_date"}}</p>{{end}}
+            </div>
+        </div>
+
+        <div class="mb-6">
+            <div class="mb-2 flex items-center justify-between gap-4">
+                <h2 class="section-title">Line items<span class="asta-label-required" aria-hidden="true">*</span></h2>
+                {{if index $data.Errors "lines"}}<p class="asta-error" role="alert">{{index $data.Errors "lines"}}</p>{{end}}
             </div>
 
-            <div class="card-actions justify-end mt-4">
-                <a href="{{$.BasePath}}/bills" class="btn btn-ghost">Cancel</a>
-                <button type="submit" class="btn btn-primary">
-                    {{if $data.IsEdit}}Update{{else}}Create{{end}} Bill
-                </button>
+            <div class="asta-table-wrap"><div class="asta-table-scroll">
+                <table class="asta-table">
+                    <thead>
+                        <tr>
+                            <th class="asta-th w-1/3" scope="col">Description</th>
+                            <th class="asta-th" scope="col">Expense account</th>
+                            <th class="asta-th w-24" scope="col">Qty</th>
+                            <th class="asta-th w-36" scope="col">Unit price</th>
+                            <th class="asta-th asta-th-right w-32" scope="col">Amount</th>
+                            <th class="asta-th w-12" scope="col"><span class="sr-only">Remove</span></th>
+                        </tr>
+                    </thead>
+                    <tbody id="bill-lines-body">
+                        {{range $i, $line := $data.Lines}}
+                        {{template "bill-line-row" (dict "Index" $i "Line" $line "Accounts" $data.ExpenseAccounts "Errors" $data.Errors)}}
+                        {{end}}
+                    </tbody>
+                </table>
+            </div></div>
+
+            <button type="button" class="asta-btn asta-btn-ghost asta-btn-sm mt-2"
+                hx-get="{{$.BasePath}}/htmx/bill-line"
+                hx-target="#bill-lines-body"
+                hx-swap="beforeend"><span class="asta-btn-label">Add line</span></button>
+        </div>
+
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="tax_amount">Tax amount (Rp)</label></div>
+                <label class="asta-input"><input type="number" id="tax_amount" name="tax_amount" class="asta-input-control font-mono tabular-nums" value="{{if gt $data.Bill.TaxAmount 0}}{{$data.Bill.TaxAmount}}{{end}}" min="0"></label>
             </div>
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="notes">Notes</label></div>
+                <label class="asta-input"><input type="text" id="notes" name="notes" class="asta-input-control" value="{{$data.Bill.Notes}}"></label>
+            </div>
+        </div>
+
+        <div class="asta-card-footer">
+            <a href="{{$.BasePath}}/bills" class="asta-btn asta-btn-ghost"><span class="asta-btn-label">Cancel</span></a>
+            <button type="submit" class="asta-btn asta-btn-accent"><span class="asta-btn-label">{{if $data.IsEdit}}Update bill{{else}}Create bill{{end}}</span></button>
         </div>
     </form>
 </div>
@@ -105,21 +103,37 @@ function removeBillLine(btn) { btn.closest('tr').remove(); }
 {{$accountError := index .Errors (printf "line_%d_account" .Index)}}
 {{$quantityError := index .Errors (printf "line_%d_quantity" .Index)}}
 {{$priceError := index .Errors (printf "line_%d_price" .Index)}}
-<tr>
-    <td><input type="text" name="line_description" placeholder="Description" class="input input-sm w-full {{if $descError}}input-error{{end}}" value="{{.Line.Description}}">{{if $descError}}<span class="text-xs text-error">{{$descError}}</span>{{end}}</td>
-    <td>
-        <select name="line_account_id" class="select select-sm w-full {{if $accountError}}select-error{{end}}">
-            <option value="">Account</option>
-            {{$selAcct := .Line.AccountID}}
-            {{range .Accounts}}
-            <option value="{{.ID}}" {{if eq .ID $selAcct}}selected{{end}}>{{.Code}} - {{.Name}}</option>
-            {{end}}
-        </select>
-        {{if $accountError}}<span class="text-xs text-error">{{$accountError}}</span>{{end}}
+<tr class="asta-tr">
+    <td class="asta-td">
+        <label class="asta-input asta-input-sm"><input type="text" name="line_description" placeholder="Description" aria-label="Description" class="asta-input-control" value="{{.Line.Description}}"{{if $descError}} aria-invalid="true"{{end}}></label>
+        {{if $descError}}<p class="asta-error" role="alert">{{$descError}}</p>{{end}}
     </td>
-    <td><input type="number" name="line_quantity" class="input input-sm w-full {{if $quantityError}}input-error{{end}}" value="{{if gt .Line.Quantity 0}}{{formatQty .Line.Quantity}}{{else}}1{{end}}" step="0.01" min="0">{{if $quantityError}}<span class="text-xs text-error">{{$quantityError}}</span>{{end}}</td>
-    <td><input type="number" name="line_unit_price" placeholder="0" class="input input-sm w-full font-mono {{if $priceError}}input-error{{end}}" value="{{if gt .Line.UnitPrice 0}}{{.Line.UnitPrice}}{{end}}" min="0">{{if $priceError}}<span class="text-xs text-error">{{$priceError}}</span>{{end}}</td>
-    <td class="font-mono text-sm">{{if gt .Line.Amount 0}}{{.Line.Amount}}{{else}}0{{end}}</td>
-    <td><button type="button" class="btn btn-ghost btn-xs text-error" onclick="removeBillLine(this)">X</button></td>
+    <td class="asta-td">
+        <div class="asta-select asta-select-sm min-w-[220px]">
+            <select name="line_account_id" class="asta-select-control" aria-label="Expense account"{{if $accountError}} aria-invalid="true"{{end}}>
+                <option value="">Account</option>
+                {{$selAcct := .Line.AccountID}}
+                {{range .Accounts}}
+                <option value="{{.ID}}" {{if eq .ID $selAcct}}selected{{end}}>{{.Code}} - {{.Name}}</option>
+                {{end}}
+            </select>
+            <svg class="asta-select-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
+        </div>
+        {{if $accountError}}<p class="asta-error" role="alert">{{$accountError}}</p>{{end}}
+    </td>
+    <td class="asta-td">
+        <label class="asta-input asta-input-sm"><input type="number" name="line_quantity" aria-label="Quantity" class="asta-input-control tabular-nums" value="{{if gt .Line.Quantity 0}}{{formatQty .Line.Quantity}}{{else}}1{{end}}" step="0.01" min="0"{{if $quantityError}} aria-invalid="true"{{end}}></label>
+        {{if $quantityError}}<p class="asta-error" role="alert">{{$quantityError}}</p>{{end}}
+    </td>
+    <td class="asta-td">
+        <label class="asta-input asta-input-sm"><input type="number" name="line_unit_price" placeholder="0" aria-label="Unit price" class="asta-input-control font-mono tabular-nums" value="{{if gt .Line.UnitPrice 0}}{{.Line.UnitPrice}}{{end}}" min="0"{{if $priceError}} aria-invalid="true"{{end}}></label>
+        {{if $priceError}}<p class="asta-error" role="alert">{{$priceError}}</p>{{end}}
+    </td>
+    <td class="asta-td asta-td-right font-mono tabular-nums">{{if gt .Line.Amount 0}}{{.Line.Amount}}{{else}}0{{end}}</td>
+    <td class="asta-td">
+        <button type="button" class="asta-btn asta-btn-ghost asta-btn-icon asta-btn-xs" onclick="removeBillLine(this)" aria-label="Remove line">
+            <svg viewBox="0 0 14 14" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M3 3l8 8M11 3 3 11"/></svg>
+        </button>
+    </td>
 </tr>
 {{end}}

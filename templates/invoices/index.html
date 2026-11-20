@@ -2,101 +2,93 @@
 {{define "content"}}
 {{$canManage := .User.HasCapability "invoices.manage"}}
 {{$draftMode := and $canManage (eq (index .Data "Filter") "draft")}}
-<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-    <h1 class="text-2xl font-bold">Invoices</h1>
+<div class="page-head">
+    <h1 class="page-title">Invoices</h1>
     {{if $canManage}}
-    <div class="flex gap-2 flex-wrap">
+    <div class="page-actions">
         {{if $draftMode}}
         <button type="submit" form="bulk-invoice-form" hidden
-            class="btn btn-info btn-sm bulk-action-btn" data-label="Mark as sent"
+            class="asta-btn asta-btn-outline asta-btn-sm bulk-action-btn" data-label="Mark as sent"
             formaction="{{$.BasePath}}/invoices/bulk-send"
-            onclick="return confirm('Mark the selected draft invoices as sent? A journal entry is posted for each, dated by the invoice date (may affect prior periods). This cannot be undone.')">Mark as sent</button>
+            onclick="return confirm('Mark the selected draft invoices as sent? A journal entry is posted for each, dated by the invoice date (may affect prior periods). This cannot be undone.')"><span class="asta-btn-label">Mark as sent</span></button>
         <button type="submit" form="bulk-invoice-form" hidden
-            class="btn btn-error btn-sm bulk-action-btn" data-label="Delete selected"
+            class="asta-btn asta-btn-outline erp-danger asta-btn-sm bulk-action-btn" data-label="Delete selected"
             formaction="{{$.BasePath}}/invoices/bulk-delete"
-            onclick="return confirm('Delete the selected draft invoices? This cannot be undone.')">Delete selected</button>
+            onclick="return confirm('Delete the selected draft invoices? This cannot be undone.')"><span class="asta-btn-label">Delete selected</span></button>
         {{end}}
         <form method="POST" action="{{$.BasePath}}/invoices/generate-recurring" class="inline">
             {{template "csrf" $}}
-            <button type="submit" class="btn btn-secondary btn-sm"
-                onclick="return confirm('Generate draft recurring invoices for active customers using the current school calendar adjustment? Customers already invoiced this month are skipped.')">Generate Recurring Invoices</button>
+            <button type="submit" class="asta-btn asta-btn-outline asta-btn-sm"
+                onclick="return confirm('Generate draft recurring invoices for active customers using the current school calendar adjustment? Customers already invoiced this month are skipped.')"><span class="asta-btn-label">Generate recurring invoices</span></button>
         </form>
-        <a href="{{$.BasePath}}/invoices/new" class="btn btn-primary btn-sm">+ New Invoice</a>
+        <a href="{{$.BasePath}}/invoices/new" class="asta-btn asta-btn-accent asta-btn-sm"><span class="asta-btn-label">New invoice</span></a>
     </div>
     {{end}}
 </div>
 
 {{$data := .Data}}
+{{$filter := index $data "Filter"}}
 {{$pg := index $data "Pagination"}}
 {{$n := add (mul (sub $pg.Page 1) $pg.PageSize) 1}}
 
-<!-- Status filter tabs -->
-<div class="tabs tabs-box mb-4 flex-wrap">
-    <a href="{{$.BasePath}}/invoices" class="tab {{if eq (index $data "Filter") ""}}tab-active{{end}}">All</a>
-    <a href="{{$.BasePath}}/invoices?status=draft" class="tab {{if eq (index $data "Filter") "draft"}}tab-active{{end}}">Draft</a>
-    <a href="{{$.BasePath}}/invoices?status=sent" class="tab {{if eq (index $data "Filter") "sent"}}tab-active{{end}}">Sent</a>
-    <a href="{{$.BasePath}}/invoices?status=partial" class="tab {{if eq (index $data "Filter") "partial"}}tab-active{{end}}">Partial</a>
-    <a href="{{$.BasePath}}/invoices?status=paid" class="tab {{if eq (index $data "Filter") "paid"}}tab-active{{end}}">Paid</a>
-    <a href="{{$.BasePath}}/invoices?status=overdue" class="tab {{if eq (index $data "Filter") "overdue"}}tab-active{{end}}">Overdue</a>
-</div>
+<nav class="asta-segmented asta-segmented-sm mb-4 max-w-full overflow-x-auto" aria-label="Filter by status">
+    <a href="{{$.BasePath}}/invoices" class="asta-segmented-item"{{if eq $filter ""}} aria-current="page"{{end}}>All</a>
+    <a href="{{$.BasePath}}/invoices?status=draft" class="asta-segmented-item"{{if eq $filter "draft"}} aria-current="page"{{end}}>Draft</a>
+    <a href="{{$.BasePath}}/invoices?status=sent" class="asta-segmented-item"{{if eq $filter "sent"}} aria-current="page"{{end}}>Sent</a>
+    <a href="{{$.BasePath}}/invoices?status=partial" class="asta-segmented-item"{{if eq $filter "partial"}} aria-current="page"{{end}}>Partial</a>
+    <a href="{{$.BasePath}}/invoices?status=paid" class="asta-segmented-item"{{if eq $filter "paid"}} aria-current="page"{{end}}>Paid</a>
+    <a href="{{$.BasePath}}/invoices?status=overdue" class="asta-segmented-item"{{if eq $filter "overdue"}} aria-current="page"{{end}}>Overdue</a>
+</nav>
 
-<div class="overflow-x-auto">
-    {{if $draftMode}}<form id="bulk-invoice-form" method="POST" action="{{$.BasePath}}/invoices/bulk-send">{{template "csrf" $}}{{end}}
-    <table class="table table-sm">
+{{if $draftMode}}<form id="bulk-invoice-form" method="POST" action="{{$.BasePath}}/invoices/bulk-send">{{template "csrf" $}}{{end}}
+<div class="asta-table-wrap"><div class="asta-table-scroll">
+    <table class="asta-table">
         <thead>
             <tr>
-                <th class="w-8">#</th>
-                {{if $draftMode}}<th><input type="checkbox" id="select-all-drafts" class="checkbox checkbox-xs" aria-label="Select all draft invoices"></th>{{end}}
-                <th>Number</th>
-                <th>Customer</th>
-                <th>Date</th>
-                <th>{{if eq (index $data "Filter") "paid"}}Paid Date{{else}}Due Date{{end}}</th>
-                <th>Status</th>
-                <th class="text-right">Total</th>
-                <th class="text-right">Paid</th>
-                <th class="text-right">Due</th>
-                <th>Actions</th>
+                <th class="asta-th w-8 hidden lg:table-cell" scope="col">#</th>
+                {{if $draftMode}}<th class="asta-th w-8" scope="col"><span class="asta-checkbox-box"><input type="checkbox" id="select-all-drafts" class="asta-checkbox-input" aria-label="Select all draft invoices">{{template "check-icon"}}</span></th>{{end}}
+                <th class="asta-th" scope="col">Number</th>
+                <th class="asta-th hidden sm:table-cell" scope="col">Customer</th>
+                <th class="asta-th hidden sm:table-cell" scope="col">Date</th>
+                <th class="asta-th hidden sm:table-cell" scope="col">{{if eq $filter "paid"}}Paid date{{else}}Due date{{end}}</th>
+                <th class="asta-th hidden sm:table-cell" scope="col">Status</th>
+                <th class="asta-th asta-th-right hidden sm:table-cell" scope="col">Total</th>
+                <th class="asta-th asta-th-right hidden sm:table-cell" scope="col">Paid</th>
+                <th class="asta-th asta-th-right" scope="col">Due</th>
+                <th class="asta-th hidden sm:table-cell" scope="col"><span class="sr-only">Actions</span></th>
             </tr>
         </thead>
         <tbody>
             {{range (index $data "Invoices")}}
-            <tr id="invoice-{{.ID}}">
-                <td class="text-sm opacity-60">{{$n}}</td>
-                {{if $draftMode}}<td><input type="checkbox" name="ids" value="{{.ID}}" class="checkbox checkbox-xs" aria-label="Select invoice {{.InvoiceNumber}}"></td>{{end}}
-                <td class="font-mono text-sm">{{.InvoiceNumber}}</td>
-                <td>{{.ContactName}}</td>
-                <td class="text-sm">{{formatDate .InvoiceDate}}</td>
-                <td class="text-sm">{{if eq (index $data "Filter") "paid"}}{{formatDate .PaidDate}}{{else}}{{formatDate .DueDate}}{{end}}</td>
-                <td>
-                    <span class="badge badge-sm
-                        {{if eq .Status "draft"}}badge-ghost
-                        {{else if eq .Status "sent"}}badge-info
-                        {{else if eq .Status "partial"}}badge-warning
-                        {{else if eq .Status "paid"}}badge-success
-                        {{else if eq .Status "overdue"}}badge-error
-                        {{else if eq .Status "cancelled"}}badge-ghost
-                        {{end}}">{{.Status}}</span>
-                </td>
-                <td class="text-right font-mono text-sm">{{formatIDR .Total}}</td>
-                <td class="text-right font-mono text-sm">{{formatIDR .AmountPaid}}</td>
-                <td class="text-right font-mono text-sm">{{formatIDR .AmountDue}}</td>
-                <td>
-                    <a href="{{$.BasePath}}/invoices/{{.ID}}" class="btn btn-outline btn-accent btn-xs">View</a>
-                    {{if and $canManage (ne .Status "draft")}}
-                    <a href="{{$.BasePath}}/invoices/{{.ID}}/whatsapp" class="btn btn-outline btn-accent btn-xs" target="_blank" rel="noopener">WA</a>
-                    {{end}}
+            <tr class="asta-tr" id="invoice-{{.ID}}">
+                <td class="asta-td text-mute tabular-nums hidden lg:table-cell">{{$n}}</td>
+                {{if $draftMode}}<td class="asta-td"><span class="asta-checkbox-box"><input type="checkbox" name="ids" value="{{.ID}}" class="asta-checkbox-input" aria-label="Select invoice {{.InvoiceNumber}}">{{template "check-icon"}}</span></td>{{end}}
+                <td class="asta-td font-mono"><a class="erp-link" href="{{$.BasePath}}/invoices/{{.ID}}">{{.InvoiceNumber}}</a><span class="mt-0.5 block max-w-[180px] truncate font-sans text-[12.5px] text-ink-2 sm:hidden">{{.ContactName}}</span><span class="mt-1 block sm:hidden">{{template "status-badge" .Status}}</span></td>
+                <td class="asta-td asta-td-wrap hidden min-w-[120px] max-w-[160px] text-ink sm:table-cell">{{.ContactName}}</td>
+                <td class="asta-td tabular-nums hidden sm:table-cell">{{formatDate .InvoiceDate}}</td>
+                <td class="asta-td tabular-nums hidden sm:table-cell">{{if eq $filter "paid"}}{{formatDate .PaidDate}}{{else}}{{formatDate .DueDate}}{{end}}</td>
+                <td class="asta-td hidden sm:table-cell">{{template "status-badge" .Status}}</td>
+                <td class="asta-td asta-td-right font-mono tabular-nums hidden sm:table-cell">{{formatIDR .Total}}</td>
+                <td class="asta-td asta-td-right font-mono tabular-nums hidden sm:table-cell">{{formatIDR .AmountPaid}}</td>
+                <td class="asta-td asta-td-right font-mono tabular-nums text-ink">{{formatIDR .AmountDue}}</td>
+                <td class="asta-td hidden sm:table-cell">
+                    <div class="flex gap-1">
+                        {{if and $canManage (ne .Status "draft")}}
+                        <a href="{{$.BasePath}}/invoices/{{.ID}}/whatsapp" class="asta-btn asta-btn-outline asta-btn-xs" target="_blank" rel="noopener"><span class="asta-btn-label">WhatsApp</span></a>
+                        {{end}}
+                    </div>
                 </td>
             </tr>
             {{$n = add $n 1}}
             {{else}}
             <tr>
-                <td colspan="{{if $draftMode}}11{{else}}10{{end}}" class="text-center py-8 opacity-60">No invoices found</td>
+                <td colspan="{{if $draftMode}}11{{else}}10{{end}}" class="asta-td py-10 text-center text-mute">No invoices found</td>
             </tr>
             {{end}}
         </tbody>
     </table>
-    {{if $draftMode}}</form>{{end}}
-</div>
+</div></div>
+{{if $draftMode}}</form>{{end}}
 
 {{template "pagination" (index $data "Pagination")}}
 
@@ -109,8 +101,9 @@
     var n = document.querySelectorAll('input[name="ids"]:checked').length;
     document.querySelectorAll('.bulk-action-btn').forEach(function (btn) {
       btn.hidden = (n === 0);
-      var label = btn.dataset.label || btn.textContent;
-      btn.textContent = n > 0 ? label + ' (' + n + ')' : label;
+      var labelEl = btn.querySelector('.asta-btn-label') || btn;
+      var label = btn.dataset.label || labelEl.textContent;
+      labelEl.textContent = n > 0 ? label + ' (' + n + ')' : label;
     });
   }
 

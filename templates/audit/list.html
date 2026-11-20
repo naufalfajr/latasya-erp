@@ -2,119 +2,107 @@
 {{define "content"}}
 {{$d := .Data}}
 
-<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+<div class="page-head">
     <div>
-        <h1 class="text-2xl font-bold">Audit Log</h1>
-        <p class="text-sm opacity-60">{{$d.Total}} event{{if ne $d.Total 1}}s{{end}} total</p>
+        <h1 class="page-title">Audit log</h1>
+        <p class="page-sub tabular-nums">{{$d.Total}} event{{if ne $d.Total 1}}s{{end}} total</p>
     </div>
 </div>
 
-<form method="GET" action="{{$.BasePath}}/audit" class="card bg-base-100 shadow-sm mb-4">
-    <div class="card-body p-4">
-        <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
-            <div>
-                <label class="label label-text text-xs">Actor (exact username)</label>
-                <input type="text" name="actor" value="{{$d.Filter.Actor}}" class="input input-bordered input-sm w-full" placeholder="e.g. admin">
-            </div>
-            <div>
-                <label class="label label-text text-xs">Action prefix</label>
-                <input type="text" name="action" value="{{$d.Filter.Action}}" class="input input-bordered input-sm w-full" placeholder="e.g. invoice. or auth.login">
-            </div>
-            <div>
-                <label class="label label-text text-xs">From</label>
-                <input type="date" name="from" value="{{$d.Filter.From}}" class="input input-bordered input-sm w-full">
-            </div>
-            <div>
-                <label class="label label-text text-xs">To</label>
-                <input type="date" name="to" value="{{$d.Filter.To}}" class="input input-bordered input-sm w-full">
-            </div>
+<form method="GET" action="{{$.BasePath}}/audit" class="asta-card mb-4">
+    <div class="grid grid-cols-1 gap-3 sm:grid-cols-4">
+        <div class="asta-field">
+            <div class="asta-field-head"><label class="asta-label" for="actor">Actor (exact username)</label></div>
+            <label class="asta-input asta-input-sm"><input type="text" id="actor" name="actor" value="{{$d.Filter.Actor}}" class="asta-input-control" placeholder="e.g. admin"></label>
         </div>
-        <div class="flex gap-2 mt-3">
-            <button type="submit" class="btn btn-primary btn-sm">Filter</button>
-            <a href="{{$.BasePath}}/audit" class="btn btn-ghost btn-sm">Reset</a>
+        <div class="asta-field">
+            <div class="asta-field-head"><label class="asta-label" for="action">Action prefix</label></div>
+            <label class="asta-input asta-input-sm"><input type="text" id="action" name="action" value="{{$d.Filter.Action}}" class="asta-input-control font-mono" placeholder="e.g. invoice. or auth.login"></label>
         </div>
+        <div class="asta-field">
+            <div class="asta-field-head"><label class="asta-label" for="from">From</label></div>
+            <label class="asta-input asta-input-sm"><input type="date" id="from" name="from" value="{{$d.Filter.From}}" class="asta-input-control"></label>
+        </div>
+        <div class="asta-field">
+            <div class="asta-field-head"><label class="asta-label" for="to">To</label></div>
+            <label class="asta-input asta-input-sm"><input type="date" id="to" name="to" value="{{$d.Filter.To}}" class="asta-input-control"></label>
+        </div>
+    </div>
+    <div class="mt-4 flex gap-2">
+        <button type="submit" class="asta-btn asta-btn-accent asta-btn-sm"><span class="asta-btn-label">Filter</span></button>
+        <a href="{{$.BasePath}}/audit" class="asta-btn asta-btn-ghost asta-btn-sm"><span class="asta-btn-label">Reset</span></a>
     </div>
 </form>
 
-<div class="overflow-x-auto">
-    <table class="table table-sm table-zebra">
+<div class="asta-table-wrap"><div class="asta-table-scroll">
+    <table class="asta-table">
         <thead>
             <tr>
-                <th>Time (UTC)</th>
-                <th>Actor</th>
-                <th>Action</th>
-                <th>Target</th>
-                <th>Result</th>
-                <th>IP</th>
-                <th>Details</th>
+                <th class="asta-th" scope="col">Time (UTC)</th>
+                <th class="asta-th" scope="col">Actor</th>
+                <th class="asta-th" scope="col">Action</th>
+                <th class="asta-th" scope="col">Target</th>
+                <th class="asta-th" scope="col">Result</th>
+                <th class="asta-th" scope="col">IP</th>
+                <th class="asta-th" scope="col">Details</th>
             </tr>
         </thead>
         <tbody>
             {{range $d.Entries}}
-            <tr>
-                <td class="font-mono text-xs whitespace-nowrap">{{.OccurredAt.Format "2006-01-02 15:04:05"}}</td>
-                <td class="text-sm">
-                    {{if .ActorUsername}}{{.ActorUsername}}{{else}}<span class="opacity-50">—</span>{{end}}
+            <tr class="asta-tr">
+                <td class="asta-td whitespace-nowrap font-mono text-[12px] tabular-nums">{{.OccurredAt.Format "2006-01-02 15:04:05"}}</td>
+                <td class="asta-td">
+                    {{if .ActorUsername}}{{.ActorUsername}}{{else}}<span class="text-mute">—</span>{{end}}
                 </td>
-                <td><span class="badge badge-ghost badge-sm font-mono">{{.Action}}</span></td>
-                <td class="text-sm">
+                <td class="asta-td"><span class="asta-badge asta-badge-sm font-mono">{{.Action}}</span></td>
+                <td class="asta-td asta-td-wrap">
                     {{if .TargetType}}
-                        <span class="opacity-60">{{.TargetType}}</span>
-                        {{if .TargetLabel}}<span class="font-semibold ml-1">{{.TargetLabel}}</span>{{end}}
-                        {{if .TargetID.Valid}}<span class="opacity-40 text-xs ml-1">#{{.TargetID.Int64}}</span>{{end}}
+                        <span class="text-mute">{{.TargetType}}</span>
+                        {{if .TargetLabel}}<span class="ml-1 font-medium text-ink">{{.TargetLabel}}</span>{{end}}
+                        {{if .TargetID.Valid}}<span class="ml-1 text-[12px] text-mute tabular-nums">#{{.TargetID.Int64}}</span>{{end}}
                     {{else}}
-                        <span class="opacity-50">—</span>
+                        <span class="text-mute">—</span>
                     {{end}}
                 </td>
-                <td>
+                <td class="asta-td">
                     {{if eq .Result "ok"}}
-                        <span class="badge badge-success badge-sm">ok</span>
+                        <span class="asta-badge asta-badge-sm asta-badge-success">OK</span>
                     {{else}}
-                        <span class="badge badge-error badge-sm" title="{{.ErrorMessage}}">fail</span>
+                        <span class="asta-badge asta-badge-sm asta-badge-danger" title="{{.ErrorMessage}}">Failed</span>
                     {{end}}
                 </td>
-                <td class="font-mono text-xs">{{if .IP}}{{.IP}}{{else}}<span class="opacity-40">—</span>{{end}}</td>
-                <td>
+                <td class="asta-td font-mono text-[12px]">{{if .IP}}{{.IP}}{{else}}<span class="text-mute">—</span>{{end}}</td>
+                <td class="asta-td">
                     {{if .Metadata}}
                     <details>
-                        <summary class="cursor-pointer text-xs opacity-70">view</summary>
-                        <pre class="text-xs bg-base-200 p-2 mt-1 rounded max-w-md overflow-x-auto">{{.Metadata}}</pre>
-                        {{if .RequestID}}<div class="text-xs opacity-40 mt-1 font-mono">req: {{.RequestID}}</div>{{end}}
-                        {{if .ErrorMessage}}<div class="text-xs text-error mt-1">error: {{.ErrorMessage}}</div>{{end}}
+                        <summary class="cursor-pointer text-[12px] text-ink-2">View</summary>
+                        <pre class="mt-1 max-w-md overflow-x-auto rounded-lg bg-paper-2 p-2 font-mono text-[12px] text-ink">{{.Metadata}}</pre>
+                        {{if .RequestID}}<div class="mt-1 font-mono text-[12px] text-mute">req: {{.RequestID}}</div>{{end}}
+                        {{if .ErrorMessage}}<p class="asta-error mt-1">error: {{.ErrorMessage}}</p>{{end}}
                     </details>
                     {{else if or .RequestID .ErrorMessage}}
                     <details>
-                        <summary class="cursor-pointer text-xs opacity-70">view</summary>
-                        {{if .RequestID}}<div class="text-xs opacity-40 mt-1 font-mono">req: {{.RequestID}}</div>{{end}}
-                        {{if .ErrorMessage}}<div class="text-xs text-error mt-1">error: {{.ErrorMessage}}</div>{{end}}
+                        <summary class="cursor-pointer text-[12px] text-ink-2">View</summary>
+                        {{if .RequestID}}<div class="mt-1 font-mono text-[12px] text-mute">req: {{.RequestID}}</div>{{end}}
+                        {{if .ErrorMessage}}<p class="asta-error mt-1">error: {{.ErrorMessage}}</p>{{end}}
                     </details>
                     {{end}}
                 </td>
             </tr>
             {{else}}
-            <tr><td colspan="7" class="text-center py-8 opacity-60">No audit events match these filters.</td></tr>
+            <tr><td colspan="7" class="asta-td py-10 text-center text-mute">No audit events match these filters.</td></tr>
             {{end}}
         </tbody>
     </table>
-</div>
+</div></div>
 
 {{if gt $d.TotalPages 1}}
-<div class="flex items-center justify-between mt-4">
-    <div class="text-sm opacity-60">
-        Page {{$d.Page}} of {{$d.TotalPages}}
-    </div>
-    <div class="join">
-        {{if gt $d.Page 1}}
-        <a class="join-item btn btn-sm" href="?{{if $d.Filter.Actor}}actor={{$d.Filter.Actor}}&{{end}}{{if $d.Filter.Action}}action={{$d.Filter.Action}}&{{end}}{{if $d.Filter.From}}from={{$d.Filter.From}}&{{end}}{{if $d.Filter.To}}to={{$d.Filter.To}}&{{end}}page={{sub $d.Page 1}}">‹ Prev</a>
-        {{else}}
-        <button class="join-item btn btn-sm" disabled>‹ Prev</button>
-        {{end}}
-        {{if lt $d.Page $d.TotalPages}}
-        <a class="join-item btn btn-sm" href="?{{if $d.Filter.Actor}}actor={{$d.Filter.Actor}}&{{end}}{{if $d.Filter.Action}}action={{$d.Filter.Action}}&{{end}}{{if $d.Filter.From}}from={{$d.Filter.From}}&{{end}}{{if $d.Filter.To}}to={{$d.Filter.To}}&{{end}}page={{add $d.Page 1}}">Next ›</a>
-        {{else}}
-        <button class="join-item btn btn-sm" disabled>Next ›</button>
-        {{end}}
-    </div>
+<div class="mt-4 flex items-center justify-between gap-4">
+    <p class="text-[13px] tabular-nums text-mute">Page {{$d.Page}} of {{$d.TotalPages}}</p>
+    <nav class="asta-pagination asta-pagination-sm" aria-label="Pagination">
+        {{if gt $d.Page 1}}<a class="asta-pagination-link" href="?{{if $d.Filter.Actor}}actor={{$d.Filter.Actor}}&{{end}}{{if $d.Filter.Action}}action={{$d.Filter.Action}}&{{end}}{{if $d.Filter.From}}from={{$d.Filter.From}}&{{end}}{{if $d.Filter.To}}to={{$d.Filter.To}}&{{end}}page={{sub $d.Page 1}}" aria-label="Previous page">{{else}}<span role="link" aria-disabled="true" class="asta-pagination-link" aria-label="Previous page">{{end}}<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5"/></svg>{{if gt $d.Page 1}}</a>{{else}}</span>{{end}}
+        {{if lt $d.Page $d.TotalPages}}<a class="asta-pagination-link" href="?{{if $d.Filter.Actor}}actor={{$d.Filter.Actor}}&{{end}}{{if $d.Filter.Action}}action={{$d.Filter.Action}}&{{end}}{{if $d.Filter.From}}from={{$d.Filter.From}}&{{end}}{{if $d.Filter.To}}to={{$d.Filter.To}}&{{end}}page={{add $d.Page 1}}" aria-label="Next page">{{else}}<span role="link" aria-disabled="true" class="asta-pagination-link" aria-label="Next page">{{end}}<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5"/></svg>{{if lt $d.Page $d.TotalPages}}</a>{{else}}</span>{{end}}
+    </nav>
 </div>
 {{end}}
 {{end}}

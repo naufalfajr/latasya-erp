@@ -18,6 +18,45 @@
         ],
         "createdAt": "2026-11-20T01:01:57.316Z",
         "reason": "Agent: static scan without compiled app.css; body text is var(--ink) at runtime"
+      },
+      {
+        "rule": "overused-font",
+        "value": "geist",
+        "createdAt": "2026-11-20T10:51:00.537Z",
+        "reason": "User pinned Astabyte UI (asta-ui) as the design system; its rules require Geist"
+      },
+      {
+        "rule": "marquee",
+        "value": "*",
+        "files": [
+          "templates/base.html"
+        ],
+        "createdAt": "2026-11-20T10:51:00.552Z",
+        "reason": "Agent: base.html renders no marquee; the rule matches unused marquee keyframes in the vendored Astabyte kit CSS"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "rgb(0, 0, 0)",
+        "createdAt": "2026-11-20T10:58:35.978Z",
+        "reason": "Agent: static scan without compiled app.css reads default black; text is var(--ink) at runtime on every migrated page"
+      },
+      {
+        "rule": "repeating-stripes-gradient",
+        "value": "*",
+        "files": [
+          "templates/base.html"
+        ],
+        "createdAt": "2026-11-20T10:59:36.971Z",
+        "reason": "Agent: base.html has no gradient; the rule matches repeating gradients inside the vendored Astabyte kit CSS"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "rgb(0 0 0 / 0.08)",
+        "files": [
+          "static/css/input.css"
+        ],
+        "createdAt": "2026-11-20T10:59:47.584Z",
+        "reason": "Agent: Astabyte kit's own segment-pill shadow, documented in DESIGN.md shadow vocabulary"
       }
     ]
   }

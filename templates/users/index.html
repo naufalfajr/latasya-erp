@@ -1,60 +1,60 @@
 {{template "base" .}}
 {{define "content"}}
-<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-    <h1 class="text-2xl font-bold">Users</h1>
-    <div class="flex gap-2">
-        <a href="{{$.BasePath}}/settings/api-tokens#all-tokens" class="btn btn-ghost btn-sm">All Users' Tokens</a>
-        <a href="{{$.BasePath}}/users/new" class="btn btn-primary btn-sm">+ New User</a>
+<div class="page-head">
+    <h1 class="page-title">Users</h1>
+    <div class="page-actions">
+        <a href="{{$.BasePath}}/settings/api-tokens#all-tokens" class="asta-btn asta-btn-ghost asta-btn-sm"><span class="asta-btn-label">All users' tokens</span></a>
+        <a href="{{$.BasePath}}/users/new" class="asta-btn asta-btn-accent asta-btn-sm"><span class="asta-btn-label">New user</span></a>
     </div>
 </div>
 
 {{$data := .Data}}
 
-<div class="overflow-x-auto">
-    <table class="table table-sm">
+<div class="asta-table-wrap"><div class="asta-table-scroll">
+    <table class="asta-table">
         <thead>
             <tr>
-                <th>Username</th>
-                <th>Full Name</th>
-                <th>Role</th>
-                <th>Status</th>
-                <th>Created</th>
-                <th>Actions</th>
+                <th class="asta-th" scope="col">Username</th>
+                <th class="asta-th" scope="col">Full name</th>
+                <th class="asta-th" scope="col">Role</th>
+                <th class="asta-th" scope="col">Status</th>
+                <th class="asta-th" scope="col">Created</th>
+                <th class="asta-th" scope="col"><span class="sr-only">Actions</span></th>
             </tr>
         </thead>
         <tbody>
             {{range $data.Users}}
-            <tr id="user-{{.ID}}" class="{{if not .IsActive}}opacity-50{{end}}">
-                <td class="font-semibold">{{.Username}}</td>
-                <td>{{.FullName}}</td>
-                <td><span class="badge badge-sm {{if eq .Role "admin"}}badge-primary{{else}}badge-ghost{{end}}">{{.Role}}</span></td>
-                <td>
+            <tr id="user-{{.ID}}" class="asta-tr{{if not .IsActive}} text-mute{{end}}">
+                <td class="asta-td font-medium{{if .IsActive}} text-ink{{end}}">{{.Username}}</td>
+                <td class="asta-td">{{.FullName}}</td>
+                <td class="asta-td"><span class="asta-badge asta-badge-sm{{if eq .Role "admin"}} asta-badge-accent{{end}}">{{.Role}}</span></td>
+                <td class="asta-td">
                     {{if .IsActive}}
-                    <span class="badge badge-success badge-xs">active</span>
+                    <span class="asta-badge asta-badge-sm asta-badge-success">Active</span>
                     {{else}}
-                    <span class="badge badge-ghost badge-xs">inactive</span>
+                    <span class="asta-badge asta-badge-sm asta-badge-danger">Inactive</span>
                     {{end}}
                 </td>
-                <td class="text-sm">{{formatDate .CreatedAt}}</td>
-                <td>
+                <td class="asta-td tabular-nums">{{formatDate .CreatedAt}}</td>
+                <td class="asta-td">
                     {{if index $data.Manageable .Role}}
                     <div class="flex gap-1">
-                        <a href="{{$.BasePath}}/users/{{.ID}}/edit" class="btn btn-ghost btn-xs">Edit</a>
+                        <a href="{{$.BasePath}}/users/{{.ID}}/edit" class="asta-btn asta-btn-outline asta-btn-xs"><span class="asta-btn-label">Edit</span></a>
                         {{if .IsActive}}
-                        <button class="btn btn-ghost btn-xs text-error"
+                        <button class="asta-btn asta-btn-outline erp-danger asta-btn-xs"
                             hx-delete="{{$.BasePath}}/users/{{.ID}}"
                             hx-target="#user-{{.ID}}"
                             hx-swap="outerHTML"
-                            hx-confirm="Deactivate user {{.Username}}?">Deactivate</button>
+                            hx-confirm="Deactivate user {{.Username}}?"><span class="asta-btn-label">Deactivate</span></button>
                         {{end}}
                     </div>
                     {{end}}
                 </td>
             </tr>
             {{else}}
-            <tr><td colspan="6" class="text-center py-8 opacity-60">No users found</td></tr>
+            <tr><td colspan="6" class="asta-td py-10 text-center text-mute">No users found</td></tr>
             {{end}}
         </tbody>
     </table>
-</div>
+</div></div>
 {{end}}

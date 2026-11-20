@@ -3,99 +3,90 @@
 {{$data := .Data}}
 {{$report := (index $data "Report")}}
 
-<h1 class="text-2xl font-bold mb-6">Balance Sheet</h1>
+<div class="page-head">
+    <h1 class="page-title">Balance sheet</h1>
+</div>
 
-<form class="flex flex-wrap gap-2 mb-4 items-end">
-    <div class="flex flex-col gap-1">
-        <label class="label text-xs">As of</label>
-        <input type="date" name="date" value="{{index $data "AsOf"}}" class="input input-sm">
+<form class="mb-4 flex flex-wrap items-end gap-3" aria-label="Report date">
+    <div class="asta-field">
+        <div class="asta-field-head"><label class="asta-label" for="date">As of</label></div>
+        <label class="asta-input asta-input-sm"><input type="date" id="date" name="date" value="{{index $data "AsOf"}}" class="asta-input-control tabular-nums"></label>
     </div>
-    <button type="submit" class="btn btn-sm btn-primary">Apply</button>
+    <button type="submit" class="asta-btn asta-btn-accent asta-btn-sm"><span class="asta-btn-label">Apply</span></button>
 </form>
 
-<div class="card bg-base-100 shadow">
-    <div class="card-body overflow-x-auto">
-        <table class="table table-sm">
-            <!-- Assets -->
-            <thead>
-                <tr class="bg-base-200"><th colspan="2">Assets</th><th class="text-right">Amount</th></tr>
-            </thead>
-            <tbody>
-                {{range $report.Assets.Accounts}}
-                <tr>
-                    <td class="font-mono text-sm">{{.AccountCode}}</td>
-                    <td>{{.AccountName}}</td>
-                    <td class="text-right font-mono">{{formatIDR .Balance}}</td>
-                </tr>
-                {{else}}
-                <tr><td colspan="3" class="text-center opacity-60">No assets</td></tr>
-                {{end}}
-            </tbody>
-            <tfoot>
-                <tr class="font-bold">
-                    <td colspan="2" class="text-right">Total Assets</td>
-                    <td class="text-right font-mono">{{formatIDR $report.Assets.Total}}</td>
-                </tr>
-            </tfoot>
+{{if ne $report.Assets.Total $report.TotalLiabEquity}}
+<div class="asta-alert asta-alert-danger mb-4" role="alert">{{template "alert-icon"}}<div class="asta-alert-body"><p class="asta-alert-title">Balance sheet does not balance</p><p class="asta-alert-text font-mono tabular-nums">Assets: {{formatIDR $report.Assets.Total}} ≠ liabilities + equity: {{formatIDR $report.TotalLiabEquity}}</p></div></div>
+{{end}}
 
-            <!-- Liabilities -->
-            <thead>
-                <tr class="bg-base-200"><th colspan="2">Liabilities</th><th class="text-right">Amount</th></tr>
-            </thead>
-            <tbody>
-                {{range $report.Liabilities.Accounts}}
-                <tr>
-                    <td class="font-mono text-sm">{{.AccountCode}}</td>
-                    <td>{{.AccountName}}</td>
-                    <td class="text-right font-mono">{{formatIDR .Balance}}</td>
-                </tr>
-                {{else}}
-                <tr><td colspan="3" class="text-center opacity-60">No liabilities</td></tr>
-                {{end}}
-            </tbody>
-            <tfoot>
-                <tr class="font-bold">
-                    <td colspan="2" class="text-right">Total Liabilities</td>
-                    <td class="text-right font-mono">{{formatIDR $report.Liabilities.Total}}</td>
-                </tr>
-            </tfoot>
-
-            <!-- Equity -->
-            <thead>
-                <tr class="bg-base-200"><th colspan="2">Equity</th><th class="text-right">Amount</th></tr>
-            </thead>
-            <tbody>
-                {{range $report.Equity.Accounts}}
-                <tr>
-                    <td class="font-mono text-sm">{{.AccountCode}}</td>
-                    <td>{{.AccountName}}</td>
-                    <td class="text-right font-mono">{{formatIDR .Balance}}</td>
-                </tr>
-                {{end}}
-                {{if ne $report.RetainedEarnings 0}}
-                <tr>
-                    <td></td>
-                    <td class="italic">Retained Earnings (Net Income)</td>
-                    <td class="text-right font-mono">{{formatIDR $report.RetainedEarnings}}</td>
-                </tr>
-                {{end}}
-            </tbody>
-            <tfoot>
-                <tr class="font-bold">
-                    <td colspan="2" class="text-right">Total Equity</td>
-                    <td class="text-right font-mono">{{formatIDR (add $report.Equity.Total $report.RetainedEarnings)}}</td>
-                </tr>
-                <tr class="font-bold text-lg border-t-2">
-                    <td colspan="2" class="text-right">Total Liabilities + Equity</td>
-                    <td class="text-right font-mono">{{formatIDR $report.TotalLiabEquity}}</td>
-                </tr>
-                {{if ne $report.Assets.Total $report.TotalLiabEquity}}
-                <tr class="text-error">
-                    <td colspan="3" class="text-center">Balance sheet does not balance! (Assets: {{formatIDR $report.Assets.Total}} ≠ L+E: {{formatIDR $report.TotalLiabEquity}})</td>
-                </tr>
-                {{end}}
-            </tfoot>
-        </table>
-    </div>
-</div>
+<div class="asta-table-wrap"><div class="asta-table-scroll">
+    <table class="asta-table">
+        <thead>
+            <tr>
+                <th class="asta-th w-28" scope="col">Code</th>
+                <th class="asta-th" scope="col">Account</th>
+                <th class="asta-th asta-th-right" scope="col">Amount</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><th colspan="3" scope="colgroup" class="asta-td bg-paper-2 font-medium text-ink">Assets</th></tr>
+            {{range $report.Assets.Accounts}}
+            <tr class="asta-tr">
+                <td class="asta-td font-mono">{{.AccountCode}}</td>
+                <td class="asta-td text-ink">{{.AccountName}}</td>
+                <td class="asta-td asta-td-right font-mono tabular-nums">{{formatIDR .Balance}}</td>
+            </tr>
+            {{else}}
+            <tr><td colspan="3" class="asta-td text-center text-mute">No assets</td></tr>
+            {{end}}
+            <tr>
+                <td colspan="2" class="asta-td asta-td-right font-medium text-ink">Total assets</td>
+                <td class="asta-td asta-td-right font-mono tabular-nums font-medium text-ink">{{formatIDR $report.Assets.Total}}</td>
+            </tr>
+        </tbody>
+        <tbody>
+            <tr><th colspan="3" scope="colgroup" class="asta-td bg-paper-2 font-medium text-ink">Liabilities</th></tr>
+            {{range $report.Liabilities.Accounts}}
+            <tr class="asta-tr">
+                <td class="asta-td font-mono">{{.AccountCode}}</td>
+                <td class="asta-td text-ink">{{.AccountName}}</td>
+                <td class="asta-td asta-td-right font-mono tabular-nums">{{formatIDR .Balance}}</td>
+            </tr>
+            {{else}}
+            <tr><td colspan="3" class="asta-td text-center text-mute">No liabilities</td></tr>
+            {{end}}
+            <tr>
+                <td colspan="2" class="asta-td asta-td-right font-medium text-ink">Total liabilities</td>
+                <td class="asta-td asta-td-right font-mono tabular-nums font-medium text-ink">{{formatIDR $report.Liabilities.Total}}</td>
+            </tr>
+        </tbody>
+        <tbody>
+            <tr><th colspan="3" scope="colgroup" class="asta-td bg-paper-2 font-medium text-ink">Equity</th></tr>
+            {{range $report.Equity.Accounts}}
+            <tr class="asta-tr">
+                <td class="asta-td font-mono">{{.AccountCode}}</td>
+                <td class="asta-td text-ink">{{.AccountName}}</td>
+                <td class="asta-td asta-td-right font-mono tabular-nums">{{formatIDR .Balance}}</td>
+            </tr>
+            {{end}}
+            {{if ne $report.RetainedEarnings 0}}
+            <tr class="asta-tr">
+                <td class="asta-td"></td>
+                <td class="asta-td italic">Retained earnings (net income)</td>
+                <td class="asta-td asta-td-right font-mono tabular-nums">{{formatIDR $report.RetainedEarnings}}</td>
+            </tr>
+            {{end}}
+            <tr>
+                <td colspan="2" class="asta-td asta-td-right font-medium text-ink">Total equity</td>
+                <td class="asta-td asta-td-right font-mono tabular-nums font-medium text-ink">{{formatIDR (add $report.Equity.Total $report.RetainedEarnings)}}</td>
+            </tr>
+        </tbody>
+        <tfoot>
+            <tr>
+                <td colspan="2" class="asta-td asta-td-right bg-paper-2 text-[15px] font-medium text-ink">Total liabilities + equity</td>
+                <td class="asta-td asta-td-right bg-paper-2 font-mono tabular-nums text-[15px] font-medium text-ink">{{formatIDR $report.TotalLiabEquity}}</td>
+            </tr>
+        </tfoot>
+    </table>
+</div></div>
 {{end}}
