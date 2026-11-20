@@ -3,9 +3,10 @@ This document is the single source of truth for the ongoing migration from a pur
 
 The API surface now has a first-party MCP surface: the remote endpoint at
 `/mcp` (streamable-HTTP MCP; every API operation exposed as a tool, login
-via first-party OAuth 2.1 — see `MCP_PLAN.md`). It is a plain Bearer-token
-consumer of `/api/v1`, just like the Telegram bot; the server's domain
-handlers know nothing about either.
+via first-party OAuth 2.1 — see [`internal/mcpserver/README.md`](internal/mcpserver/README.md)
+and [`internal/oauthas/README.md`](internal/oauthas/README.md)). It is a plain
+Bearer-token consumer of `/api/v1`, just like the Telegram bot; the server's
+domain handlers know nothing about either.
 
 The migration follows the strangler-fig pattern: the HTML surface stays fully functional while the API surface grows alongside it. No HTML routes are removed until the SPA reaches parity for that domain.
 
@@ -19,7 +20,7 @@ These five rules are immutable contracts. They must not be violated by any imple
 `/invoices`, `/bills`, `/accounts`, and all other HTML routes serve HTML only. `/api/v1/invoices`, `/api/v1/bills`, `/api/v1/accounts`, and all other API routes serve JSON only. The same path NEVER serves both content types. No content-negotiation tricks, no `Accept` header switching on a shared handler.
 
 **Invariant 2: Handlers share models, never response code.**
-HTML handlers and API handlers may call the same `model.*` functions (queries, business logic). They must never share response-writing code. An HTML handler returns `text/html`; an API handler returns `application/json`. Mixing them creates a maintenance trap.
+HTML handlers and API handlers may call the same business modules (`internal/<domain>`; see `MODULES.md`). They must never share response-writing code. An HTML handler returns `text/html`; an API handler returns `application/json`. Mixing them creates a maintenance trap.
 
 **Invariant 3: Both surfaces get new features.**
 New features must be implemented for both the HTML surface and the API surface unless the task is explicitly marked `HTML-only` or `API-only`. Skipping one surface creates silent gaps that are expensive to discover later.
@@ -287,7 +288,7 @@ Date-only fields (invoice date, due date, journal date) use `YYYY-MM-DD`:
 
 These items were considered during the API migration plan and explicitly deferred. They are not bugs; they are conscious scope decisions.
 
-**SPA implementation.** The API exists but the SPA that consumes it is a separate plan. The HTML UI remains the primary browser interface until the SPA plan is executed.
+**SPA implementation — decided: stay SSR.** The browser UI stays HTML/HTMX and does not move onto `/api/v1`. The API is machine-shaped (bearer tokens, no CSRF, integer-IDR strings, pagination envelopes); an SPA would reintroduce cookie auth + CSRF on the API, a JS build chain, CORS, and XSS surface for no new capability. MCP and the Telegram bot consume the API directly and need no SPA. The decision is reversible: the dual-surface invariant keeps API parity, and the per-domain sunset criteria in Section 2 remain the trigger if a product reason appears.
 
 **Optimistic locking (ETag / If-Match).** Concurrent edits are not protected by ETags. This is acceptable because `SetMaxOpenConns(1)` serializes all DB writes, and the expected concurrency for a solo-dev single-business deployment is low. A follow-up plan can add ETags when multi-user concurrent editing becomes a real problem.
 
@@ -299,7 +300,7 @@ These items were considered during the API migration plan and explicitly deferre
 
 **`/api/v1/invoices/{id}/pdf` endpoint.** Implemented. PDFs are produced by a pure-Go standard-library writer in `internal/pdf` (no headless browser, no third-party dependency), preserving the single-binary deploy model. Both surfaces are wired: HTML `GET /invoices/{id}/pdf` (inline) and API `GET /api/v1/invoices/{id}/pdf` (attachment). Seller identity and bank details come from the editable Company Profile at `/settings/company`.
 
-**Bulk operations.** No bulk create, bulk update, or bulk delete endpoints exist in v1. Each resource is created/updated/deleted individually. Bulk operations are out of scope.
+**Bulk operations.** Only invoices have bulk endpoints (`POST /api/v1/invoices/bulk-delete`, `POST /api/v1/invoices/bulk-send`). Other resources are created/updated/deleted individually.
 
 ---
 
@@ -322,12 +323,7 @@ Do not add CORS headers piecemeal. The above changes must be done together in a 
 
 ## 7. Idempotency Key Behavior
 
-Financial mutation endpoints support the `Idempotency-Key` request header. Covered endpoints:
-
-- `POST /api/v1/invoices`
-- `POST /api/v1/bills`
-- `POST /api/v1/journals`
-- `POST /api/v1/credit-notes`
+`POST` endpoints for income, expenses, journals, invoices (create, send, payment, recurring generation — not the bulk endpoints), bills (including receive and payment), credit notes (including issue and void), and API token creation honor the `Idempotency-Key` request header; the middleware ignores the header on other methods. The documented list is every path referencing the `IdempotencyKey` parameter in `api/openapi.yaml`.
 
 **Behavior:**
 - If a request arrives with an `Idempotency-Key` that was seen within the last 24 hours, the server returns the original response without re-executing the mutation.
@@ -341,29 +337,20 @@ Financial mutation endpoints support the `Idempotency-Key` request header. Cover
 
 ## 8. API Token Scopes Reference
 
-Tokens are created with a subset of the owner's capabilities. Available scopes:
+Tokens are created with a subset of the owner's capabilities. Scopes are the capabilities in `model.AllCapabilities` (`internal/model/constants.go`):
 
 | Scope | Grants |
 |-------|--------|
-| `accounts.view` | Read accounts |
 | `accounts.manage` | Create, edit, delete accounts |
-| `contacts.view` | Read contacts |
 | `contacts.manage` | Create, edit, delete contacts |
-| `journals.view` | Read journal entries |
 | `journals.manage` | Create, edit, delete journal entries |
-| `income.view` | Read income entries |
 | `income.manage` | Create, edit, delete income entries |
-| `expenses.view` | Read expense entries |
 | `expenses.manage` | Create, edit, delete expense entries |
-| `invoices.view` | Read invoices |
-| `invoices.manage` | Create, edit, send, payment, delete invoices |
-| `bills.view` | Read bills |
+| `invoices.manage` | Invoices (create, edit, send, payment, delete, bulk, recurring, PDF), credit notes (all, including issue/void), school calendar |
 | `bills.manage` | Create, edit, receive, payment, delete bills |
-| `credit_notes.view` | Read credit notes |
-| `credit_notes.manage` | Create, edit, issue, void, delete credit notes |
 | `reports.view` | Read all financial reports |
-| `users.manage` | User management (admin-only capability) |
-| `roles.manage` | Role management (admin-only capability) |
-| `audit.view` | Read audit log (admin-only capability) |
+| `users.manage` | User management, including other users' API tokens |
+| `roles.manage` | Role management |
+| `audit.view` | Read audit log |
 
-A token cannot grant a scope the creating user doesn't hold. Admins can grant any scope.
+There are no `*.view` scopes for domain data: list/get endpoints are open to any authenticated token. A token cannot grant a scope the creating user doesn't hold, and scopes are re-intersected with the owner's current role on every request. Admins hold every capability.

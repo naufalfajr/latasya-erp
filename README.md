@@ -33,7 +33,7 @@ No Node.js, no npm, no JS framework. Single binary with embedded templates and s
 
 ## API
 
-Latasya ERP exposes a JSON API at `/api/v1/*` alongside the HTML UI. Bots, scripts, MCP servers, and Telegram integrations authenticate via scoped Bearer tokens managed at `/settings/api-tokens`. Every API operation is also exposed as an [MCP](https://modelcontextprotocol.io) tool at `https://<host>/mcp` — add it in your AI client as a remote MCP server (Claude Code, Claude Desktop, Codex, Cursor, …); login is OAuth 2.1 in the browser. Design and decision log: [`MCP_PLAN.md`](MCP_PLAN.md).
+Latasya ERP exposes a JSON API at `/api/v1/*` alongside the HTML UI. Bots, scripts, MCP servers, and Telegram integrations authenticate via scoped Bearer tokens managed at `/settings/api-tokens`. Every API operation is also exposed as an [MCP](https://modelcontextprotocol.io) tool at `https://<host>/mcp` — add it in your AI client as a remote MCP server (Claude Code, Claude Desktop, Codex, Cursor, …); login is OAuth 2.1 in the browser. Details: [`internal/mcpserver/README.md`](internal/mcpserver/README.md) (tools) and [`internal/oauthas/README.md`](internal/oauthas/README.md) (login).
 
 ### Quick Start
 
@@ -113,7 +113,7 @@ Financial mutations (invoices, bills, journals, credit-notes) support `Idempoten
 curl http://localhost:8080/api/v1/openapi.yaml
 ```
 
-See `MIGRATION_NOTES.md` for the full migration strategy and sunset criteria.
+See [`MIGRATION_NOTES.md`](MIGRATION_NOTES.md) for the API invariants, data formats, and scopes.
 
 ## Telegram Bot
 
@@ -290,7 +290,7 @@ make test
 go test ./... -v
 ```
 
-101 tests covering:
+Tests cover:
 - Auth flow (login, logout, sessions, middleware, admin/viewer roles)
 - CRUD for all entities (accounts, contacts, journals, income, expenses, invoices, bills, users)
 - Accounting correctness (balanced entries, P&L, balance sheet equation, trial balance)

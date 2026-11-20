@@ -13,9 +13,12 @@ This file is the entry point for the architecture. Detailed behavior lives besid
 | Company | Seller profile and validated invoice defaults | [`internal/company/README.md`](internal/company/README.md) |
 | Access | Users, roles, password storage, and authorization invariants | [`internal/access/README.md`](internal/access/README.md) |
 | API tokens | Scoped bearer credential issuance, lookup, and revocation | [`internal/apitoken/README.md`](internal/apitoken/README.md) |
-| Remote MCP | Streamable-HTTP JSON-RPC at /mcp; protocol shell replaying into the JSON API | [`internal/mcpserver`](../internal/mcpserver/server.go) |
-| OAuth AS | First-party OAuth 2.1 (code+PKCE) for remote MCP clients | [`internal/oauthas`](../internal/oauthas/module.go) |
+| Remote MCP | Streamable-HTTP JSON-RPC at /mcp; protocol shell replaying into the JSON API | [`internal/mcpserver/README.md`](internal/mcpserver/README.md) |
+| OAuth AS | First-party OAuth 2.1 (code+PKCE, dynamic registration) for remote MCP clients | [`internal/oauthas/README.md`](internal/oauthas/README.md) |
 | Document numbers | Atomic monthly business-document sequences | [`internal/documentnumber/README.md`](internal/documentnumber/README.md) |
+| Reporting | Read-only financial projections for dashboard, reports, and report endpoints | [`internal/reporting/README.md`](internal/reporting/README.md) |
+| School calendar | School closures, effective billing days, and Google Calendar sync | [`internal/schoolcalendar/README.md`](internal/schoolcalendar/README.md) |
+| Idempotency | 24-hour replay cache for JSON mutations | [`internal/idempotency/README.md`](internal/idempotency/README.md) |
 | Audit | Best-effort business and security event recording | [`internal/audit/README.md`](internal/audit/README.md) |
 | JSON API | Versioned JSON transport, authentication, errors, pagination, and idempotency | [`internal/api/README.md`](internal/api/README.md) |
 | Telegram bot | Staff bookkeeping from Telegram; a JSON API client using each user's own token | [`cmd/telegram-bot/README.md`](cmd/telegram-bot/README.md) |
