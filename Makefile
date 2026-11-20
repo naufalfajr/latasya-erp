@@ -2,12 +2,9 @@
 
 # Tailwind standalone CLI
 TAILWIND := ./bin/tailwindcss
-DAISYUI := ./bin/daisyui.mjs
-DAISYUI_THEME := ./bin/daisyui-theme.mjs
 
 # Pinned CSS toolchain versions — keep in sync with .github/workflows/deploy.yml
 TAILWIND_VERSION := v4.3.3
-DAISYUI_VERSION := v5.6.18
 
 $(TAILWIND):
 	@mkdir -p bin
@@ -15,22 +12,12 @@ $(TAILWIND):
 	@curl -fsSL --retry 3 https://github.com/tailwindlabs/tailwindcss/releases/download/$(TAILWIND_VERSION)/tailwindcss-macos-arm64 -o $(TAILWIND)
 	@chmod +x $(TAILWIND)
 
-$(DAISYUI):
-	@mkdir -p bin
-	@echo "Downloading daisyUI plugin..."
-	@curl -sL https://github.com/saadeghi/daisyui/releases/download/$(DAISYUI_VERSION)/daisyui.mjs -o $(DAISYUI)
-
-$(DAISYUI_THEME):
-	@mkdir -p bin
-	@echo "Downloading daisyUI theme plugin..."
-	@curl -fsSL --retry 3 https://github.com/saadeghi/daisyui/releases/download/$(DAISYUI_VERSION)/daisyui-theme.mjs -o $(DAISYUI_THEME)
-
 # Build CSS
-css: $(TAILWIND) $(DAISYUI) $(DAISYUI_THEME)
+css: $(TAILWIND)
 	$(TAILWIND) -i static/css/input.css -o static/css/app.css --minify
 
 # Watch CSS for development
-css-watch: $(TAILWIND) $(DAISYUI) $(DAISYUI_THEME)
+css-watch: $(TAILWIND)
 	$(TAILWIND) -i static/css/input.css -o static/css/app.css --watch
 
 # Run in development mode

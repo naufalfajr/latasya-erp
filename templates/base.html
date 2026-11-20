@@ -1,11 +1,11 @@
 {{define "base"}}
 <!DOCTYPE html>
-<html lang="en"{{if not .User}} data-theme="silk"{{end}}>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{if .Title}}{{.Title}} — {{end}}Latasya ERP</title>
-    {{if .User}}{{template "theme-head" .}}{{else}}<link rel="stylesheet" href="{{asset "css/app.css"}}">{{end}}
+    {{template "theme-head" .}}
     <script src="{{asset "js/htmx.min.js"}}"></script>
     <script src="{{asset "js/financial-charts.js"}}"></script>
     <style>
@@ -16,7 +16,7 @@
         .htmx-indicator { opacity: 0; transition: opacity 200ms ease-in; }
         .htmx-request .htmx-indicator, .htmx-request.htmx-indicator { opacity: 1; }
         /* Top loading bar */
-        #page-loader { position: fixed; top: 0; left: 0; width: 100%; height: 3px; background: var(--brand, var(--color-primary)); z-index: 9999; }
+        #page-loader { position: fixed; top: 0; left: 0; width: 100%; height: 3px; background: var(--brand); z-index: 9999; }
         /* Full-page navigation loader (non-HTMX link clicks, form submits) */
         body.is-navigating #page-loader { opacity: 1; animation: page-loader-pulse 900ms ease-in-out infinite; }
         @keyframes page-loader-pulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
@@ -45,11 +45,17 @@
         </button>
     </dialog>
 {{else}}
-<body class="min-h-screen bg-base-200" {{if .CSRFToken}}hx-headers='{"X-CSRF-Token": "{{.CSRFToken}}"}'{{end}}>
+<body class="latasya" {{if .CSRFToken}}hx-headers='{"X-CSRF-Token": "{{.CSRFToken}}"}'{{end}}>
     <div id="page-loader" class="htmx-indicator"></div>
-    <main class="min-h-screen flex items-center justify-center bg-base-200">
-        {{block "content" .}}{{end}}
-    </main>
+    <div class="auth-shell">
+        <header class="auth-top">
+            <span class="auth-mark">Latasya ERP</span>
+            {{template "theme-toggle" "Toggle dark mode"}}
+        </header>
+        <main class="auth-main">
+            {{block "content" .}}{{end}}
+        </main>
+    </div>
 {{end}}
 
     <script>

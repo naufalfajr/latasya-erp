@@ -1,48 +1,44 @@
 {{template "base" .}}
 {{define "content"}}
-<div class="card w-full max-w-sm bg-base-100 shadow-xl">
-    <div class="card-body">
-        <h2 class="card-title text-2xl font-bold text-center justify-center mb-2">Latasya ERP</h2>
-        <p class="text-center text-sm opacity-60 mb-4">Sign in to your account</p>
+<section class="asta-card w-full max-w-sm">
+    <div class="asta-card-header">
+        <h1 class="page-title">Sign in</h1>
+        <p class="asta-card-description">Use your Latasya ERP staff account.</p>
+    </div>
 
-        {{if .Data}}
-        {{with .Data}}
-        {{if index . "Error"}}
-        <div class="alert alert-error mb-4">
-            <span>{{index . "Error"}}</span>
-        </div>
-        {{end}}
-        {{end}}
-        {{end}}
+    {{if .Data}}{{with index .Data "Error"}}
+    <div class="asta-alert asta-alert-danger mb-4" role="alert">{{template "alert-icon"}}<div class="asta-alert-body"><p class="asta-alert-text">{{.}}</p></div></div>
+    {{end}}{{end}}
 
-        <form method="POST" action="{{$.BasePath}}/login">
-            <input type="hidden" name="next" value="{{if .Data}}{{index .Data "Next"}}{{end}}">
-            <div class="flex flex-col gap-1 mb-4">
-                <label class="label" for="username">Username</label>
-                <input type="text" id="username" name="username" placeholder="Username"
-                    class="input w-full"
+    <form method="POST" action="{{$.BasePath}}/login">
+        <input type="hidden" name="next" value="{{if .Data}}{{index .Data "Next"}}{{end}}">
+        <div class="grid grid-cols-1 gap-4">
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="username">Username</label></div>
+                <label class="asta-input"><input type="text" id="username" name="username" autocomplete="username"
+                    class="asta-input-control"
                     value="{{if .Data}}{{index .Data "Username"}}{{end}}"
-                    required autofocus>
+                    required autofocus></label>
             </div>
-            <div class="flex flex-col gap-1 mb-6">
-                <label class="label" for="password">Password</label>
-                <div class="relative">
-                    <input type="password" id="password" name="password" placeholder="Password"
-                        class="input w-full pr-12" required>
+            <div class="asta-field">
+                <div class="asta-field-head"><label class="asta-label" for="password">Password</label></div>
+                <div class="asta-input pr-1">
+                    <input type="password" id="password" name="password" autocomplete="current-password"
+                        class="asta-input-control" required>
                     <button type="button"
-                        class="btn btn-ghost btn-sm btn-square absolute top-1/2 right-1 -translate-y-1/2"
+                        class="asta-btn asta-btn-ghost asta-btn-icon asta-btn-xs"
                         data-pw-toggle="password" aria-label="Show password">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
                             <circle cx="12" cy="12" r="3"/>
                         </svg>
                     </button>
                 </div>
             </div>
-            <button type="submit" class="btn btn-primary w-full">Sign In</button>
-        </form>
-    </div>
-</div>
+            <button type="submit" class="asta-btn asta-btn-accent mt-2 w-full"><span class="asta-btn-label">Sign in</span></button>
+        </div>
+    </form>
+</section>
 <script>
 document.querySelectorAll('[data-pw-toggle]').forEach(function(btn) {
     btn.addEventListener('click', function() {

@@ -11,7 +11,7 @@ Mode: Operate. English, desk and phone. Every signed-in screen rendered through 
 
 Audience: Latasya Trans office staff (bookkeeper at a desk, owner and staff on phones), not accountants.
 Task: record income, expenses, journals; create, send and collect invoices; receive and pay bills; credit notes; contacts; reports; settings.
-Constraints: same information as before the migration (tables, charts, fields, actions); no handler or data changes; behaviour of every hx-* interaction preserved. Asta UI kit only, navy the one accent, status badges per DESIGN.md mapping, mono charts. Light and dark with the toggle in the sidebar foot and the phone top bar. Login, MCP consent, portal and print are out of scope (PR3).
+Constraints: same information as before the migration (tables, charts, fields, actions); no handler or data changes; behaviour of every hx-* interaction preserved. Asta UI kit only, navy the one accent, status badges per DESIGN.md mapping, mono charts. Light and dark with the toggle in the sidebar foot and the phone top bar. Login and MCP consent share the signed-out branch of base.html (see DESIGN.md Layout).
 
 ## Direction contract
 

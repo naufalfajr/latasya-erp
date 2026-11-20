@@ -32,7 +32,7 @@ Built for one specific operator rather than as generic accounting software: char
 
 - Modules: invoices, bills, credit notes, income, expenses, manual journals, chart of accounts, contacts (customers/suppliers, routes, pricing, portal codes), company profile and invoice defaults, users/roles, API tokens, audit log, school calendar.
 - Reports: Trial Balance, Profit & Loss, Balance Sheet, Cash Flow, General Ledger; dashboard with cash balance, monthly revenue/expenses, outstanding invoices/bills, and financial history charts.
-- Stack: Go stdlib (`net/http`, `html/template`), HTMX, Tailwind CSS with Astabyte UI (DaisyUI being phased out), SQLite. No Node, npm, or JS framework; single binary with embedded templates and static assets, deployed via systemd behind Cloudflare Tunnel.
+- Stack: Go stdlib (`net/http`, `html/template`), HTMX, Tailwind CSS with Astabyte UI, SQLite. No Node, npm, or JS framework; single binary with embedded templates and static assets, deployed via systemd behind Cloudflare Tunnel.
 - Currency is IDR (integer rupiah). Dates are local Indonesian business dates.
 - Language: staff ERP copy stays in English (confirmed). Parent portal and public company profile are in Bahasa Indonesia.
 

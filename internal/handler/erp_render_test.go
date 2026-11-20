@@ -80,7 +80,8 @@ func erpRoutes(f erpFixture) []string {
 
 var (
 	renderedClass = regexp.MustCompile(`class="([^"]*)"`)
-	daisyToken    = regexp.MustCompile(`^(btn|card|badge|alert|input-bordered|select-bordered|join-item|stat-value|tab-active|bg-base-[0-9]+|text-error|text-success)(-[a-z0-9]+)*$`)
+	// Same component list as templates_test.go, applied to rendered HTML.
+	daisyToken = regexp.MustCompile(`^(btn|card|card-body|card-title|card-actions|badge|alert|input-bordered|select-bordered|textarea-bordered|form-control|label-text|tab|tabs|tab-active|join|join-item|stat|stats|stat-title|stat-value|divider|drawer|drawer-side|drawer-toggle|menu|menu-title|navbar|link|link-hover|link-primary|checkbox|toggle|loading|rounded-box)(-[a-z0-9]+)*$|^(bg|text|border)-(base|primary|secondary|accent|neutral|info|success|warning|error)(-[a-z0-9]+)?$`)
 )
 
 // daisyClassIn returns the first DaisyUI class token in body, comparing whole
