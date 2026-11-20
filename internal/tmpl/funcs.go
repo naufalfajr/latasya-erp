@@ -1,16 +1,49 @@
 package tmpl
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io/fs"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 	"unicode/utf8"
 
+	latasyaerp "github.com/naufal/latasya-erp"
 	"github.com/naufal/latasya-erp/internal/contact"
 )
+
+// assetHashes maps each embedded static file to a short hash of its bytes.
+var assetHashes = sync.OnceValue(func() map[string]string {
+	m := map[string]string{}
+	_ = fs.WalkDir(latasyaerp.StaticFS, "static", func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		b, err := latasyaerp.StaticFS.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		sum := sha256.Sum256(b)
+		m[strings.TrimPrefix(p, "static/")] = hex.EncodeToString(sum[:4])
+		return nil
+	})
+	return m
+})
+
+// asset returns the URL of a static file with its content hash, so a deploy
+// changes the URL and no cache (browser or Cloudflare edge) serves stale CSS
+// or JS next to new HTML.
+func asset(p string) string {
+	if h, ok := assetHashes()[p]; ok {
+		return "/static/" + p + "?v=" + h
+	}
+	return "/static/" + p
+}
 
 func FuncMap() template.FuncMap {
 	return template.FuncMap{
@@ -37,6 +70,7 @@ func FuncMap() template.FuncMap {
 			return string(unicode.ToUpper(r)) + s[size:]
 		},
 		"splitN": strings.SplitN,
+		"asset":  asset,
 		"add":    func(a, b int) int { return a + b },
 		"sub":    func(a, b int) int { return a - b },
 		"mul":    func(a, b int) int { return a * b },

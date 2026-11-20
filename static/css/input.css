@@ -94,7 +94,6 @@ body.latasya {
 }
 .erp-content {
   width: 100%;
-  max-width: 1280px;
   padding: 24px 16px 64px;
 }
 @media (min-width: 1024px) {
