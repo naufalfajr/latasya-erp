@@ -1,0 +1,24 @@
+{
+  "hook": {
+    "enabled": true,
+    "limits": {
+      "maxFindings": 5,
+      "maxChars": 8000
+    }
+  },
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "design-system-color",
+        "value": "rgb(0, 0, 0)",
+        "files": [
+          "templates/home/index.html"
+        ],
+        "createdAt": "2026-11-20T01:01:57.316Z",
+        "reason": "Agent: static scan without compiled app.css; body text is var(--ink) at runtime"
+      }
+    ]
+  }
+}

@@ -637,3 +637,28 @@ func TestContactEditPage_HidesCodeEditorFromNonAdmin(t *testing.T) {
 		t.Error("non-admin should still see the read-only portal link")
 	}
 }
+
+func TestPublicHome_FleetIsStaticCopy(t *testing.T) {
+	t.Parallel()
+	ts, db := publicTestServer(t)
+	// ERP vehicles must not leak onto the public page.
+	if _, err := db.Exec("INSERT INTO vehicles (code, capacity) VALUES ('ZZ901', 99)"); err != nil {
+		t.Fatal(err)
+	}
+
+	resp, err := http.Get(ts.URL + "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	page := string(body)
+	for _, want := range []string{"Toyota Hiace", "Nissan Evalia", "Daihatsu Gran Max", "4 kendaraan", "12–16 kursi", "52 kursi"} {
+		if !strings.Contains(page, want) {
+			t.Errorf("homepage missing %q", want)
+		}
+	}
+	if strings.Contains(page, "ZZ901") || strings.Contains(page, "99 kursi") {
+		t.Error("ERP vehicle data must not appear on the public homepage")
+	}
+}

@@ -3,123 +3,282 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{.Title}}</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400..700;1,400..700&family=Plus+Jakarta+Sans:wght@300..700&display=swap" rel="stylesheet">
+<title>{{.Title}} · Antar jemput sekolah, wisata, dan travel antar daerah</title>
+<meta name="description" content="Latasya Trans melayani antar jemput sekolah, perjalanan wisata, dan travel antar daerah. Hubungi kami lewat WhatsApp.">
+{{template "theme-head" .}}
 <style>
-    html,body{margin:0;padding:0;background:#FBFAF7;}
-    body{font-family:'Plus Jakarta Sans',sans-serif;color:#1B2A55;}
-    a{color:#1B2A55;text-decoration:none;}
-    a:hover{color:#C9A24B;}
-    ::selection{background:#C9A24B;color:#fff;}
-    .wa-btn{background:#1B2A55;color:#FBFAF7;transition:background .2s;}
-    .wa-btn:hover{background:#2B4C9D;color:#FBFAF7;}
-    .outline-btn{border:1px solid #D8D3C6;transition:border-color .2s;}
-    .outline-btn:hover{border-color:#C9A24B;color:#1B2A55;}
-    .service-card{transition:background .2s;}
-    .service-card:hover{background:#20315F;}
-    .staff-link:hover{color:#1B2A55;}
+    /* Page base. Global once DaisyUI is gone (PR3); scoped here so ERP pages stay untouched. */
+    html { background: var(--paper); }
+    body.home { font-family: var(--font-sans); background: var(--paper); color: var(--ink); }
+    .home :focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+    .home ::selection { background: color-mix(in srgb, var(--brand) 22%, transparent); }
+    .home { --gutter: clamp(16px, 2.8vw, 40px); }
+    .home-wrap { max-width: 1320px; margin: 0 auto; padding: 0 var(--gutter); }
+
+    /* Header: clear at the top, a solid paper bar once the page scrolls. */
+    .home-header { position: sticky; top: 0; z-index: 20; isolation: isolate; }
+    .home-header::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--paper); }
+    @supports (animation-timeline: scroll()) {
+        .home-header::before { animation: home-header-fill linear both; animation-timeline: scroll(); animation-range: 0 48px; }
+        @keyframes home-header-fill { from { opacity: 0; } to { opacity: 1; } }
+    }
+    /* Anchored sections clear the sticky header. */
+    .home [id] { scroll-margin-top: 72px; }
+    .home-header-row { height: 56px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+    .home-mark { font-weight: 600; font-size: 16px; letter-spacing: -0.02em; color: var(--ink); text-decoration: none; }
+    .home-nav { display: flex; gap: 4px; }
+    .home-header-actions { display: flex; align-items: center; gap: 6px; }
+
+    /* Hero */
+    .home-hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 540px); gap: 56px; align-items: center; padding-top: 88px; padding-bottom: 128px; }
+    .home-h1 { font-weight: 500; font-size: clamp(44px, 4.6vw, 66px); line-height: 0.98; letter-spacing: -0.045em; text-wrap: balance; color: var(--ink); }
+    .home-h1 em { font-style: normal; color: var(--brand); }
+    .home-lede { margin-top: 28px; max-width: 520px; font-size: 18px; line-height: 1.7; color: var(--ink-2); text-wrap: pretty; }
+
+    /* Travel pass: the service radios carry the WhatsApp message itself. */
+    .pass { display: grid; grid-template-columns: minmax(0, 1fr) 200px; border-radius: 14px; overflow: hidden; background: var(--paper-2); box-shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 24px 48px -32px rgb(0 0 0 / 0.35); }
+    .pass-body { padding: 28px; display: flex; flex-direction: column; gap: 24px; min-width: 0; }
+    .pass-label { font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-2); margin-bottom: 10px; }
+    .pass-msg { font-size: 18px; line-height: 1.5; letter-spacing: -0.015em; color: var(--ink); min-height: 86px; text-wrap: pretty; }
+    .pass-stub { position: relative; background: var(--brand); color: var(--on-brand); padding: 28px 22px; display: flex; flex-direction: column; justify-content: space-between; gap: 24px; }
+    /* Ticket perforation down the stub's edge. */
+    .pass-stub::before { content: ""; position: absolute; left: -7px; top: 0; bottom: 0; width: 14px; background: radial-gradient(circle 6px at 50% 50%, var(--paper-2) 98%, transparent) 0 0 / 14px 22px repeat-y; }
+    .pass-fact dt { font-family: var(--font-mono); font-size: 12px; color: var(--on-brand); }
+    .pass-fact dd { margin-top: 4px; font-size: 18px; font-weight: 500; line-height: 1.2; letter-spacing: -0.03em; }
+    .pass-facts { display: flex; flex-direction: column; gap: 20px; }
+    .pass-send { width: 100%; background: var(--on-brand); color: var(--navy); }
+    .pass-send:hover { background: color-mix(in srgb, var(--navy) 8%, var(--on-brand)); }
+
+    .pass .asta-segmented-pill { background: var(--brand); }
+    .pass .asta-segmented-item:has(:checked) { color: var(--on-brand); }
+    .pass [data-for] { display: none; }
+    .pass [data-for="sekolah"] { display: block; }
+    .pass:has(#svc-wisata:checked) [data-for="sekolah"],
+    .pass:has(#svc-travel:checked) [data-for="sekolah"] { display: none; }
+    .pass:has(#svc-wisata:checked) [data-for="wisata"],
+    .pass:has(#svc-travel:checked) [data-for="travel"] { display: block; }
+    /* Animate only on a switch: the default service is visible on load. */
+    .pass [data-for="wisata"],
+    .pass [data-for="travel"],
+    .pass:has(#svc-sekolah:focus) [data-for="sekolah"] { animation: pass-in 0.42s cubic-bezier(0.16, 1, 0.3, 1); }
+    @keyframes pass-in { from { opacity: 0; transform: translateY(6px); } }
+
+    /* Sections */
+    .home-section { padding-bottom: 136px; }
+    .home-h2 { font-weight: 500; font-size: clamp(32px, 4vw, 48px); line-height: 1; letter-spacing: -0.045em; color: var(--ink); text-wrap: balance; }
+    .home-section-head { display: flex; justify-content: space-between; align-items: end; gap: 32px; flex-wrap: wrap; margin-bottom: 40px; }
+    .home-section-head p { max-width: 460px; font-size: 16px; line-height: 1.7; color: var(--ink-2); }
+
+    /* Services: one full-width row each, details side by side. */
+    .svc { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.35fr) minmax(0, 1fr) auto; gap: 40px; align-items: start; padding: 36px; border-radius: 14px; background: var(--paper-2); }
+    .svc + .svc { margin-top: 12px; }
+    .svc h3 { font-weight: 500; font-size: 30px; line-height: 1.05; letter-spacing: -0.04em; color: var(--ink); text-wrap: balance; }
+    .svc p { font-size: 16px; line-height: 1.7; color: var(--ink-2); text-wrap: pretty; }
+    .svc dl { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 10px 14px; font-size: 14.5px; line-height: 1.45; }
+    .svc dt { font-family: var(--font-mono); font-size: 12px; color: var(--ink-2); padding-top: 2px; }
+    .svc dd { color: var(--ink); }
+
+    /* Fleet: one seat plan per vehicle model. */
+    .fleet { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 64px; align-items: center; }
+    .fleet-line { margin-top: 20px; font-size: 18px; line-height: 1.7; color: var(--ink-2); max-width: 460px; }
+    .fleet-line b { font-weight: 500; color: var(--ink); font-variant-numeric: tabular-nums; }
+    .fleet-maps { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 24px; }
+    .veh-fig { display: flex; flex-direction: column; gap: 12px; }
+    .veh-fig figcaption { display: flex; flex-direction: column; gap: 2px; font-size: 14px; line-height: 1.4; }
+    .veh-fig b { font-weight: 500; color: var(--ink); }
+    .veh-fig span { font-family: var(--font-mono); font-size: 12px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+    /* Minibus seen from above, front at the top. */
+    .veh { display: grid; grid-template-columns: repeat(4, 22px); grid-auto-rows: 24px; gap: 8px; padding: 30px 20px 22px; border-radius: 14px; background: var(--paper-2); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 6%, transparent); }
+    .veh-row { display: contents; }
+    .veh-s { border-radius: 6px; background: color-mix(in srgb, var(--brand) 80%, var(--paper-2)); }
+    .veh-d { border-radius: 50%; box-shadow: inset 0 0 0 2px var(--ink-2); }
+
+    /* Values */
+    .vals { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 64px; }
+    .vals dl { display: flex; flex-direction: column; gap: 28px; padding-top: 8px; }
+    .vals dt { font-weight: 500; font-size: 30px; line-height: 1.05; letter-spacing: -0.04em; color: var(--ink); }
+    .vals dd { margin-top: 10px; font-size: 16px; color: var(--ink-2); }
+
+    /* Contact band */
+    .contact { border-radius: 14px; background: var(--brand); color: var(--on-brand); padding: clamp(32px, 5vw, 64px); display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 48px; }
+    .contact .home-h2 { color: var(--on-brand); }
+    .contact .contact-cta { margin-top: 32px; background: var(--on-brand); color: var(--navy); }
+    .contact .contact-cta:hover { background: color-mix(in srgb, var(--navy) 8%, var(--on-brand)); }
+    .contact dl { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 18px 20px; font-size: 16px; line-height: 1.55; align-content: center; }
+    .contact dt { font-family: var(--font-mono); font-size: 12px; color: var(--on-brand); padding-top: 3px; }
+    .contact a { color: var(--on-brand); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: color-mix(in srgb, var(--on-brand) 45%, transparent); }
+    .contact a:hover { text-decoration-color: var(--on-brand); }
+    .contact a.asta-btn { text-decoration: none; }
+    .contact :focus-visible { outline-color: var(--on-brand); }
+
+    .home-footer { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding-top: 40px; padding-bottom: 40px; font-size: 14px; color: var(--ink-2); }
+    .home-footer a { color: var(--ink-2); text-decoration: none; }
+    .home-footer a:hover { color: var(--ink); }
+
+    @media (max-width: 1080px) {
+        .svc { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px 40px; }
+        .svc .asta-btn { justify-self: start; }
+    }
+    @media (max-width: 900px) {
+        .home-hero, .fleet, .vals, .contact { grid-template-columns: minmax(0, 1fr); gap: 40px; }
+        .home-hero { padding-top: 48px; padding-bottom: 96px; }
+        .home-section { padding-bottom: 96px; }
+    }
+    @media (max-width: 720px) {
+        .home-nav { display: none; }
+        .home-hero { padding-top: 28px; gap: 28px; }
+        .home-lede { margin-top: 16px; font-size: 16px; }
+        .pass-body { gap: 18px; }
+        .pass-msg { min-height: 0; font-size: 16px; }
+        .svc { grid-template-columns: minmax(0, 1fr); padding: 24px; gap: 20px; }
+        .pass { grid-template-columns: minmax(0, 1fr); }
+        .pass-body { padding: 20px; }
+        .pass-stub { padding: 22px 20px; }
+        .pass-stub::before { left: 0; right: 0; top: -7px; bottom: auto; width: auto; height: 14px; background: radial-gradient(circle 6px at 50% 50%, var(--paper-2) 98%, transparent) 0 0 / 22px 14px repeat-x; }
+        .pass-facts { flex-direction: row; gap: 24px; }
+        .pass-fact { flex: 1; min-width: 0; }
+        .contact dl { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+        .contact dd { margin-bottom: 14px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .pass [data-for] { animation: none; }
+    }
 </style>
 </head>
-<body>
+<body class="home">
 {{$d := .Data}}
-<div style="min-height:100vh;display:flex;flex-direction:column;background:#FBFAF7">
-    <header style="display:flex;align-items:center;justify-content:space-between;max-width:1040px;width:100%;margin:0 auto;padding:28px 32px;box-sizing:border-box">
-        <div style="display:flex;align-items:baseline;gap:8px">
-            <span style="font-family:'Lora',serif;font-weight:700;font-size:20px;letter-spacing:0.06em;color:#1B2A55">LATASYA</span>
-            <span style="font-weight:400;font-size:20px;letter-spacing:0.22em;color:#C9A24B">TRANS</span>
+
+<header class="home-header">
+    <div class="home-wrap home-header-row">
+        <a href="#" class="home-mark">Latasya Trans</a>
+        <nav class="home-nav" aria-label="Utama">
+            <a href="#layanan" class="asta-btn asta-btn-ghost asta-btn-sm"><span class="asta-btn-label">Layanan</span></a>
+            <a href="#armada" class="asta-btn asta-btn-ghost asta-btn-sm"><span class="asta-btn-label">Armada</span></a>
+            <a href="#kontak" class="asta-btn asta-btn-ghost asta-btn-sm"><span class="asta-btn-label">Kontak</span></a>
+        </nav>
+        <div class="home-header-actions">
+            {{template "theme-toggle" "Ganti mode gelap"}}
+            {{if $d.Company.Phone}}<a href="{{$d.ContactWA}}" target="_blank" rel="noopener" class="asta-btn asta-btn-accent asta-btn-sm"><span class="asta-btn-label">Chat WhatsApp</span></a>{{end}}
         </div>
-    </header>
+    </div>
+</header>
 
-    <main style="flex:1">
-        <section style="max-width:1040px;margin:0 auto;padding:72px 32px 88px;box-sizing:border-box;text-align:center">
-            <div style="font-size:12px;letter-spacing:0.28em;text-transform:uppercase;color:#C9A24B;margin-bottom:24px;font-weight:700">Profil Perusahaan</div>
-            <h1 style="font-family:'Lora',serif;font-weight:500;font-size:clamp(44px,6vw,68px);line-height:1.08;margin:0 0 24px;color:#1B2A55;text-wrap:balance">Solusi transportasi yang <em style="font-style:italic;color:#C9A24B">terpercaya</em></h1>
-            <p style="font-size:18px;line-height:1.65;color:#4A5470;max-width:560px;margin:0 auto 40px;text-wrap:pretty">Antar jemput sekolah, wisata, dan travel antar daerah. Dikelola PT Latansa Asyariyah Linarchadi dengan mengutamakan keselamatan, kenyamanan, dan ketepatan waktu.</p>
-            <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap">
-                {{if $d.Company.Phone}}<a href="{{$d.ContactWA}}" target="_blank" rel="noopener" class="wa-btn" style="display:inline-flex;align-items:center;gap:10px;padding:15px 32px;border-radius:2px;font-size:15px;font-weight:500;letter-spacing:0.02em">Hubungi Kami di WhatsApp</a>{{end}}
-                <a href="#layanan" class="outline-btn" style="display:inline-flex;align-items:center;padding:15px 28px;border-radius:2px;font-size:15px;color:#1B2A55">Lihat Layanan</a>
-            </div>
-        </section>
+<main>
+    <section class="home-wrap home-hero">
+        <div>
+            <h1 class="home-h1">Antar jemput sekolah, wisata, dan <em>travel antar daerah.</em></h1>
+            <p class="home-lede">Latasya Trans melayani peserta didik Sekolah Plus Latansa, rombongan wisata, dan perjalanan antar kota. Pilih layanan, pesannya langsung masuk ke WhatsApp kami.</p>
+        </div>
 
-        <section id="layanan" style="background:#1B2A55;color:#FBFAF7">
-            <div style="max-width:1040px;margin:0 auto;padding:80px 32px;box-sizing:border-box">
-                <div style="display:flex;align-items:baseline;justify-content:space-between;gap:24px;flex-wrap:wrap;margin-bottom:56px">
-                    <h2 style="font-family:'Lora',serif;font-weight:500;font-size:34px;margin:0">Tiga lini layanan</h2>
-                    <span style="font-size:12px;letter-spacing:0.28em;text-transform:uppercase;color:#C9A24B;font-weight:700">Layanan Kami</span>
-                </div>
-                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1px;background:rgba(232,238,249,0.14)">
-                    <div class="service-card" style="background:#1B2A55;padding:36px 36px 40px 32px;display:flex;flex-direction:column;gap:16px">
-                        <span style="font-family:'Lora',serif;font-size:15px;color:#C9A24B">01</span>
-                        <h3 style="font-family:'Lora',serif;font-weight:500;font-size:22px;margin:0;color:#FBFAF7">Antar Jemput Sekolah</h3>
-                        <p style="font-size:14.5px;line-height:1.65;color:#AEB8D4;margin:0;text-wrap:pretty">Layanan terjadwal harian Senin–Sabtu untuk peserta didik Sekolah Plus Latansa, dengan rute rapi dan tarif berbasis jarak.</p>
-                    </div>
-                    <div class="service-card" style="background:#1B2A55;padding:36px 36px 40px 32px;display:flex;flex-direction:column;gap:16px">
-                        <span style="font-family:'Lora',serif;font-size:15px;color:#C9A24B">02</span>
-                        <h3 style="font-family:'Lora',serif;font-weight:500;font-size:22px;margin:0;color:#FBFAF7">Agen Wisata</h3>
-                        <p style="font-size:14.5px;line-height:1.65;color:#AEB8D4;margin:0;text-wrap:pretty">Paket dan pengaturan perjalanan wisata sesuai kebutuhan rombongan keluarga, sekolah, maupun komunitas.</p>
-                    </div>
-                    <div class="service-card" style="background:#1B2A55;padding:36px 36px 40px 32px;display:flex;flex-direction:column;gap:16px">
-                        <span style="font-family:'Lora',serif;font-size:15px;color:#C9A24B">03</span>
-                        <h3 style="font-family:'Lora',serif;font-weight:500;font-size:22px;margin:0;color:#FBFAF7">Travel Antar Daerah</h3>
-                        <p style="font-size:14.5px;line-height:1.65;color:#AEB8D4;margin:0;text-wrap:pretty">Perjalanan antar kota berdasarkan permintaan — fleksibel dan tidak terikat jadwal tetap.</p>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <section style="max-width:1040px;margin:0 auto;padding:88px 32px;box-sizing:border-box">
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:48px;text-align:center">
-                <div style="display:flex;flex-direction:column;gap:10px">
-                    <div style="width:28px;height:1px;background:#C9A24B;margin:0 auto 8px"></div>
-                    <h3 style="font-family:'Lora',serif;font-weight:500;font-size:19px;margin:0;color:#1B2A55">Keselamatan</h3>
-                    <p style="font-size:14px;line-height:1.6;color:#6B7591;margin:0">Prioritas utama di setiap perjalanan</p>
-                </div>
-                <div style="display:flex;flex-direction:column;gap:10px">
-                    <div style="width:28px;height:1px;background:#C9A24B;margin:0 auto 8px"></div>
-                    <h3 style="font-family:'Lora',serif;font-weight:500;font-size:19px;margin:0;color:#1B2A55">Kenyamanan</h3>
-                    <p style="font-size:14px;line-height:1.6;color:#6B7591;margin:0">Armada terawat &amp; petugas profesional</p>
-                </div>
-                <div style="display:flex;flex-direction:column;gap:10px">
-                    <div style="width:28px;height:1px;background:#C9A24B;margin:0 auto 8px"></div>
-                    <h3 style="font-family:'Lora',serif;font-weight:500;font-size:19px;margin:0;color:#1B2A55">Ketepatan Waktu</h3>
-                    <p style="font-size:14px;line-height:1.6;color:#6B7591;margin:0">Jadwal disiplin dan terukur</p>
-                </div>
-            </div>
-        </section>
-
-        <section style="border-top:1px solid #E8E4D9">
-            <div style="max-width:1040px;margin:0 auto;padding:72px 32px 80px;box-sizing:border-box;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:56px">
+        <div class="pass">
+            <div class="pass-body">
                 <div>
-                    <span style="font-size:12px;letter-spacing:0.28em;text-transform:uppercase;color:#C9A24B;font-weight:700">Hubungi Kami</span>
-                    <h2 style="font-family:'Lora',serif;font-weight:500;font-size:32px;margin:18px 0 16px;color:#1B2A55">Siap melayani perjalanan Anda</h2>
-                    <p style="font-size:15px;line-height:1.65;color:#4A5470;margin:0;max-width:420px;text-wrap:pretty">Untuk pendaftaran antar jemput, pemesanan wisata, atau travel antar daerah, silakan hubungi tim kami.</p>
+                    <p class="pass-label" id="pass-svc-label">Layanan</p>
+                    <div role="radiogroup" data-asta-segmented aria-labelledby="pass-svc-label" class="asta-segmented asta-segmented-sm asta-segmented-full">
+                        <label class="asta-segmented-item"><input type="radio" id="svc-sekolah" name="layanan" value="sekolah" checked> <span aria-hidden="true" data-asta-ind class="asta-segmented-pill"></span> <span class="asta-segmented-label">Sekolah</span></label>
+                        <label class="asta-segmented-item"><input type="radio" id="svc-wisata" name="layanan" value="wisata"> <span aria-hidden="true" data-asta-ind class="asta-segmented-pill"></span> <span class="asta-segmented-label">Wisata</span></label>
+                        <label class="asta-segmented-item"><input type="radio" id="svc-travel" name="layanan" value="travel"> <span aria-hidden="true" data-asta-ind class="asta-segmented-pill"></span> <span class="asta-segmented-label">Antar kota</span></label>
+                    </div>
                 </div>
-                <div style="display:flex;flex-direction:column;gap:22px;justify-content:center">
-                    {{if $d.Company.Address}}
-                    <div style="display:flex;flex-direction:column;gap:4px">
-                        <span style="font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:#9AA1B5">Alamat</span>
-                        <span style="font-size:15px;color:#1B2A55;line-height:1.5">{{$d.Company.Address}}</span>
+                <div>
+                    <p class="pass-label">Pesan Anda</p>
+                    <div class="pass-msg" aria-live="polite">
+                        <p data-for="sekolah">{{index $d.Messages "sekolah"}}</p>
+                        <p data-for="wisata">{{index $d.Messages "wisata"}}</p>
+                        <p data-for="travel">{{index $d.Messages "travel"}}</p>
                     </div>
-                    {{end}}
-                    {{if $d.Company.Phone}}
-                    <div style="display:flex;flex-direction:column;gap:4px">
-                        <span style="font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:#9AA1B5">Kontak Administrasi (Whatsapp)</span>
-                        <a href="{{$d.ContactWA}}" target="_blank" rel="noopener" style="font-size:15px;color:#1B2A55">{{$d.PhoneDisplay}}</a>
-                    </div>
-                    {{end}}
                 </div>
             </div>
-        </section>
-    </main>
-
-    <footer style="border-top:1px solid #E8E4D9">
-        <div style="max-width:1040px;margin:0 auto;padding:24px 32px;box-sizing:border-box;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap">
-            <span style="font-size:12.5px;color:#9AA1B5">{{$d.Company.Name}} · Latasya Trans</span>
-            <a href="{{$.BasePath}}/login" class="staff-link" style="font-size:12.5px;color:#9AA1B5">Masuk staf →</a>
+            <div class="pass-stub">
+                <dl class="pass-facts">
+                    <div class="pass-fact"><dt>Untuk</dt>
+                        <dd data-for="sekolah">Sekolah Plus Latansa</dd>
+                        <dd data-for="wisata">Keluarga, sekolah, komunitas</dd>
+                        <dd data-for="travel">Perjalanan antar kota</dd></div>
+                    <div class="pass-fact"><dt>Jadwal</dt>
+                        <dd data-for="sekolah">Senin–Sabtu</dd>
+                        <dd data-for="wisata">Sesuai paket</dd>
+                        <dd data-for="travel">Sesuai permintaan</dd></div>
+                </dl>
+                {{if $d.Company.Phone}}
+                <div data-for="sekolah"><a href="{{index $d.WA "sekolah"}}" target="_blank" rel="noopener" class="asta-btn asta-btn-lg pass-send"><span class="asta-btn-label">Kirim ke WhatsApp</span></a></div>
+                <div data-for="wisata"><a href="{{index $d.WA "wisata"}}" target="_blank" rel="noopener" class="asta-btn asta-btn-lg pass-send"><span class="asta-btn-label">Kirim ke WhatsApp</span></a></div>
+                <div data-for="travel"><a href="{{index $d.WA "travel"}}" target="_blank" rel="noopener" class="asta-btn asta-btn-lg pass-send"><span class="asta-btn-label">Kirim ke WhatsApp</span></a></div>
+                {{end}}
+            </div>
         </div>
-    </footer>
-</div>
+    </section>
+
+    <section id="layanan" class="home-wrap home-section">
+        <div class="home-section-head">
+            <h2 class="home-h2">Layanan kami</h2>
+            <p>Tiga lini layanan. Semuanya dipesan lewat WhatsApp dan diatur langsung oleh tim kami.</p>
+        </div>
+
+        <article class="svc">
+            <h3>Antar jemput sekolah</h3>
+            <p>Layanan terjadwal harian untuk peserta didik Sekolah Plus Latansa, dengan rute rapi dan tarif berbasis jarak.</p>
+            <dl><dt>Untuk</dt><dd>Peserta didik Sekolah Plus Latansa</dd><dt>Jadwal</dt><dd>Senin–Sabtu</dd><dt>Tarif</dt><dd>Berbasis jarak</dd></dl>
+            {{if $d.Company.Phone}}<a href="{{index $d.WA "sekolah"}}" target="_blank" rel="noopener" class="asta-btn asta-btn-outline"><span class="asta-btn-label">Tanya layanan ini</span></a>{{end}}
+        </article>
+        <article class="svc">
+            <h3>Agen wisata</h3>
+            <p>Paket dan pengaturan perjalanan wisata sesuai kebutuhan rombongan keluarga, sekolah, maupun komunitas.</p>
+            <dl><dt>Untuk</dt><dd>Keluarga, sekolah, komunitas</dd><dt>Jadwal</dt><dd>Sesuai paket</dd></dl>
+            {{if $d.Company.Phone}}<a href="{{index $d.WA "wisata"}}" target="_blank" rel="noopener" class="asta-btn asta-btn-outline"><span class="asta-btn-label">Tanya layanan ini</span></a>{{end}}
+        </article>
+        <article class="svc">
+            <h3>Travel antar daerah</h3>
+            <p>Perjalanan antar kota berdasarkan permintaan. Fleksibel dan tidak terikat jadwal tetap.</p>
+            <dl><dt>Rute</dt><dd>Antar kota</dd><dt>Jadwal</dt><dd>Sesuai permintaan</dd></dl>
+            {{if $d.Company.Phone}}<a href="{{index $d.WA "travel"}}" target="_blank" rel="noopener" class="asta-btn asta-btn-outline"><span class="asta-btn-label">Tanya layanan ini</span></a>{{end}}
+        </article>
+    </section>
+
+    <section id="armada" class="home-wrap home-section fleet">
+        <div>
+            <h2 class="home-h2">Armada kami</h2>
+            <p class="fleet-line"><b>{{$d.FleetUnits}} kendaraan</b>, {{$d.FleetRange}} kursi per kendaraan. Total <b>{{$d.FleetTotal}} kursi</b> penumpang.</p>
+        </div>
+        <div class="fleet-maps">
+            {{range $d.Fleet}}
+            <figure class="veh-fig">
+                <div class="veh" role="img" aria-label="Denah {{.Name}}, {{.Seats}} kursi penumpang">
+                    {{range .Plan}}<div class="veh-row" aria-hidden="true">{{range .}}<span{{if .}} class="veh-{{.}}"{{end}}></span>{{end}}</div>{{end}}
+                </div>
+                <figcaption><b>{{.Name}}</b><span>{{.Seats}} kursi · {{.Units}} unit</span></figcaption>
+            </figure>
+            {{end}}
+        </div>
+    </section>
+
+    <section class="home-wrap home-section vals">
+        <h2 class="home-h2">Yang kami jaga di setiap perjalanan</h2>
+        <dl>
+            <div><dt>Keselamatan</dt><dd>Prioritas utama di setiap perjalanan.</dd></div>
+            <div><dt>Kenyamanan</dt><dd>Armada terawat dan petugas profesional.</dd></div>
+            <div><dt>Ketepatan waktu</dt><dd>Jadwal disiplin dan terukur.</dd></div>
+        </dl>
+    </section>
+
+    <section id="kontak" class="home-wrap">
+        <div class="contact">
+            <div>
+                <h2 class="home-h2">Siap melayani perjalanan Anda</h2>
+                {{if $d.Company.Phone}}<a href="{{$d.ContactWA}}" target="_blank" rel="noopener" class="asta-btn asta-btn-lg contact-cta"><span class="asta-btn-label">Kirim pesan WhatsApp</span></a>{{end}}
+            </div>
+            <dl>
+                <dt>Perusahaan</dt><dd>PT Latansa Asyariyah Linarchadi</dd>
+                {{if $d.Company.Address}}<dt>Alamat</dt><dd>{{$d.Company.Address}}{{if $d.MapsURL}}<br><a href="{{$d.MapsURL}}" target="_blank" rel="noopener">Buka di Google Maps</a>{{end}}</dd>{{end}}
+                {{if $d.Company.Phone}}<dt>WhatsApp</dt><dd><a href="{{$d.ContactWA}}" target="_blank" rel="noopener">{{$d.PhoneDisplay}}</a></dd>{{end}}
+            </dl>
+        </div>
+    </section>
+</main>
+
+<footer class="home-wrap home-footer">
+    <span>Latasya Trans · PT Latansa Asyariyah Linarchadi</span>
+    <a href="{{$.BasePath}}/login">Masuk staf</a>
+</footer>
 </body>
 </html>

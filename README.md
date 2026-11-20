@@ -2,7 +2,7 @@
 
 Simple bookkeeping web app for a transport business (school bus & travel) in Indonesia.
 
-Built with Go stdlib, HTMX, Tailwind CSS + DaisyUI, and SQLite. Deploys as a single static binary behind Cloudflare Tunnel.
+Built with Go stdlib, HTMX, Tailwind CSS with [Astabyte UI](https://github.com/astabyteidn/asta-ui), and SQLite. Deploys as a single static binary behind Cloudflare Tunnel.
 
 ## Features
 
@@ -15,7 +15,9 @@ Built with Go stdlib, HTMX, Tailwind CSS + DaisyUI, and SQLite. Deploys as a sin
 - **Financial Reports** — Trial Balance, Profit & Loss, Balance Sheet, Cash Flow, General Ledger
 - **User Management** — capability-based roles (admin, bookkeeper, viewer) with a `/roles` page to manage custom roles
 - **Dashboard** — cash balance, monthly revenue/expenses, outstanding invoices/bills
-- **Responsive** — works on desktop and mobile (DaisyUI drawer layout)
+- **Public homepage** — company profile at `/` (Bahasa Indonesia) with a WhatsApp travel-pass form, services, and fleet
+- **Light and dark mode** — follows the device setting, with a toggle; live on the public homepage, and each ERP, portal, and print screen gains it as it moves to Astabyte UI
+- **Responsive** — works on desktop and mobile
 - **HTMX** — SPA-like navigation with `hx-boost`, inline delete, live search, dynamic form rows
 - **Telegram bot** — record income/expenses, mark invoices sent, and record payments from Telegram with per-user API tokens
 
@@ -24,7 +26,7 @@ Built with Go stdlib, HTMX, Tailwind CSS + DaisyUI, and SQLite. Deploys as a sin
 | Layer | Choice |
 |-------|--------|
 | Backend | Go stdlib (`net/http`, `html/template`) |
-| Frontend | HTMX + Tailwind CSS + DaisyUI (CDN) |
+| Frontend | HTMX + Tailwind CSS v4 (standalone CLI) + [Astabyte UI](https://github.com/astabyteidn/asta-ui) 0.9.1, vendored in `static/css/asta/`. DaisyUI remains only on screens not yet migrated. |
 | Database | SQLite via `modernc.org/sqlite` (pure Go, no CGO) |
 | Auth | Session-based (bcrypt + HttpOnly cookie) |
 | Deploy | systemd + Cloudflare Tunnel |
@@ -123,7 +125,7 @@ Staff can record income and expenses, mark invoices as sent, and record payments
 
 ### Prerequisites
 
-- Go 1.22+ (uses stdlib routing patterns)
+- Go 1.26+ (see `go.mod`)
 - [Tailwind CSS standalone CLI](https://tailwindcss.com/blog/standalone-cli) (auto-downloaded by `make`)
 
 ### Run locally
@@ -210,7 +212,7 @@ latasya-erp/
 │   └── tmpl/                    # Template functions (formatIDR, formatDate, dict)
 ├── migrations/                  # SQL migrations (embedded, auto-applied)
 ├── templates/                   # HTML templates (embedded)
-├── static/                      # CSS, JS (embedded)
+├── static/                      # CSS, JS (embedded); css/asta/ is the vendored Astabyte UI kit
 ├── embed.go                     # Go embed directives
 ├── deploy/                      # systemd unit + cloudflared config example
 └── Makefile

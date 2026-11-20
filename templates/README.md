@@ -4,7 +4,11 @@ Templates are the HTML adapter's presentation layer. Business rules and database
 
 ## Full pages
 
-Full-page responses execute `templates/base.html` with shared navigation, flash, CSRF, and pagination partials. Page data should be typed when practical.
+Full-page responses execute `templates/base.html` with shared navigation, flash, CSRF, and pagination partials. The theme partials (`templates/partials/theme.html`) are parsed alongside them for every page. Page data should be typed when practical.
+
+Pages built on Astabyte UI include `{{template "theme-head" .}}` in `<head>`; today that is the public homepage, and the ERP, parent portal, and invoice print adopt it as they migrate. It loads the stylesheet, Geist fonts, and the Asta runtime, and applies dark mode before first paint. `{{template "theme-toggle" "<label>"}}` renders the light/dark switch; the label is its accessible name in the page's language.
+
+Markup uses Astabyte UI's `asta-*` classes and the tokens in [DESIGN.md](../DESIGN.md). Keep the `data-asta-*` and ARIA attributes from the kit's examples: `asta.js` drives dialogs, menus, tabs, and segmented controls through them.
 
 ## HTMX fragments
 
