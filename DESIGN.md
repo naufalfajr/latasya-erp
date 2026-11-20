@@ -241,7 +241,7 @@ The header is sticky at 56px: wordmark, nav as small ghost buttons, theme toggle
 
 ERP and portal screens keep the same tokens and kit controls at operational density: kit cards, tables and 32-40px controls, with the large display sizes reserved for public pages.
 
-**ERP shell** (`templates/base.html`): the kit sidebar (`asta-sidebar`, 248px, paper-2) sticks at full viewport height on desktop, its link list scrolling on its own, with the user, theme toggle and log out at the foot. Below 1024px it becomes a 56px top bar (menu, title, toggle) and a left `asta-drawer` holding the same sidebar. Content sits in a 1280px column (32px / 40px padding, 24px / 16px on phones). Every screen opens with a page header: title (and optional subtitle) on the left, actions on the right with one accent button.
+**ERP shell** (`templates/base.html`): the kit sidebar (`asta-sidebar`, 248px, paper-2) sticks at full viewport height on desktop, its link list scrolling on its own, with the user, theme toggle and log out at the foot. Below 1024px it becomes a 56px top bar (menu, title, toggle) and a left `asta-drawer` holding the same sidebar. Content fills the width beside the sidebar (32px / 40px padding, 24px / 16px on phones). Every screen opens with a page header: title (and optional subtitle) on the left, actions on the right with one accent button.
 
 ## Elevation & Depth
 

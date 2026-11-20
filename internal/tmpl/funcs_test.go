@@ -1,6 +1,9 @@
 package tmpl
 
-import "testing"
+import (
+	"regexp"
+	"testing"
+)
 
 func TestNavActive(t *testing.T) {
 	navActive := FuncMap()["navActive"].(func(string, string) bool)
@@ -57,5 +60,17 @@ func TestFormatDate(t *testing.T) {
 		if got := formatDate(in); got != want {
 			t.Errorf("formatDate(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// Static URLs carry a content hash so a deploy never pairs new HTML with a
+// CSS or JS file still cached at the Cloudflare edge or in the browser.
+func TestAsset_HashesEmbeddedFiles(t *testing.T) {
+	got := asset("css/app.css")
+	if !regexp.MustCompile(`^/static/css/app\.css\?v=[0-9a-f]{8}$`).MatchString(got) {
+		t.Errorf("asset(css/app.css) = %q, want a hashed URL", got)
+	}
+	if got := asset("missing.css"); got != "/static/missing.css" {
+		t.Errorf("asset(missing.css) = %q, want the plain URL", got)
 	}
 }

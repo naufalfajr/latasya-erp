@@ -5,9 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{if .Title}}{{.Title}} — {{end}}Latasya ERP</title>
-    {{if .User}}{{template "theme-head" .}}{{else}}<link rel="stylesheet" href="/static/css/app.css">{{end}}
-    <script src="/static/js/htmx.min.js"></script>
-    <script src="/static/js/financial-charts.js"></script>
+    {{if .User}}{{template "theme-head" .}}{{else}}<link rel="stylesheet" href="{{asset "css/app.css"}}">{{end}}
+    <script src="{{asset "js/htmx.min.js"}}"></script>
+    <script src="{{asset "js/financial-charts.js"}}"></script>
     <style>
         /* Native cross-document view transitions (Chrome/Edge/Safari) */
         @view-transition { navigation: auto; }

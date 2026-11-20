@@ -8,6 +8,8 @@ Full-page responses execute `templates/base.html` with the shared partials in `t
 
 Signed-in pages get the ERP shell from `base.html`: the kit sidebar on desktop, a top bar and drawer on phones, and `body.latasya`. Pages that do not use `base.html` (the public homepage) include `{{template "theme-head" .}}` in `<head>` and put `latasya` on `<body>`. `theme-head` loads the stylesheet, Geist fonts, and the Asta runtime, and applies dark mode before first paint. `{{template "theme-toggle" "<label>"}}` renders the light/dark switch; the label is its accessible name in the page's language. The login page, MCP consent page, parent portal, and invoice print still use DaisyUI until they migrate.
 
+Link static files with `{{asset "css/app.css"}}`, never a bare `/static/…` path. `asset` adds a content hash (`?v=…`), so a deploy changes the URL. Cloudflare and browsers cache `/static/` for 4 hours, and a bare path can pair new HTML with old CSS.
+
 ## Markup: Astabyte UI
 
 Markup uses Astabyte UI's `asta-*` classes and the tokens in [DESIGN.md](../DESIGN.md); Tailwind utilities handle layout (grid, flex, gap, width) and tokens (`text-ink`, `text-ink-2`, `text-mute`, `bg-paper`, `bg-paper-2`). Keep the `data-asta-*` and ARIA attributes from the kit's examples: `asta.js` drives dialogs, menus, tabs, and segmented controls through them. Never use DaisyUI classes on a migrated page.

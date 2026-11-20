@@ -151,3 +151,21 @@ func TestBase_ClosesDialogsBeforeHistorySnapshot(t *testing.T) {
 		t.Fatal("base.html must close open dialogs on htmx:beforeHistorySave")
 	}
 }
+
+// Cloudflare and browsers cache /static/ for hours, so templates link static
+// files through {{asset}}, whose content hash changes the URL on every deploy.
+func TestTemplates_StaticLinksUseAsset(t *testing.T) {
+	err := fs.WalkDir(TemplateFS, "templates", func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".html") {
+			return err
+		}
+		b, err := TemplateFS.ReadFile(path)
+		if strings.Contains(string(b), `="/static/`) {
+			t.Errorf("%s links a bare /static/ path; use {{asset \"…\"}}", path)
+		}
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
