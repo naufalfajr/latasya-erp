@@ -17,6 +17,9 @@ import (
 	"github.com/naufal/latasya-erp/internal/contact"
 )
 
+// wib is Latasya's business timezone, so form dates do not follow the host clock.
+var wib = time.FixedZone("WIB", 7*60*60)
+
 // assetHashes maps each embedded static file to a short hash of its bytes.
 var assetHashes = sync.OnceValue(func() map[string]string {
 	m := map[string]string{}
@@ -51,6 +54,7 @@ func FuncMap() template.FuncMap {
 		"contactPrice": contact.Price,
 		"formatQty":    formatQty,
 		"formatDate":   formatDate,
+		"today":        func() string { return time.Now().In(wib).Format("2006-01-02") },
 		"isNegative":   func(n *int) bool { return n != nil && *n < 0 },
 		"toJSON": func(v any) template.JS {
 			b, _ := json.Marshal(v)

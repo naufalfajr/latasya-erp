@@ -18,7 +18,7 @@
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div class="asta-field">
                 <div class="asta-field-head"><label class="asta-label" for="entry_date">Date<span class="asta-label-required" aria-hidden="true">*</span></label></div>
-                <label class="asta-input"><input type="date" id="entry_date" name="entry_date" class="asta-input-control" value="{{$data.Entry.EntryDate}}" required{{if index $data.Errors "entry_date"}} aria-invalid="true"{{end}}></label>
+                <label class="asta-input"><input type="date" id="entry_date" name="entry_date" class="asta-input-control" value="{{or $data.Entry.EntryDate today}}" required{{if index $data.Errors "entry_date"}} aria-invalid="true"{{end}}></label>
                 {{if index $data.Errors "entry_date"}}<p class="asta-error" role="alert">{{index $data.Errors "entry_date"}}</p>{{end}}
             </div>
 

@@ -41,7 +41,7 @@
 
             <div class="asta-field">
                 <div class="asta-field-head"><label class="asta-label" for="cn_date">Date<span class="asta-label-required" aria-hidden="true">*</span></label></div>
-                <label class="asta-input"><input type="date" id="cn_date" name="cn_date" class="asta-input-control" value="{{$cn.CNDate}}" required{{if index $data.Errors "cn_date"}} aria-invalid="true"{{end}}></label>
+                <label class="asta-input"><input type="date" id="cn_date" name="cn_date" class="asta-input-control" value="{{or $cn.CNDate today}}" required{{if index $data.Errors "cn_date"}} aria-invalid="true"{{end}}></label>
                 {{if index $data.Errors "cn_date"}}<p class="asta-error" role="alert">{{index $data.Errors "cn_date"}}</p>{{end}}
             </div>
 

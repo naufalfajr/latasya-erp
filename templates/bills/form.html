@@ -32,7 +32,7 @@
 
             <div class="asta-field">
                 <div class="asta-field-head"><label class="asta-label" for="bill_date">Bill date<span class="asta-label-required" aria-hidden="true">*</span></label></div>
-                <label class="asta-input"><input type="date" id="bill_date" name="bill_date" class="asta-input-control" value="{{$data.Bill.BillDate}}" required{{if index $data.Errors "bill_date"}} aria-invalid="true"{{end}}></label>
+                <label class="asta-input"><input type="date" id="bill_date" name="bill_date" class="asta-input-control" value="{{or $data.Bill.BillDate today}}" required{{if index $data.Errors "bill_date"}} aria-invalid="true"{{end}}></label>
                 {{if index $data.Errors "bill_date"}}<p class="asta-error" role="alert">{{index $data.Errors "bill_date"}}</p>{{end}}
             </div>
 
