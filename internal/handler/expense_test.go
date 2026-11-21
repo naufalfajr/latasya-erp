@@ -2,9 +2,11 @@ package handler_test
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestNewExpense_Form(t *testing.T) {
@@ -22,6 +24,11 @@ func TestNewExpense_Form(t *testing.T) {
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	today := time.Now().In(time.FixedZone("WIB", 7*60*60)).Format("2006-01-02")
+	if !strings.Contains(string(body), `value="`+today+`"`) {
+		t.Errorf("new expense form should default entry_date to %s (WIB)", today)
 	}
 }
 
@@ -181,6 +188,9 @@ func TestUpdateExpense_SuccessWithEditForm(t *testing.T) {
 	defer respEdit.Body.Close()
 	if respEdit.StatusCode != http.StatusOK {
 		t.Errorf("edit expense: expected 200, got %d", respEdit.StatusCode)
+	}
+	if body, _ := io.ReadAll(respEdit.Body); !strings.Contains(string(body), `value="2026-04-04"`) {
+		t.Error("edit expense form should keep the stored entry_date, not today")
 	}
 
 	updateForm := fmt.Sprintf(

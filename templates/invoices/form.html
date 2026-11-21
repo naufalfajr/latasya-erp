@@ -32,7 +32,7 @@
 
             <div class="asta-field">
                 <div class="asta-field-head"><label class="asta-label" for="invoice_date">Invoice date<span class="asta-label-required" aria-hidden="true">*</span></label></div>
-                <label class="asta-input"><input type="date" id="invoice_date" name="invoice_date" class="asta-input-control" value="{{$data.Invoice.InvoiceDate}}" required{{if index $data.Errors "invoice_date"}} aria-invalid="true"{{end}}></label>
+                <label class="asta-input"><input type="date" id="invoice_date" name="invoice_date" class="asta-input-control" value="{{or $data.Invoice.InvoiceDate today}}" required{{if index $data.Errors "invoice_date"}} aria-invalid="true"{{end}}></label>
                 {{if index $data.Errors "invoice_date"}}<p class="asta-error" role="alert">{{index $data.Errors "invoice_date"}}</p>{{end}}
             </div>
 
